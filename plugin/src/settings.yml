@@ -1,3 +1,4 @@
+---
 strategy: polling
 no_screen_padding: 'yes'
 dark_mode: 'no'
@@ -5,9 +6,11 @@ static_data: ''
 polling_verb: get
 framework_version: 3.4.6
 serverless_language: node
+refresh_interval_floor:
 polling_url: ''
 polling_headers: ''
 polling_body: ''
+id: 543128
 oauth_enabled: 'false'
 oauth_pkce_enabled: 'no'
 custom_fields:
@@ -35,7 +38,7 @@ custom_fields:
   name: Fit (Full screen)
   default: fill
   optional: true
-  help_text: "Full screen only.<br /><b>Fill</b>: the work covers the whole screen, the edges are cropped. Works shaped like your screen are picked first.<br /><b>Whole work</b>: nothing is cut off; a plain white mat fills what is left."
+  help_text: 'Full screen only.<br /><b>Fill</b>: the work covers the whole screen, the edges are cropped. Works shaped like your screen are picked first.<br /><b>Whole work</b>: nothing is cut off; a plain white mat fills what is left.'
   options:
   - Fill (crop the edges): fill
   - Whole work (plain mat): whole
