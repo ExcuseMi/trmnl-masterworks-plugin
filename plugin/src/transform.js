@@ -26,6 +26,8 @@ var STEPS = [120, 250, 500, 960, 1280, 1920, 3840]; // the thumbnail widths Wiki
 var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
+var BOLD = 1.2; // bold lines are this much wider than regular ones
+var TEXT_FIT = 0.9; // lines are cut to this share of their box: the width table is an estimate for faces the renderer picks
 var GALLERY_SHARE = 0.75; // gallery: the picture takes up to this share of the slot's width and of its height
 var GALLERY_USE = 0.94; // picture, gap and label together stay inside this share of the height
 var VIEWS = { full: [1, 1], half_horizontal: [1, 0.5], half_vertical: [0.5, 1], quadrant: [0.5, 0.5] }; // slot size as a share of the screen
@@ -183,18 +185,22 @@ async function fetchShard(orientation, rnd) {
 
 // ---- label text, drawn as SVG text: sizes are the slot's own pixels ---------------------------------------------------
 
-/** Width of a text in em, from character classes (a serif face): close enough to cut a line before it leaves its box. */
+/**
+ * Width of a text in em, from character classes. The face is whatever "serif" is on the render box: Times-like locally,
+ * DejaVu Serif (about 25 % wider) in the trmnlp Docker image where the base checks found text 1 px past its box. The
+ * numbers are those of the wide one, so a line is cut a little early on a narrow face and never late on a wide one.
+ */
 function emWidth(str, caps, italic) {
   var w = 0;
   for (var i = 0; i < str.length; i++) {
     var c = str.charAt(i), code = str.charCodeAt(i);
-    if (c === ' ') w += 0.25;
+    if (c === ' ') w += 0.32;
     else if (code > 0x2e80) w += 1;
-    else if (c >= 'A' && c <= 'Z') w += 0.68;
-    else if (c >= '0' && c <= '9') w += 0.5;
-    else if (c >= 'a' && c <= 'z') w += caps ? 0.68 : (italic ? 0.43 : 0.46);
-    else if (code > 0x7f) w += 0.55;
-    else w += 0.33;
+    else if (c >= 'A' && c <= 'Z') w += 0.82;
+    else if (c >= '0' && c <= '9') w += 0.64;
+    else if (c >= 'a' && c <= 'z') w += caps ? 0.82 : (italic ? 0.62 : 0.6);
+    else if (code > 0x7f) w += 0.62;
+    else w += 0.42;
   }
   return w;
 }
@@ -236,36 +242,39 @@ function sizesFor(slotH) {
 function galleryLabel(art, slotH, pw) {
   var z = sizesFor(slotH), lines = [], y = 0, i;
   var pad = Math.round(z.title * 0.35);
-  var titleLines = wrapText(art.title, z.title, pw, slotH >= 700 ? 2 : 1, false, true);
+  // right edge of the text: a face without a real italic is slanted by the renderer, and the slant reaches past the advance
+  // (the base checks measured 0.55 em in the Docker image), so the italic title ends a little early and the rest 2 px
+  var inset = 3, tin = Math.round(z.title * 0.3);
+  var titleLines = wrapText(art.title, z.title, (pw - tin) * TEXT_FIT, slotH >= 700 ? 2 : 1, false, true);
   y = pad;
-  for (i = 0; i < titleLines.length; i++) { y += Math.round(z.title * 1.1); lines.push({ x: pw, y: y, s: z.title, a: 'end', fs: 'italic', fw: 'normal', t: titleLines[i] }); y += Math.round(z.title * 0.15); }
+  for (i = 0; i < titleLines.length; i++) { y += Math.round(z.title * 1.1); lines.push({ x: pw - tin, y: y, s: z.title, a: 'end', fs: 'italic', fw: 'normal', t: titleLines[i] }); y += Math.round(z.title * 0.15); }
   var who = String(art.artist || '').toUpperCase() + (art.year ? ' \u00b7 ' + art.year : '');
-  if (art.artist || art.year) { y += Math.round(z.artist * 1.35); lines.push({ x: pw, y: y, s: z.artist, a: 'end', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, pw, true, false) }); }
+  if (art.artist || art.year) { y += Math.round(z.artist * 1.35); lines.push({ x: pw - inset, y: y, s: z.artist, a: 'end', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, (pw - inset) * TEXT_FIT, true, false) }); }
   var parts = [art.medium, art.size ? cmText(art.size) : '', art.collection].filter(Boolean);
   if (parts.length && slotH >= 400) {
     // the collection, then the material, give way when the line is too wide; a cut-off word is the last resort
     var detail = parts.join(' \u00b7 ');
-    while (parts.length > 1 && emWidth(detail, false, false) * z.detail > pw) {
+    while (parts.length > 1 && emWidth(detail, false, false) * z.detail > (pw - inset) * TEXT_FIT) {
       parts = parts.slice(0, -1);
       detail = parts.join(' \u00b7 ');
     }
     y += Math.round(z.detail * 1.55);
-    lines.push({ x: pw, y: y, s: z.detail, a: 'end', fs: 'normal', fw: 'normal', t: fitText(detail, z.detail, pw, false, false) });
+    lines.push({ x: pw - inset, y: y, s: z.detail, a: 'end', fs: 'normal', fw: 'normal', t: fitText(detail, z.detail, (pw - inset) * TEXT_FIT, false, false) });
   }
   return { vw: Math.round(pw), vh: y + Math.round(z.detail * 0.5), lines: lines };
 }
 
 /** The corner placard of Full screen: left-aligned lines inside a plate. Returns { vw, vh, lines }. */
 function plateLabel(art, slotW, slotH) {
-  var z = sizesFor(slotH), pad = Math.round(z.title * 0.45), maxW = Math.round(slotW * 0.6) - 2 * pad;
+  var z = sizesFor(slotH), pad = Math.round(z.title * 0.45), maxW = (Math.round(slotW * 0.6) - 2 * pad) * TEXT_FIT;
   var lines = [], y = pad, i;
-  var titleLines = wrapText(art.title, z.title, maxW, 2, false, false);
+  var titleLines = wrapText(art.title, z.title, maxW / BOLD, 2, false, false); // the title is bold
   for (i = 0; i < titleLines.length; i++) { y += Math.round(z.title * 1.15); lines.push({ x: pad, y: y, s: z.title, a: 'start', fs: 'normal', fw: 'bold', t: titleLines[i] }); }
   var who = (art.artist || '') + (art.year ? ', ' + art.year : '');
   if (who) { y += Math.round(z.artist * 1.4); lines.push({ x: pad, y: y, s: z.artist, a: 'start', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, maxW, false, false) }); }
   if (art.collection && slotH >= 240) { y += Math.round(z.artist * 1.35); lines.push({ x: pad, y: y, s: z.artist, a: 'start', fs: 'normal', fw: 'normal', t: fitText(art.collection, z.artist, maxW, false, false) }); }
   var widest = 0;
-  lines.forEach(function (l) { widest = Math.max(widest, emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? 1.07 : 1)); });
+  lines.forEach(function (l) { widest = Math.max(widest, emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? BOLD : 1)); });
   var vw = Math.min(Math.round(slotW * 0.6), Math.round(widest + 2 * pad));
   return { vw: vw, vh: y + pad, lines: lines, pct: Math.min(60, Math.ceil(100 * vw / slotW)) };
 }

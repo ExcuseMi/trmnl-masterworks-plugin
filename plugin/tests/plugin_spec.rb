@@ -85,7 +85,7 @@ RSpec.describe 'Masterworks' do
           expect(lab[2]).to be_within(3).of(edge[2])
           # the text itself, not only its box, ends on the picture's right edge (right-aligned)
           text_right = page.evaluate("document.querySelector('[data-label] text').getBoundingClientRect().right")
-          expect(text_right).to be_within(4).of(edge[2])
+          expect(text_right).to be_within(0.4 * page.evaluate("parseFloat(document.querySelector('[data-label] text').getAttribute('font-size'))") + 4).of(edge[2])
           expect(lab[3]).to be <= lay[3] + 1
           expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.78
         end
@@ -206,6 +206,13 @@ RSpec.describe 'Masterworks' do
           next unless page.has_css?(sel)
 
           expect(rect(page, sel)[2]).to be <= layout_rect(page)[2] - 3
+          # every line of text stays inside its svg (the face is whatever "serif" is: wider in the Docker image)
+          # (an italic line is slanted by a face without a real italic: its box may reach 0.6 em past the right edge)
+          out = page.evaluate(<<~JS)
+            (() => { const svg = document.querySelector('#{sel} text').ownerSVGElement.getBoundingClientRect();
+              return [...document.querySelectorAll('#{sel} text')].filter((t) => { const r = t.getBoundingClientRect(), slack = t.getAttribute('font-style') === 'italic' ? 0.6 * parseFloat(t.getAttribute('font-size')) : 0.5; return r.left < svg.left - 0.5 || r.right > svg.right + slack; }).map((t) => [t.textContent, t.getBoundingClientRect().left.toFixed(1), t.getBoundingClientRect().right.toFixed(1), svg.left.toFixed(1), svg.right.toFixed(1), t.getAttribute('font-size')]); })()
+          JS
+          expect(out).to eq([])
         end
       end
     end

@@ -250,7 +250,7 @@ test('gallery geometry: the picture box has the work\'s shape, fits the share, l
 test('gallery label: lines are right-aligned at the picture edge; missing parts are left out cleanly', () => {
   const g = t.galleryFor({ ...ART, medium: '', size: null, collection: '' }, 2560, 1440, true);
   assert.deepStrictEqual(g.label.lines.map((l) => l.a), ['end', 'end']);
-  assert.ok(g.label.lines.every((l) => l.x === g.label.vw));
+  assert.ok(g.label.lines.every((l) => l.x <= g.label.vw && l.x >= g.label.vw - 0.35 * l.s - 2), 'right-aligned within a slant of the picture edge');
   assert.ok(!g.label.lines.some((l) => /undefined|null|NaN|\u00b7 \u00b7/.test(l.t)));
   const full = t.galleryFor(ART, 2560, 1440, true);
   assert.match(full.label.lines[2].t, /^Woodblock print \u00b7 25\.7 \u00d7 37\.9 cm \u00b7 /);
@@ -276,7 +276,7 @@ test('label text never leaves its box: long titles wrap or end in an ellipsis', 
   lines.forEach((l) => assert.ok(t.emWidth(l, false, true) * 36 <= 800));
   assert.strictEqual(t.fitText('Short', 36, 600), 'Short');
   const plate = t.plateLabel({ ...ART, title: long }, 400, 240);
-  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? 1.07 : 1) <= plate.vw));
+  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? 1.2 : 1) <= plate.vw));
 });
 
 test('mat: a dark work hangs on black, else white; Full screen has the plate model and no gallery boxes', async () => {
