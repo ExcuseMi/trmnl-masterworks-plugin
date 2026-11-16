@@ -49,5 +49,10 @@ for (const name of ['landscape', 'portrait']) {
   const shape = name === 'landscape' ? 16 / 9 : 9 / 16;
   const nearest = (pool) => pool.sort((a, b) => Math.abs(Math.log(a.w / a.h / shape)) - Math.abs(Math.log(b.w / b.h / shape)) || b.sl - a.sl)[0];
   writeFileSync(join(out, name === 'landscape' ? 'one-wide-landscape.json' : 'one-tall.json'), JSON.stringify(pack([nearest(all.filter((w) => !w.dm && full(w) && w.dark < 0.3 && !w.reasons.length))], { ...meta, parts: 1 })));
-  if (name === 'landscape') writeFileSync(join(out, 'one-dark-landscape.json'), JSON.stringify(pack([pick(all.filter((w) => w.dm && full(w)))], { ...meta, parts: 1 })));
+  if (name === 'landscape') {
+    const dark = pick(all.filter((w) => w.dm && full(w)));
+    writeFileSync(join(out, 'one-dark-landscape.json'), JSON.stringify(pack([dark], { ...meta, parts: 1 })));
+    // two works, a light one on a white mat and a dark one on black, for the primary-and-backup specs
+    writeFileSync(join(out, 'two-landscape.json'), JSON.stringify(pack([pick(all.filter((w) => !w.dm && full(w) && w.dark < 0.3)), dark], { ...meta, parts: 1 })));
+  }
 }

@@ -65,12 +65,14 @@ test('thumb width: only widths Commons serves, never above the file, a step down
   assert.strictEqual(t.thumbWidth(1600, 1500, 2560, 1440, 'fill'), 1280); // the file is 1600 wide
 });
 
-test('screen: portrait and landscape from the device, long side across for landscape', () => {
-  assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 1440, height: 2560, orientation: 'portrait' } } }), { w: 1440, h: 2560, o: 'portrait' });
-  assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 2560, height: 1440, orientation: 'portrait' } } }), { w: 1440, h: 2560, o: 'portrait' });
-  assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 1440, height: 2560, orientation: 'landscape' } } }), { w: 1440, h: 2560, o: 'portrait' }); // sizes win
-  assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 800, height: 480 } } }), { w: 800, h: 480, o: 'landscape' });
-  assert.deepStrictEqual(t.screenOf({}), { w: 800, h: 480, o: 'landscape' });
+test('screen: portrait and landscape from the device, long side across for landscape; the Frame by model or by its 2560 x 1440', () => {
+  const sc = (d) => t.screenOf({ trmnl: { device: d } });
+  assert.deepStrictEqual(sc({ width: 1440, height: 2560, orientation: 'portrait' }), { w: 1440, h: 2560, o: 'portrait', frame: true });
+  assert.deepStrictEqual(sc({ width: 2560, height: 1440, orientation: 'portrait' }), { w: 1440, h: 2560, o: 'portrait', frame: true });
+  assert.deepStrictEqual(sc({ width: 1440, height: 2560, orientation: 'landscape' }), { w: 1440, h: 2560, o: 'portrait', frame: true }); // sizes win
+  assert.deepStrictEqual(sc({ width: 800, height: 480 }), { w: 800, h: 480, o: 'landscape', frame: false });
+  assert.deepStrictEqual(sc({ width: 800, height: 480, model: 'frame' }), { w: 800, h: 480, o: 'landscape', frame: true });
+  assert.deepStrictEqual(t.screenOf({}), { w: 800, h: 480, o: 'landscape', frame: false });
 });
 
 test('settings: label, genres (a multiple choice), period and family friendly; unknown values mean the default; Presentation, Fit and Skip portraits are gone', () => {
@@ -281,20 +283,22 @@ test('the thumbnail is sized by the picture box in the gallery, by the screen wh
   assert.ok(gal.art.width <= full.art.width);
 });
 
-test('automatic choice: full screen when a fill crops under AUTO_CROP_MAX of the work, else gallery (16:9 Frame)', () => {
+test('automatic choice: full screen when a fill crops under AUTO_CROP_MAX (5 %) of the work, else gallery (16:9 Frame)', () => {
   const frame = [2560, 1440];
   const mode = (w, h, [sw, sh] = frame) => t.modeFor({ w, h }, sw, sh);
-  assert.strictEqual(t.AUTO_CROP_MAX, 0.1);
+  assert.strictEqual(t.AUTO_CROP_MAX, 0.05);
   assert.strictEqual(mode(1920, 1080), 'full', 'a 16:9 work');
   assert.strictEqual(mode(3000, 2000), 'gallery', '3:2 crops 15.6 %');
+  assert.strictEqual(mode(1920, 1000), 'gallery', '1.92:1 crops 7.4 %: full screen at 10 % before, gallery now');
   assert.strictEqual(mode(2000, 3000), 'gallery', 'a tall portrait on a landscape Frame');
   assert.strictEqual(mode(1440, 2560, [1440, 2560]), 'full', 'the same shape on the portrait Frame');
-  // the edge: crop = 1 - work aspect / screen aspect; 0.099 is under, 0.101 over (exactly 0.1 is not under)
+  // the edge: crop = 1 - work aspect / screen aspect; 0.049 is under, 0.051 over (exactly 0.05 is not under)
   const A = 16 / 9;
-  assert.strictEqual(mode(100000 * A * 0.901, 100000), 'full');
-  assert.strictEqual(mode(100000 * A * 0.899, 100000), 'gallery');
-  assert.strictEqual(mode(100000 * A * 1.11, 100000), 'full', 'a work wider than the screen is cut at the sides: 1 - 1/1.11 = 9.9 %');
-  assert.strictEqual(mode(100000 * A * 1.12, 100000), 'gallery');
+  assert.strictEqual(mode(100000 * A * 0.951, 100000), 'full');
+  assert.strictEqual(mode(100000 * A * 0.949, 100000), 'gallery');
+  assert.strictEqual(mode(100000 * A * 1.05, 100000), 'full', 'a work wider than the screen is cut at the sides: 1 - 1/1.05 = 4.8 %');
+  assert.strictEqual(mode(100000 * A * 1.06, 100000), 'gallery');
+  assert.strictEqual(mode(1920, 1080 * 1.06), 'gallery', '6 % taller than the screen: cut top and bottom');
   assert.ok(Math.abs(t.cropShare(1.5, 1.5)) < 1e-12);
 });
 
@@ -478,13 +482,18 @@ test('the placard of a work that fills the view: who, the collection, a margin t
   assert.strictEqual(t.plateFor({ ...art, collection: '', medium: '' }, 2560, 1440, 'big').detail, '');
 });
 
-test('text size tier: a big canvas (the Frame) is named from the reported size; the X (1872) is not big', async () => {
+test('text size tier: only the Frame is a big canvas (model frame, or 2560 x 1440 without a model); zoomed screens are not', async () => {
   globalThis.fetch = answer(shard([{}]));
   const kind = async (w, h) => (await t.run(input({ device: { width: w, height: h, orientation: 'landscape' } }))).art.kind;
   assert.strictEqual(await kind(2560, 1440), 'big');
   assert.strictEqual(await kind(1440, 2560), 'big');
   assert.strictEqual(await kind(1872, 1404), 'normal');
   assert.strictEqual(await kind(800, 480), 'normal');
+  assert.strictEqual(await kind(1600, 2400), 'normal', 'tcl_nxtpaper_14: lg, drawn zoomed');
+  assert.strictEqual(await kind(2480, 1860), 'normal', 'Kindle Scribe: not the Frame');
+  const model = async (m, w, h) => (await t.run(input({ device: { width: w, height: h, model: m, orientation: 'landscape' } }))).art.kind;
+  assert.strictEqual(await model('frame', 2560, 1440), 'big');
+  assert.strictEqual(await model('og_png', 2560, 1440), 'normal', 'a model that is not the Frame');
 });
 
 test('thumbnail: the requested width is at least 0.8 x the displayed width (up to the 1920 cap and the file\'s own width)', async () => {
@@ -509,4 +518,134 @@ test('srcset: the standard widths up to 1920 and the file\'s own width, so the b
   assert.deepStrictEqual(set('A.jpg', 1500), [500, 960, 1280]);
   assert.ok(set('A.jpg', 600).length >= 1);
   assert.ok(t.srcsetOf('A b\'s (c).jpg', 5000).split(', ').every((x) => /^https:\/\/upload\.wikimedia\.org\/.+ \d+w$/.test(x) && !/[,]\S*\s\d+w$/.test(x.replace(/ \d+w$/, '')) ));
+});
+
+// ---- mirrors ---------------------------------------------------------------------------------------------------------------
+const byHost = (table) => async (url) => {
+  const host = Object.keys(table).find((h) => url.includes(h));
+  const v = host === undefined ? new Error('no route') : table[host];
+  if (v instanceof Error) throw v;
+  if (typeof v === 'string') return { ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token < in JSON'); }, text: async () => v };
+  return v;
+};
+const BASES = ['raw.githubusercontent.com', 'cdn.jsdelivr.net', 'excusemi.github.io', 'cdn.statically.io'];
+
+test('mirrors: the four are listed, the repository path is the same on each', () => {
+  assert.strictEqual(t.DATA_BASES.length, 4);
+  for (const host of BASES) assert.ok(t.DATA_BASES.some((b) => b.includes(host)), host);
+  assert.ok(t.DATA_BASES.every((b) => /^https:\/\/.+\/data\/$/.test(b)));
+  assert.ok(!t.DATA_BASES.some((b) => /statically\.io\/gh\/ExcuseMi\/trmnl-masterworks-plugin\/main/.test(b)), 'the form without @ answers 301');
+});
+
+test('mirrors: all are asked at once', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => { asked.push(url); return answer(shard([{}]))(); };
+  await t.run(input());
+  assert.strictEqual(asked.length, 4);
+  for (const host of BASES) assert.ok(asked.some((u) => u.includes(host)), host);
+  assert.strictEqual(new Set(asked.map((u) => u.split('/').pop())).size, 1, 'the same part on each');
+});
+
+test('mirrors: raw down, jsDelivr answers: the work comes from jsDelivr', async () => {
+  const good = shard([{ t: 'From jsDelivr' }]);
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': new Error('ECONNRESET'), 'cdn.jsdelivr.net': answer(good)(), 'excusemi.github.io': new Error('404'), 'cdn.statically.io': new Error('x') });
+  globalThis.fetch = (f => async (u) => { const r = await f(u); return typeof r.then === 'function' ? r : r; })(byHost({ 'raw.githubusercontent.com': new Error('ECONNRESET'), 'cdn.jsdelivr.net': { ok: true, status: 200, json: async () => good }, 'excusemi.github.io': new Error('404'), 'cdn.statically.io': new Error('x') }));
+  const out = await t.run(input());
+  assert.strictEqual(out.art.title, 'From jsDelivr');
+  assert.ok(!out.notice);
+});
+
+test('mirrors: a mirror that answers HTML is ignored, the others are used', async () => {
+  const good = shard([{ t: 'From raw' }]);
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': { ok: true, status: 200, json: async () => good }, 'cdn.jsdelivr.net': '<!DOCTYPE html><html>Not found</html>', 'excusemi.github.io': '<html>404</html>', 'cdn.statically.io': '<html>x</html>' });
+  assert.strictEqual((await t.run(input())).art.title, 'From raw');
+  // HTML, a 200 with a wrong shape and a 500: nothing valid anywhere is a clean failure
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': '<html>', 'cdn.jsdelivr.net': { ok: true, status: 200, json: async () => ({ hello: 1 }) }, 'excusemi.github.io': { ok: false, status: 500, json: async () => ({}) }, 'cdn.statically.io': new Error('x') });
+  const out = await t.run(input());
+  assert.ok(out.notice && !out.art);
+});
+
+test('mirrors: all down: the work shown last again, else a clean message, the state untouched', async () => {
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const art = { id: 'Q9', url: 'https://example.org/x.jpg', title: 'Old' };
+  const kept = await t.run(input({ previous_merge_variables: { art, geo: { full: { mode: 'full' } } }, state: { h: [5] } }));
+  assert.deepStrictEqual(kept.art, art);
+  assert.deepStrictEqual(kept.trmnl_state, { h: [5] });
+  const none = await t.run(input({ state: { h: [5] } }));
+  assert.ok(none.notice && !none.art);
+});
+
+test('mirrors: the newest shard wins when two answer, a stale one is fine alone', async () => {
+  const old = { ...shard([{ t: 'Old data' }]), built: '2026-10-01' };
+  const fresh = { ...shard([{ t: 'New data' }]), built: '2026-11-16' };
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': { ok: true, status: 200, json: async () => old }, 'cdn.jsdelivr.net': { ok: true, status: 200, json: async () => fresh }, 'excusemi.github.io': new Error('x'), 'cdn.statically.io': new Error('x') });
+  assert.strictEqual((await t.run(input())).art.title, 'New data');
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': { ok: true, status: 200, json: async () => old }, 'cdn.jsdelivr.net': new Error('x'), 'excusemi.github.io': new Error('x'), 'cdn.statically.io': new Error('x') });
+  assert.strictEqual((await t.run(input())).art.title, 'Old data');
+});
+
+test('mirrors: a mirror that answers with an error status is ignored even if its body parses as a shard', async () => {
+  const good = shard([{ t: 'Fine' }]), stale = shard([{ t: 'From an error page' }]);
+  globalThis.fetch = byHost({ 'raw.githubusercontent.com': { ok: false, status: 404, json: async () => stale }, 'cdn.jsdelivr.net': { ok: true, status: 200, json: async () => good }, 'excusemi.github.io': new Error('x'), 'cdn.statically.io': new Error('x') });
+  assert.strictEqual((await t.run(input())).art.title, 'Fine');
+});
+
+test('mirrors: a slow mirror does not hold the run: the first valid answer plus the grace is enough', async () => {
+  const good = shard([{ t: 'Quick' }]);
+  globalThis.fetch = (url) => (url.includes('raw.githubusercontent.com')
+    ? Promise.resolve({ ok: true, status: 200, json: async () => good })
+    : new Promise(() => {})); // the others never answer
+  const started = Date.now();
+  const out = await t.run(input());
+  assert.strictEqual(out.art.title, 'Quick');
+  assert.ok(Date.now() - started < 1500, 'waited ' + (Date.now() - started) + ' ms');
+});
+
+// ---- backup work -------------------------------------------------------------------------------------------------------------
+test('backup: a famous work, not the primary, not in the history, through the same filters; its own presentation and mat', async () => {
+  const works = [{ s: 20 }, { s: 300, n: 1 }, { s: 250 }, { s: 200, u: 1 }, { s: 150 }, { s: 120 }, { s: 90 }, { s: 60 }, { s: 5 }];
+  const sh = shard(works);
+  const rnd = seeded(3);
+  for (let n = 0; n < 300; n++) {
+    const b = t.pickBackup(sh, { k: 1, aspect: 1.6, family: true }, [qnumOf(2)], 0, rnd);
+    assert.notStrictEqual(b, 0, 'not the primary');
+    assert.notStrictEqual(b, 2, 'not in the history');
+    assert.notStrictEqual(b, 3, 'the family filter holds');
+    assert.ok(sh.w[b].s >= 60, 'one of the 5 most famous eligible: ' + sh.w[b].s);
+  }
+  assert.strictEqual(t.pickBackup(shard([{}]), { k: 1, aspect: 1.6 }, [], 0, rnd), null, 'a shard of one work has no backup');
+});
+const qnumOf = (idx) => idx + 1; // Q1.. in shard()
+
+test('run: the model has a primary and a backup, each with its own art, geometry and mat; the state records the primary only', async () => {
+  globalThis.fetch = answer(shard([{ w: 3000, h: 2000, s: 10, n: 1 }, { w: 1600, h: 900, s: 400 }, { w: 2000, h: 3000, s: 300 }]));
+  for (let n = 0; n < 20; n++) {
+    const out = await t.run(input());
+    assert.ok(out.backup && out.backup.art && out.backup.geo, 'a backup');
+    assert.notStrictEqual(out.backup.art.id, out.art.id);
+    assert.ok(out.backup.geo.full.mode && out.backup.art.mat && out.backup.art.url);
+    assert.deepStrictEqual(out.trmnl_state.h, [Number(out.art.id.slice(1))], 'the primary is recorded: the browser decides which one shows');
+  }
+  globalThis.fetch = answer(shard([{}]));
+  assert.strictEqual((await t.run(input())).backup, null);
+});
+
+test('run: a failed fetch keeps the previous primary and backup', async () => {
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const art = { id: 'Q9', url: 'https://example.org/x.jpg', title: 'Old' }, backup = { art: { id: 'Q8', url: 'https://example.org/y.jpg' }, geo: {} };
+  const out = await t.run(input({ previous_merge_variables: { art, geo: {}, backup } }));
+  assert.deepStrictEqual(out.backup, backup);
+});
+
+test('zoomed screens: the label\'s share of a slot is judged in CSS px (generic_16_9 reports 1920 x 1080 and draws 800 x 480 zoomed 2.4)', async () => {
+  const art = { ...ART, w: 3000, h: 2000 };
+  // half_horizontal slot 1920 x 540 reported = 800 x 225 CSS: a 3-line label needs a third of it
+  const zoomed = t.galleryFor(art, 1920, 540, true, 'normal', 2.4);
+  const plain = t.galleryFor(art, 1920, 540, true, 'normal', 1);
+  assert.ok(zoomed.ph < plain.ph, `zoomed ${zoomed.ph} < plain ${plain.ph}`);
+  assert.ok(zoomed.ph + 2.4 * (1.25 * 20 + 1.3 * 16 + 1.35 * 16) <= 540 * 0.93 + 8, 'the zoomed label fits under the picture');
+  assert.strictEqual(t.galleryFor(art, 480, 288, true, 'normal', 2.4).label, undefined, 'a quadrant of a zoomed screen too small for a label');
+  const art2 = (await t.run(input({ device: { width: 1920, height: 1080, orientation: 'landscape' } }))).art;
+  assert.strictEqual(art2.zoom, 2.4);
+  assert.strictEqual((await t.run(input({ device: { width: 2560, height: 1440, orientation: 'landscape' } }))).art.zoom, 1);
 });

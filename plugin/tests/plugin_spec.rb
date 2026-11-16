@@ -6,16 +6,25 @@ require 'json'
 require 'uri'
 
 RSpec.describe 'Masterworks' do
-  let(:base) { 'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data' }
   let(:custom_fields) { {} }
 
   def fixture(name) = JSON.parse(File.read(File.join(__dir__, 'fixtures', "#{name}.json")))
 
-  # the same document for every part of an orientation (the transform fetches one part at random)
+  # the data is served from four mirrors (the transform asks them all and takes the newest valid answer)
+  MIRRORS = %w[
+    https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data
+    https://cdn.jsdelivr.net/gh/ExcuseMi/trmnl-masterworks-plugin@main/data
+    https://excusemi.github.io/trmnl-masterworks-plugin/data
+    https://cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data
+  ].freeze
+
+  # the same document for every part of an orientation and every mirror (the transform fetches one part at random)
   def shard_mocks(landscape, portrait)
-    (0..5).each_with_object({}) do |k, m|
-      m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
-      m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
+    MIRRORS.each_with_object({}) do |base, m|
+      (0..5).each do |k|
+        m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
+        m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
+      end
     end
   end
 
@@ -55,7 +64,7 @@ RSpec.describe 'Masterworks' do
           [light, wide].each do |m|
             page = screen(view, device, mocks: m)
             wait(page)
-            expect(page.all('[data-gallery], [data-mode="full"]').length).to eq(1)
+            expect(page.all('[data-block="primary"][data-gallery], [data-block="primary"][data-mode="full"]').length).to eq(1)
             expect(page).to have_css('img.image.image-dither')
             expect(page).to have_no_css('.title_bar')
             expect(page.evaluate("getComputedStyle(document.querySelector('img.image')).objectFit")).to eq('cover')
@@ -198,6 +207,84 @@ RSpec.describe 'Masterworks' do
     end
   end
 
+  describe 'when the picture of the chosen work fails' do
+    # two works; the state says the dark one was shown lately, so the light one is the primary and the dark one the backup
+    let(:two) { shard_mocks('two-landscape', 'one-portrait') }
+    let(:works) { fixture('two-landscape')['w'] }
+    let(:light) { works.find { |w| !w['n'] } }
+    let(:dark) { works.find { |w| w['n'] } }
+    let(:state) { { 'h' => [dark['i'][1..].to_i] } }
+    let(:model) { trmnl.transform(mocks: two, custom_fields:, state:).data }
+    # trmnlp's asset overrides do not reach the browser's picture requests, so the failure is the browser's own error event, fired on the image
+    def fail_picture(page, block)
+      page.evaluate("document.querySelector('[data-block=\"#{block}\"] img').dispatchEvent(new Event('error'))")
+      Kernel.sleep(0.3)
+    end
+
+    def backup_text(page)
+      page.evaluate("document.querySelector('[data-block=backup]').innerText").to_s.tr("\u00a0", ' ')
+    end
+
+    def visible_block(page, name) = page.evaluate("(() => { const b = document.querySelector('[data-block=\"#{name}\"]'); return !!b && !b.classList.contains('hidden') && b.getBoundingClientRect().height > 0; })()")
+
+    it 'the model has the light work as primary and the dark one as its backup, each with its own look' do
+      expect(model['art']['id']).to eq(light['i'])
+      expect(model['backup']['art']['id']).to eq(dark['i'])
+      expect(model['art']['mat']).to eq('white')
+      expect(model['backup']['art']['mat']).to eq('black')
+    end
+
+    it 'shows the primary while its picture loads, the backup block stays hidden' do
+      page = trmnl.render(view: 'full', device: 'og_png', mocks: two, custom_fields:, state:)
+      wait(page)
+      expect(visible_block(page, 'primary')).to be(true)
+      expect(visible_block(page, 'backup')).to be(false)
+    end
+
+    it 'swaps to the backup, with its own label and its own mat, when the primary picture fails' do
+      page = trmnl.render(view: 'full', device: 'og_png', mocks: two, custom_fields:, state:)
+      wait(page)
+      fail_picture(page, 'primary')
+      expect(visible_block(page, 'primary')).to be(false)
+      expect(visible_block(page, 'backup')).to be(true)
+      expect(backup_text(page)).to include(dark['t'])
+      expect(page.evaluate("getComputedStyle(document.querySelector('[data-block=\"backup\"]')).backgroundColor")).to eq('rgb(0, 0, 0)')
+    end
+
+    it 'swaps in every view and on the Frame' do
+      %w[full half_horizontal half_vertical quadrant].each do |view|
+        %w[og_png frame].each do |device|
+          page = trmnl.render(view:, device:, mocks: two, custom_fields:, state:)
+          wait(page)
+          fail_picture(page, 'primary')
+          expect(visible_block(page, 'backup')).to be(true), "#{view} on #{device}"
+          expect(visible_block(page, 'primary')).to be(false), "#{view} on #{device}"
+        end
+      end
+    end
+
+    it 'both pictures failing leaves the backup\'s mat and label (the clean fallback), never a blank screen' do
+      page = trmnl.render(view: 'full', device: 'og_png', mocks: two, custom_fields:, state:)
+      wait(page)
+      fail_picture(page, 'primary')
+      page.evaluate("document.querySelector('[data-block=\"backup\"] img').dispatchEvent(new Event('error'))")
+      expect(visible_block(page, 'backup')).to be(true)
+      expect(backup_text(page)).to include(dark['t'])
+    end
+
+    it 'the backup picture is not fetched while the primary shows (lazy)' do
+      page = trmnl.render(view: 'full', device: 'og_png', mocks: two, custom_fields:, state:)
+      wait(page)
+      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').getAttribute('loading')")).to eq('lazy')
+      expect(page.evaluate("document.querySelector('[data-block=\"primary\"] img').getAttribute('onerror')")).to include('hidden')
+    end
+
+    it 'the state records the primary (whether its picture loaded is only known in the browser)' do
+      run = trmnl.transform(mocks: two, custom_fields:, state:)
+      expect(run.state['h'].last).to eq(light['i'][1..].to_i)
+    end
+  end
+
   describe 'when the picture cannot be loaded' do
     # the mat and the label are drawn by the markup itself, so a failed picture is never a blank screen
     it 'still shows the mat and the label with the title, or the placard' do
@@ -220,9 +307,11 @@ RSpec.describe 'Masterworks' do
 
   describe 'when the data cannot be loaded' do
     let(:mocks) do
-      (0..5).each_with_object({}) do |k, m|
-        m["#{base}/landscape-#{k}.json"] = { status: 500 }
-        m["#{base}/portrait-#{k}.json"] = { status: 500 }
+      MIRRORS.each_with_object({}) do |base, m|
+        (0..5).each do |k|
+          m["#{base}/landscape-#{k}.json"] = { status: 500 }
+          m["#{base}/portrait-#{k}.json"] = { status: 500 }
+        end
       end
     end
 

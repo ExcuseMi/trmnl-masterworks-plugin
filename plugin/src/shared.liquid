@@ -1,7 +1,5 @@
-{% template main %}
-{% comment %} Masterworks. No title bar. Each view is drawn as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label; "full": the work fills the view with a corner placard. Label text is SVG text in the slot's own pixels (geo, from the transform): the Frame is screen--md at 1x, so no text class could scale to it. {% endcomment %}
-{% comment %} Masterworks. No title bar. Each view is drawn as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label; full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp). The Frame is screen--frame screen--md at 1x like the OG and the Framework has no variant for a device class, so art.kind (from the reported screen size) names the tier: big = the largest sizes. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
-{% if art.url %}
+{% comment %} Masterworks. No title bar. The "work" template draws one work; "main" draws the primary and, when there is one, a hidden backup (see main). Each work is drawn per view as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label (title, ARTIST and year, technique and where it hangs); full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp) with the text colour on every element. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
+{% template work %}
 {% assign gv = geo[vname] %}
 {% comment %} THE ONE PLACE that sizes text by screen. Known TRMNL bug: the Frame (2560 px, screen--frame) carries screen--md, not screen--lg, so lg: prefixes never apply to it and its Framework text is OG-sized on a 2560 px canvas. Until TRMNL fixes the class, a Frame (trmnl.device.model, or art.kind from the reported size) gets the largest Framework sizes; the X is lg and uses lg: prefixes. When the class is fixed, replace this branch with lg: prefixes and delete it. {% endcomment %}
 {% if art.kind == "big" or trmnl.device.model == "frame" %}
@@ -10,9 +8,9 @@
   {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}{% assign ppad = "px--3 py--2" %}
 {% endif %}
 {% if gv.mode == "full" %}
-<div class="layout layout--center p--0" data-mode="full">
+<div class="layout layout--center p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
   <div class="relative w--full h--full bg--white">
-    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw" class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
     {% assign pl = gv.plate %}
     {% if pl %}
     {% comment %} the plate sits inside the picture's bottom-left corner with a margin (never across an edge): solid black with white text on a dark corner, solid white with black text on a light one, a thin solid edge in the other colour; dark: swaps the tokens back so a dark-mode screen does not repaint it {% endcomment %}
@@ -39,12 +37,12 @@
 {% else %}
   {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
-<div class="layout layout--col layout--center gap--none p--0 {{ mat }}" data-gallery="{{ art.mat }}">
+<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}">
   <div class="flex flex--col flex--center-x gap--none">
     {% comment %} the bevel: an outer line in the opposite colour, then a gap of mat colour, then the picture; the box is whole-percent sized and the picture covers it {% endcomment %}
     <div class="{{ edge }} p--0.5 w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
       <div class="{{ mat }} p--0.5 w--full h--full">
-        <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw" class="image image--cover image-dither block w--full h--full" alt="" />
+        <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
       </div>
     </div>
     {% if gl.label %}
@@ -57,6 +55,15 @@
   </div>
 </div>
 {% endif %}
+{% endtemplate %}
+
+{% template main %}
+{% if art.url %}
+{% comment %} The primary block is shown; when its picture fails to load, its onerror hides it and shows the backup block (a second, famous work with its own label, look and mat). If the backup's picture fails too, its mat and label stay: the clean fallback. The swap uses Framework classes only (hidden); no style=. {% endcomment %}
+{% assign swap = "" %}
+{% if backup.art.url %}{% assign swap = "var v=this.closest('.view')||document,b=v.querySelector('[data-block=backup]'),p=v.querySelector('[data-block=primary]');if(b&&p){p.classList.add('hidden');b.classList.remove('hidden');}" %}{% endif %}
+{% render "work", trmnl:trmnl, art:art, geo:geo, vname:vname, block:"primary", swap:swap %}
+{% if backup.art.url %}{% render "work", trmnl:trmnl, art:backup.art, geo:backup.geo, vname:vname, block:"backup", swap:"" %}{% endif %}
 {% else %}
 <div class="layout layout--col layout--center">
   <span class="title title--small">Masterworks</span>

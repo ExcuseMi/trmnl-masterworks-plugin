@@ -12,7 +12,16 @@
  * size tier from the reported screen size (art.kind) and the markup picks the classes.
  */
 
-var DATA_BASE = 'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/';
+// The data is served from several mirrors of the same repository; a run asks all of them at once and uses the newest valid
+// answer, so the plugin keeps working when one of them is down.
+var DATA_BASES = [
+  'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/',
+  'https://cdn.jsdelivr.net/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/',
+  'https://excusemi.github.io/trmnl-masterworks-plugin/data/',
+  'https://cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/', // the form without @ answers 301
+];
+var MIRROR_GRACE_MS = 400; // after the first valid answer, wait this long for a newer one from another mirror
+var BACKUP_TOP = 5; // the backup work is one of this many most famous candidates (likely cached at its thumbnail width)
 var FETCH_MS = 3500; // the run has 5 s in all
 var SHARDS = { landscape: 6, portrait: 5 }; // parts per orientation in data/ (a test compares this with the files)
 var HISTORY = 50; // never one of the last HISTORY works shown
@@ -22,12 +31,15 @@ var COLOR_WEIGHT = 0.25; // palette distance (after TRMNL's contrast step), resc
 var DARK_FREE = 0.45; // share of near-black pixels (after TRMNL's contrast step) that costs nothing
 var DARK_K = 6; // beyond DARK_FREE the weight is multiplied by exp(-DARK_K x the excess): the strong penalty, for very dark works only
 var MIN_POOL = 5; // a movement with fewer works than this is ignored
-var BIG_SCREEN_PX = 2200; // a reported screen with a side this long is a big canvas (the Frame is 2560; TRMNL gives it screen--md, a bug): the largest Framework text sizes. The X (1872) is lg and scales by itself
+// Only the Frame (model "frame", or the 2560 x 1440 it reports when no model is given) is a big canvas that TRMNL calls screen--md (a bug):
+// it gets the largest Framework text sizes. Every other screen scales its Framework text by itself, and many are drawn zoomed:
+// the reported size is device pixels, the CSS size is about 800 px wide on md screens (zoom = reported / 800, a guess that errs on the safe side for lg).
+var CSS_BASE_PX = 800;
 var STEPS = [120, 250, 500, 960, 1280, 1920, 3840]; // the thumbnail widths Wikimedia serves (Commons returns 400 for others)
 var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
-var AUTO_CROP_MAX = 0.10; // full screen when filling the view would crop less than this share of the work's area, else the gallery
+var AUTO_CROP_MAX = 0.05; // full screen when filling the view would crop less than this share of the work's area, else the gallery
 var ASPECT_K = 2; // shape factor exp(-ASPECT_K x |ln(work aspect / screen aspect)|): works shaped like the screen come up more often
 // the genre choices of the settings and the genres (the data's own names) each one lets through
 var GENRE_SETS = {
@@ -129,7 +141,8 @@ function screenOf(input) {
   var o = h > w || d.orientation === 'portrait' ? 'portrait' : 'landscape';
   // the sizes are those of the picture area: the long side is across for landscape, down for portrait
   var long = Math.max(w, h), short = Math.min(w, h);
-  return o === 'portrait' ? { w: short, h: long, o: o } : { w: long, h: short, o: o };
+  var frame = d.model === 'frame' || (d.model === undefined && long === 2560 && short === 1440);
+  return o === 'portrait' ? { w: short, h: long, o: o, frame: frame } : { w: long, h: short, o: o, frame: frame };
 }
 
 /** A boolean custom field arrives as true, "true", "yes", false, "false"...; missing or empty means the default. */
@@ -191,7 +204,7 @@ var genreOfWork = function (shard, work) { return shard.gen && work.g !== undefi
  * dropped together and `relaxed` names them.
  * rnd() is a uniform [0, 1) source, injected so tests can drive it.
  */
-function pick(shard, ctx, history, rnd) {
+function candidates(shard, ctx) {
   var works = shard.w, i, relaxed = [];
   var all = [];
   for (i = 0; i < works.length; i++) if (!(ctx.family && works[i].u)) all.push(i);
@@ -210,6 +223,13 @@ function pick(shard, ctx, history, rnd) {
     if (ctx.movement && mov >= 0) relaxed.push('movement');
     if (allowed.length) relaxed.push('genre');
   }
+  return { pool: pool, relaxed: relaxed, allowed: allowed };
+}
+
+/** The pick (see candidates for the pool). */
+function pick(shard, ctx, history, rnd) {
+  var works = shard.w, i;
+  var cand = candidates(shard, ctx), pool = cand.pool, relaxed = cand.relaxed, allowed = cand.allowed;
   var seen = {};
   history.forEach(function (n) { seen[n] = true; });
   var fresh = pool.filter(function (idx) { return !seen[qnum(works[idx].i)]; });
@@ -235,6 +255,21 @@ function pick(shard, ctx, history, rnd) {
   return { index: fresh[fresh.length - 1], relaxed: relaxed };
 }
 
+/**
+ * A backup work for when the primary's picture fails to load: one of the BACKUP_TOP most famous candidates (their thumbnails are
+ * the likeliest to be cached), not the primary, not shown lately, through the same filters. null when the shard has no other.
+ */
+function pickBackup(shard, ctx, history, primaryIdx, rnd) {
+  var pool = candidates(shard, ctx).pool, seen = {};
+  history.forEach(function (n) { seen[n] = true; });
+  var list = pool.filter(function (idx) { return idx !== primaryIdx && !seen[qnum(shard.w[idx].i)]; });
+  if (!list.length) list = pool.filter(function (idx) { return idx !== primaryIdx; });
+  if (!list.length) return null;
+  list.sort(function (a, b) { return (shard.w[b].s || 0) - (shard.w[a].s || 0); });
+  var top = list.slice(0, BACKUP_TOP);
+  return top[Math.min(top.length - 1, Math.floor(rnd() * top.length))];
+}
+
 /** The index only (tests drive this one). */
 function choose(shard, ctx, history, rnd) {
   var c = Object.assign({}, ctx);
@@ -247,14 +282,38 @@ function validShard(j) {
     typeof j.w[0].f === 'string' && j.w[0].w > 0 && j.w[0].h > 0;
 }
 
-async function fetchShard(orientation, rnd) {
-  var parts = SHARDS[orientation] || 1;
-  var part = Math.min(parts - 1, Math.floor(rnd() * parts));
-  var res = await fetch(DATA_BASE + orientation + '-' + part + '.json', { signal: AbortSignal.timeout(FETCH_MS) });
-  if (!res || !res.ok) throw new Error('data HTTP ' + (res && res.status));
+/** One mirror's answer: valid JSON of the right shape, else an error (HTML, a 404 page, a half answer are all errors). */
+async function fetchOne(base, name) {
+  var res = await fetch(base + name, { signal: AbortSignal.timeout(FETCH_MS) });
+  if (!res || !res.ok) throw new Error(base + ' HTTP ' + (res && res.status));
   var j = await res.json();
-  if (!validShard(j)) throw new Error('data has an unexpected shape');
+  if (!validShard(j)) throw new Error(base + ' has an unexpected shape');
   return j;
+}
+
+/** All mirrors at once; the first valid answer starts a short wait for a newer one, then the newest `built` wins. */
+function fetchShard(orientation, rnd) {
+  var parts = SHARDS[orientation] || 1;
+  var name = orientation + '-' + Math.min(parts - 1, Math.floor(rnd() * parts)) + '.json';
+  return new Promise(function (resolve, reject) {
+    var best = null, pending = DATA_BASES.length, timer = null, done = false, errors = [];
+    var finish = function () {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      if (best) resolve(best); else reject(new Error(errors.join('; ')));
+    };
+    DATA_BASES.forEach(function (base) {
+      fetchOne(base, name).then(function (j) {
+        if (!best || String(j.built) > String(best.built)) best = j;
+        if (!timer) timer = setTimeout(finish, MIRROR_GRACE_MS);
+        if (--pending === 0) finish();
+      }, function (e) {
+        errors.push(String(e && e.message ? e.message : e));
+        if (--pending === 0) finish();
+      });
+    });
+  });
 }
 
 // ---- label text, drawn as SVG text: sizes are the slot's own pixels ---------------------------------------------------
@@ -289,14 +348,15 @@ function plateFor(art, slotW, slotH, kind) {
  * nearest the work's shape is taken and the picture covers its box, so an error of a fraction of a percent is cropped,
  * never a gap), and what the label needs. withLabel false: the picture alone, centred.
  */
-function galleryFor(art, slotW, slotH, withLabel, kind) {
+function galleryFor(art, slotW, slotH, withLabel, kind, zoom) {
   var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
   var widthCap = (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE) * slotW;
   var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
   var px = LABEL_PX[kind || 'normal'], maxLines = slotH >= 700 ? 2 : 1, hasDetail = slotH >= LABEL_DETAIL_MIN_H && !!detailLine(art);
   var lines = 1, ph = 0, pw = 0, i;
   // the room a label needs: its share of the slot, but never less than its lines at the sizes the markup uses
-  var floorPx = function (n) { return n * 1.25 * px[0] + 1.3 * px[1] + (hasDetail ? 1.35 * px[2] : 0) + 6; };
+  zoom = zoom || 1; // the label's text is in CSS px; the slot is in reported device px, which a zoomed screen draws larger
+  var floorPx = function (n) { return zoom * (n * 1.25 * px[0] + 1.3 * px[1] + (hasDetail ? 1.35 * px[2] : 0) + 6); };
   if (withLabel && floorPx(1) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
   for (i = 0; i < 3; i++) { // the title wraps by the picture's width, the picture's size leaves room for the label
     var reserve = withLabel ? Math.max(slotH * (LABEL_SHARE + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE), floorPx(lines) + slotH * LABEL_GAP_SHARE) : 0;
@@ -345,12 +405,12 @@ function artOf(work, shard, set, scr) {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
     collection: work.c === undefined ? '' : shard.col[work.c], movement: work.m === undefined ? '' : shard.mov[work.m],
     genre: genreOfWork(shard, work), medium: work.e === undefined || !shard.med ? '' : shard.med[work.e], size: work.z || null,
-    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: Math.max(scr.w, scr.h) >= BIG_SCREEN_PX ? 'big' : 'normal', w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
+    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
   };
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
-    if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind), plate: null };
+    if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null };
     else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null };
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
@@ -372,7 +432,7 @@ async function run(input) {
     // Hand the state back unchanged. The work shown last stays on the screen, without a notice; else a plain message.
     var prev = input && input.trmnl && input.trmnl.previous_merge_variables;
     var out = { settings: set, trmnl_state: state };
-    if (prev && prev.art && prev.art.url) { out.art = prev.art; out.geo = prev.geo; }
+    if (prev && prev.art && prev.art.url) { out.art = prev.art; out.geo = prev.geo; out.backup = prev.backup || null; }
     else out.notice = 'The artwork list could not be loaded. The next refresh tries again.';
     out.debug = String(err && err.message ? err.message : err);
     return out;
@@ -384,13 +444,17 @@ async function run(input) {
   state.h.push(qnum(work.i));
   state.h = state.h.slice(-HISTORY);
   var made = artOf(work, shard, set, scr);
+  var pickCtx = { k: ASPECT_K, aspect: scr.w / scr.h, movement: set.movement, genres: set.genres, family: set.family_friendly };
+  var bIdx = pickBackup(shard, pickCtx, state.h, chosen.index, Math.random);
+  var backup = bIdx === null ? null : artOf(shard.w[bIdx], shard, set, scr);
   // filters_relaxed: the narrowing filters that left too few works and were dropped for this refresh
-  return { art: made.art, geo: made.geo, settings: set, filters_relaxed: chosen.relaxed, trmnl_state: state };
+  // trmnl_state records the primary: whether its picture loaded (or the backup replaced it) is only known in the browser
+  return { art: made.art, geo: made.geo, backup: backup, settings: set, filters_relaxed: chosen.relaxed, trmnl_state: state };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, validShard: validShard, pick: pick, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }
