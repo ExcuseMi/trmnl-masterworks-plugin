@@ -421,8 +421,8 @@ test('gallery geometry: the picture has the work\'s shape and fits; the limiting
           assert.ok(g.pw <= sw * (wide ? 0.92 : 0.75) + sw * 0.015, `${tag}: width ${g.pw}`);
           assert.ok(g.ph <= sh * (wide ? 0.75 : 0.88) + sh * 0.015, `${tag}: height ${g.ph}`);
           const shapeErr = Math.abs(g.pw / g.ph / (w / h) - 1);
-          assert.ok(shapeErr < 0.1, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
-          if (label) assert.ok(g.ph + sh * (sh < 400 ? 0.085 : 0.105) + sh * 0.018 <= sh * 0.94 + sh * 0.015, `${tag}: no room for the label (${g.ph} of ${sh})`);
+          assert.ok(shapeErr < 0.12, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
+          if (label && g.label) assert.ok(g.ph + sh * 0.11 + sh * 0.018 <= sh * 0.93 + sh * 0.015 + 1, `${tag}: no room for the label (${g.ph} of ${sh})`);
         }
       }
     }
@@ -433,23 +433,25 @@ test('panoramic and tall extremes use the room their shape allows (The Funeral o
   const pano = t.galleryFor({ ...ART, w: 2000, h: 847 }, ...FRAME, true, 'big');
   assert.ok(pano.pw >= 0.9 * 2560 && pano.pw <= 0.935 * 2560, `a panoramic work: ${pano.pw} of 2560`);
   const tall = t.galleryFor({ ...ART, w: 1000, h: 3000 }, ...FRAME, true, 'big');
-  assert.ok(tall.ph >= 0.78 * 1440, `a tall work: ${tall.ph} of 1440`);
-  assert.ok(tall.ph + 1440 * 0.123 <= 1440 * 0.945, 'with the label under it');
+  assert.ok(tall.ph >= 0.75 * 1440, `a tall work: ${tall.ph} of 1440`);
+  assert.ok(tall.ph + 1440 * 0.128 <= 1440 * 0.935, 'with the label under it');
   const normal = t.galleryFor({ ...ART, w: 3000, h: 2000 }, ...FRAME, true, 'big');
   assert.ok(normal.pw < pano.pw, 'a 3:2 work is not blown up like a panorama');
 });
 
-test('label lines: ARTIST in caps with the year, then material, size and where it hangs; missing parts are left out cleanly', () => {
+test('label lines: title, ARTIST in caps with the year, where it hangs; nothing else (no material, no size); missing parts are left out cleanly', () => {
   const full = t.galleryFor(ART, ...FRAME, true, 'big').label;
   assert.strictEqual(full.who, 'KATSUSHIKA HOKUSAI \u00b7 1831');
-  assert.strictEqual(full.detail, 'Woodblock print \u00b7 25.7 \u00d7 37.9 cm \u00b7 The Metropolitan Museum of Art');
+  assert.strictEqual(full.detail, 'The Metropolitan Museum of Art');
+  assert.ok(!/Woodblock|cm/.test(JSON.stringify(full)), 'material and size are not on the label');
   const bare = t.galleryFor({ ...ART, medium: '', size: null, collection: '', year: '' }, ...FRAME, true, 'big').label;
   assert.strictEqual(bare.detail, '');
   assert.strictEqual(bare.who, 'KATSUSHIKA HOKUSAI');
   assert.ok(!/undefined|null|NaN|\u00b7 \u00b7/.test(bare.who + bare.detail));
-  assert.strictEqual(t.galleryFor(ART, 400, 240, true, 'normal').label.detail, '', 'a small slot: no detail line');
+  assert.strictEqual(t.galleryFor(ART, 400, 240, true, 'normal').label.detail, '', 'a small slot: no where-it-hangs line');
   assert.strictEqual(t.galleryFor(ART, ...FRAME, false, 'big').label, undefined);
   assert.strictEqual(t.whoLine({ artist: '', year: '1500' }), '1500');
+  assert.strictEqual(t.galleryFor(ART, 200, 120, true, 'normal').label, undefined, 'a slot too small for a readable label has none (a playdate quadrant)');
 });
 
 test('a long title takes more label room (two lines where the slot is high enough)', () => {

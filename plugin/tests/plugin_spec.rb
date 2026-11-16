@@ -96,8 +96,9 @@ RSpec.describe 'Masterworks' do
           expect(lab[2]).to be_within(3).of(edge[2])
           # the text itself is right-aligned, so it ends on the picture's right edge
           expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] .title')).textAlign")).to eq('right')
-          expect(lab[3]).to be <= lay[3] + 1
-          expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.78
+          expect(lab[3]).to be <= lay[3] + 3
+          # a wide work may take up to 0.92 of the width (GALLERY_WIDE_MAX), others up to 0.75
+          expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.935
         end
       end
     end

@@ -50,12 +50,13 @@ var FAME_FLOOR = 10; // a work with fewer sitelinks counts as this famous: the g
 var GALLERY_SHARE = 0.75;
 var GALLERY_WIDE_MAX = 0.92;
 var GALLERY_TALL_MAX = 0.88;
-var GALLERY_USE = 0.94;
-var LABEL_SHARE = 0.105; // the room the label (title line, artist line, detail line) needs, as a share of the slot's height
-var LABEL_SHARE_SMALL = 0.085; // the same in a slot under 400 px high: no detail line
+var GALLERY_USE = 0.93;
+var LABEL_SHARE = 0.11; // the room the label (title line, artist line, detail line) needs, as a share of the slot's height
 var LABEL_LINE_SHARE = 0.032; // every further title line
 var LABEL_GAP_SHARE = 0.018;
-var TITLE_PX = { big: 40, normal: 18 }; // the title size the markup uses, to guess how many lines a title takes
+var LABEL_PX = { big: [40, 26, 21], normal: [20, 16, 16] }; // title, artist and detail sizes the markup uses (the floor of the room a label needs, and to guess how many lines a title takes)
+var LABEL_MAX_SHARE = 0.4; // a label that would need more of a slot's height than this is left out (a playdate quadrant)
+var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
 var VIEWS = { full: [1, 1], half_horizontal: [1, 0.5], half_vertical: [0.5, 1], quadrant: [0.5, 0.5] }; // slot size as a share of the screen
 
 /** MD5 as lowercase hex of a UTF-8 string, in plain JS: Commons paths are built from it and a sandbox may lack `crypto`. */
@@ -263,12 +264,12 @@ var cmText = function (z) {
   return n(z[0]) + ' \u00d7 ' + n(z[1]) + ' cm';
 };
 
-/** "ARTIST \u00b7 year" in capitals, and "material \u00b7 size \u00b7 where it hangs": the lines of the label, missing parts left out. */
+/** The lines of the label: "ARTIST \u00b7 year" in capitals, and where the work hangs. Material and size stay in the data, not on the label. */
 function whoLine(art) {
   return String(art.artist || '').toUpperCase() + (art.year ? (art.artist ? ' \u00b7 ' : '') + art.year : '');
 }
 function detailLine(art) {
-  return [art.medium, art.size ? cmText(art.size) : '', art.collection].filter(Boolean).join(' \u00b7 ');
+  return art.collection || '';
 }
 
 /**
@@ -292,13 +293,16 @@ function galleryFor(art, slotW, slotH, withLabel, kind) {
   var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
   var widthCap = (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE) * slotW;
   var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
-  var maxLines = slotH >= 700 ? 2 : 1, titlePx = TITLE_PX[kind || 'normal'];
+  var px = LABEL_PX[kind || 'normal'], maxLines = slotH >= 700 ? 2 : 1, hasDetail = slotH >= LABEL_DETAIL_MIN_H && !!detailLine(art);
   var lines = 1, ph = 0, pw = 0, i;
+  // the room a label needs: its share of the slot, but never less than its lines at the sizes the markup uses
+  var floorPx = function (n) { return n * 1.25 * px[0] + 1.3 * px[1] + (hasDetail ? 1.35 * px[2] : 0) + 6; };
+  if (withLabel && floorPx(1) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
   for (i = 0; i < 3; i++) { // the title wraps by the picture's width, the picture's size leaves room for the label
-    var reserve = withLabel ? slotH * ((slotH < 400 ? LABEL_SHARE_SMALL : LABEL_SHARE) + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE) : 0;
+    var reserve = withLabel ? Math.max(slotH * (LABEL_SHARE + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE), floorPx(lines) + slotH * LABEL_GAP_SHARE) : 0;
     ph = Math.min(heightCap, GALLERY_USE * slotH - reserve, widthCap / aspect);
     pw = ph * aspect;
-    lines = Math.min(maxLines, Math.max(1, Math.ceil(String(art.title).length * 0.5 * titlePx / Math.max(pw, 1))));
+    lines = Math.min(maxLines, Math.max(1, Math.ceil(String(art.title).length * 0.5 * px[0] / Math.max(pw, 1))));
   }
   var ideal = 100 * pw / slotW, best = null, da, db;
   for (da = -1; da <= 1; da++) {
@@ -310,7 +314,7 @@ function galleryFor(art, slotW, slotH, withLabel, kind) {
     }
   }
   var out = { a: best.a, b: best.b, pw: Math.round(best.a * slotW / 100), ph: Math.round(best.b * slotH / 100) };
-  if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: slotH >= 400 ? detailLine(art) : '' };
+  if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: hasDetail ? detailLine(art) : '' };
   return out;
 }
 
