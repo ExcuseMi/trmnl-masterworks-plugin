@@ -83,6 +83,9 @@ RSpec.describe 'Masterworks' do
           lab = rect(page, '[data-label]')
           lay = layout_rect(page)
           expect(lab[2]).to be_within(3).of(edge[2])
+          # the text itself, not only its box, ends on the picture's right edge (right-aligned)
+          text_right = page.evaluate("document.querySelector('[data-label] text').getBoundingClientRect().right")
+          expect(text_right).to be_within(4).of(edge[2])
           expect(lab[3]).to be <= lay[3] + 1
           expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.78
         end
