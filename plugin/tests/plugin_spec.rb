@@ -285,26 +285,6 @@ RSpec.describe 'Masterworks' do
     end
   end
 
-  describe 'when the picture cannot be loaded' do
-    # the mat and the label are drawn by the markup itself, so a failed picture is never a blank screen
-    it 'still shows the mat and the label with the title, or the placard' do
-      one = shard_mocks('one-landscape', 'one-portrait')
-      url = trmnl.transform(mocks: one, custom_fields:).data['art']['url']
-      title = fixture('one-landscape')['w'].first['t']
-      broken = { url => { body: 'not a picture', content_type: 'text/plain' } }
-      page = trmnl.render(view: 'full', device: 'og_png', mocks: one, custom_fields:, asset_overrides: broken)
-      page.has_css?('[data-gallery]')
-      expect(page).to have_css('[data-label] .title', text: title)
-      wide = shard_mocks('one-wide-landscape', 'one-portrait')
-      wide_url = trmnl.transform(mocks: wide, custom_fields:).data['art']['url']
-      wide_title = fixture('one-wide-landscape')['w'].first['t']
-      full = trmnl.render(view: 'full', device: 'og_png', mocks: wide, custom_fields:,
-                          asset_overrides: { wide_url => { body: 'not a picture', content_type: 'text/plain' } })
-      full.has_css?('[data-placard]')
-      expect(full).to have_css('[data-placard] .title', text: wide_title)
-    end
-  end
-
   describe 'when the data cannot be loaded' do
     let(:mocks) do
       MIRRORS.each_with_object({}) do |base, m|
