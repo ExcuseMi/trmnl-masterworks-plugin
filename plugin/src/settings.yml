@@ -17,7 +17,7 @@ custom_fields:
 - keyname: author_bio
   field_type: author_bio
   name: About This Plugin
-  description: A famous painting, print or drawing from the public domain, a new one at every refresh, filling the whole screen. About 2,000 well-known works chosen by how widely they are written about, drawn from Wikidata and Wikimedia Commons; works whose colours suit colour e-paper come up more often.<br />Faithful photographs of two-dimensional public-domain works are themselves public domain. Each work is credited on its label; the plugin code is CC-BY 4.0.
+  description: A famous painting, print or drawing from the public domain, a new one at every refresh, filling the whole screen. About 2,000 well-known works chosen by how widely they are written about, drawn from Wikidata and Wikimedia Commons; works whose colours suit colour e-paper come up more often.<br />Faithful photographs of two-dimensional public-domain works are themselves public domain. Each work is credited on its label.
   category: art,images
   github_url: https://github.com/ExcuseMi/trmnl-masterworks-plugin
   learn_more_url: https://www.wikidata.org

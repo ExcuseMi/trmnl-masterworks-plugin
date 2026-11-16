@@ -44,4 +44,4 @@ cd plugin && trmnlp test                             # renders every view on sev
 
 ## Licence
 
-Code: MIT (`LICENSE`). Published on TRMNL, the plugin's design and markup are also under TRMNL's plugin licence (CC-BY 4.0). The artworks are in the public domain; a faithful photograph of a two-dimensional public-domain work adds no new copyright (Commons: PD-Art). Each file's page on Commons has the details.
+Code: MIT (`LICENSE`). The artworks are in the public domain; a faithful photograph of a two-dimensional public-domain work adds no new copyright (Commons: PD-Art). Each file's page on Commons has the details.
