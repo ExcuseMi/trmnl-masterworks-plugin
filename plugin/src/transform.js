@@ -83,7 +83,8 @@ function thumbWidth(w, h, sw, sh, fit) {
 function screenOf(input) {
   var d = (input && input.trmnl && input.trmnl.device) || {};
   var w = Number(d.width) || DEFAULT_W, h = Number(d.height) || DEFAULT_H;
-  var o = d.orientation === 'portrait' || d.orientation === 'landscape' ? d.orientation : (h > w ? 'portrait' : 'landscape');
+  // portrait when the sizes say so or the field does (trmnlp reports 'landscape' next to portrait sizes)
+  var o = h > w || d.orientation === 'portrait' ? 'portrait' : 'landscape';
   // the sizes are those of the picture area: the long side is across for landscape, down for portrait
   var long = Math.max(w, h), short = Math.min(w, h);
   return o === 'portrait' ? { w: short, h: long, o: o } : { w: long, h: short, o: o };

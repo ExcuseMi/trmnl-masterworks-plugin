@@ -101,7 +101,7 @@ if (missing.length) { log('build check failed: a must-have work is missing; noth
 const inks = await loadPalette();
 log(`palette ${PALETTE_ID}`, inks.join(' '));
 const scores = readCache('scores.json', {});
-const todo = works.filter((w) => !(w.file in scores));
+const todo = works.filter((w) => scores[w.file] == null); // also the ones that failed before (429 from Commons)
 let next = 0, done = 0;
 await Promise.all(Array.from({ length: 3 }, async () => {
   while (next < todo.length) {

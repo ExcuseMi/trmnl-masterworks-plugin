@@ -54,6 +54,7 @@ test('thumb width: only widths Commons serves, never above the file, a step down
 test('screen: portrait and landscape from the device, long side across for landscape', () => {
   assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 1440, height: 2560, orientation: 'portrait' } } }), { w: 1440, h: 2560, o: 'portrait' });
   assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 2560, height: 1440, orientation: 'portrait' } } }), { w: 1440, h: 2560, o: 'portrait' });
+  assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 1440, height: 2560, orientation: 'landscape' } } }), { w: 1440, h: 2560, o: 'portrait' }); // sizes win
   assert.deepStrictEqual(t.screenOf({ trmnl: { device: { width: 800, height: 480 } } }), { w: 800, h: 480, o: 'landscape' });
   assert.deepStrictEqual(t.screenOf({}), { w: 800, h: 480, o: 'landscape' });
 });

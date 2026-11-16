@@ -3,6 +3,7 @@
 # Masterworks, run with `trmnlp test` from plugin/. No network for data: both shards are mocked from tests/fixtures
 # (a slice of the real data set); the pictures come from the asset override in .trmnlp.yml (a local file).
 require 'json'
+require 'uri'
 
 RSpec.describe 'Masterworks' do
   let(:base) { 'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data' }
@@ -33,7 +34,7 @@ RSpec.describe 'Masterworks' do
         end
 
         it 'shows the whole work on a mat for "Whole work"' do
-          expect(fit_of(screen(view, device, 'fit' => 'whole'))).to eq('contain')
+          expect(fit_of(screen(view, device, { 'fit' => 'whole' }))).to eq('contain')
         end
 
         it 'shows no title bar' do
@@ -45,7 +46,7 @@ RSpec.describe 'Masterworks' do
           on.has_css?('img.image')
           expect(on).to have_css('[data-placard]')
           expect(on).to have_text(/\S/)
-          off = screen(view, device, 'label' => 'off')
+          off = screen(view, device, { 'label' => 'off' })
           off.has_css?('img.image')
           expect(off).to have_no_css('[data-placard]')
         end
@@ -65,7 +66,8 @@ RSpec.describe 'Masterworks' do
         page = screen('full', device, orientation: 'portrait')
         page.has_css?('img.image')
         src = page.evaluate("document.querySelector('img.image').getAttribute('src')")
-        expect(portrait['w'].map { |w| w['f'].tr(' ', '_') }.any? { |f| src.include?(CGI.escape(f).gsub('+', '%20')) || src.include?(f) }).to be(true)
+        file = URI.decode_uri_component(src.split('/')[-2])
+        expect(portrait['w'].map { |w| w['f'].tr(' ', '_') }).to include(file)
       end
     end
   end

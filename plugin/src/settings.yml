@@ -43,5 +43,5 @@ custom_fields:
   options:
   - All: all
 name: Masterworks
-description: A famous artwork, new at every refresh
+description: A new famous artwork each refresh
 refresh_interval: 60
