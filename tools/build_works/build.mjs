@@ -13,6 +13,7 @@ import { pickMovement } from './movements.mjs';
 import { DEPICTS_RE, genreOf, is2dArtwork, unfriendlyReasons } from './classify.mjs';
 import { latestYear, yearInfo } from './dates.mjs';
 import { venueOf } from './names.mjs';
+import { normalizeMedium } from './media.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -150,8 +151,9 @@ for (const batch of chunks(works.map((w) => w.id).filter((id) => !extra[id]), 10
   writeCache('extra.json', extra);
   log(`extra ${Object.keys(extra).length}/${works.length}`);
 }
-for (const w of works) Object.assign(w, { medium: (extra[w.id] || {}).medium, size: (extra[w.id] || {}).size });
-log(`with a material: ${works.filter((w) => w.medium).length}, with a size: ${works.filter((w) => w.size).length}`);
+for (const w of works) Object.assign(w, { rawMedium: (extra[w.id] || {}).medium, medium: normalizeMedium((extra[w.id] || {}).medium) || undefined, size: (extra[w.id] || {}).size });
+log(`with a technique: ${works.filter((w) => w.medium).length} of ${works.length} (raw material text on ${works.filter((w) => w.rawMedium).length}), with a size: ${works.filter((w) => w.size).length}`);
+writeCache('media-map.json', works.filter((w) => w.rawMedium).map((w) => [w.rawMedium, w.medium || '']));
 
 // 4. palette score: download the small thumbnails once (kept in the cache), then score them locally
 const inks = await loadPalette();

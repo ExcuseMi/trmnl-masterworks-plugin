@@ -418,8 +418,8 @@ test('gallery geometry: the picture has the work\'s shape and fits; the limiting
           const tag = `${sw}x${sh} work ${w}x${h} label ${label}`;
           assert.ok(g.a >= 1 && g.a <= 100 && g.b >= 1 && g.b <= 100, tag);
           const wide = w / h >= sw / sh;
-          assert.ok(g.pw <= sw * (wide ? 0.92 : 0.75) + sw * 0.015, `${tag}: width ${g.pw}`);
-          assert.ok(g.ph <= sh * (wide ? 0.75 : 0.88) + sh * 0.015, `${tag}: height ${g.ph}`);
+          assert.ok(g.pw <= sw * (wide ? 0.92 : 0.8) + sw * 0.015, `${tag}: width ${g.pw}`);
+          assert.ok(g.ph <= sh * (wide ? 0.8 : 0.88) + sh * 0.015, `${tag}: height ${g.ph}`);
           const shapeErr = Math.abs(g.pw / g.ph / (w / h) - 1);
           assert.ok(shapeErr < 0.12, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
           if (label && g.label) assert.ok(g.ph + sh * 0.11 + sh * 0.018 <= sh * 0.93 + sh * 0.015 + 1, `${tag}: no room for the label (${g.ph} of ${sh})`);
@@ -429,7 +429,9 @@ test('gallery geometry: the picture has the work\'s shape and fits; the limiting
   }
 });
 
-test('panoramic and tall extremes use the room their shape allows (The Funeral of Patroclus, 2.36:1, on the Frame)', () => {
+test('panoramic and tall extremes use the room their shape allows (The Funeral of Patroclus 2.36:1 and Goya\'s Atropos 2.08:1, on the Frame)', () => {
+  const atropos = t.galleryFor({ ...ART, w: 3051, h: 1467 }, ...FRAME, true, 'big');
+  assert.ok(atropos.pw >= 0.9 * 2560, `Atropos: ${atropos.pw} of 2560`);
   const pano = t.galleryFor({ ...ART, w: 2000, h: 847 }, ...FRAME, true, 'big');
   assert.ok(pano.pw >= 0.9 * 2560 && pano.pw <= 0.935 * 2560, `a panoramic work: ${pano.pw} of 2560`);
   const tall = t.galleryFor({ ...ART, w: 1000, h: 3000 }, ...FRAME, true, 'big');
@@ -439,11 +441,13 @@ test('panoramic and tall extremes use the room their shape allows (The Funeral o
   assert.ok(normal.pw < pano.pw, 'a 3:2 work is not blown up like a panorama');
 });
 
-test('label lines: title, ARTIST in caps with the year, where it hangs; nothing else (no material, no size); missing parts are left out cleanly', () => {
+test('label lines: title, ARTIST in caps with the year, technique and where it hangs (no size); missing parts are left out cleanly', () => {
   const full = t.galleryFor(ART, ...FRAME, true, 'big').label;
   assert.strictEqual(full.who, 'KATSUSHIKA HOKUSAI \u00b7 1831');
-  assert.strictEqual(full.detail, 'The Metropolitan Museum of Art');
-  assert.ok(!/Woodblock|cm/.test(JSON.stringify(full)), 'material and size are not on the label');
+  assert.strictEqual(full.detail, 'Woodblock print \u00b7 The Metropolitan Museum of Art');
+  assert.ok(!/cm|25\.7/.test(JSON.stringify(full)), 'the size is not on the label');
+  assert.strictEqual(t.galleryFor({ ...ART, medium: '' }, ...FRAME, true, 'big').label.detail, 'The Metropolitan Museum of Art', 'no technique: only the place');
+  assert.strictEqual(t.galleryFor({ ...ART, collection: '' }, ...FRAME, true, 'big').label.detail, 'Woodblock print');
   const bare = t.galleryFor({ ...ART, medium: '', size: null, collection: '', year: '' }, ...FRAME, true, 'big').label;
   assert.strictEqual(bare.detail, '');
   assert.strictEqual(bare.who, 'KATSUSHIKA HOKUSAI');
@@ -464,13 +468,14 @@ test('a long title takes more label room (two lines where the slot is high enoug
 });
 
 test('the placard of a work that fills the view: who, the collection, a margin that grows with the screen', () => {
-  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
+  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', medium: 'Oil on canvas', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
   const big = t.plateFor(art, 2560, 1440, 'big'), small = t.plateFor(art, 400, 240, 'normal');
   assert.strictEqual(big.who, 'VINCENT VAN GOGH \u00b7 1890');
-  assert.strictEqual(big.detail, 'Van Gogh Museum');
+  assert.strictEqual(big.detail, 'Oil on canvas \u00b7 Van Gogh Museum');
   assert.ok(big.m > small.m && small.m >= 3, 'a margin step to the picture\'s edges that grows with the screen');
   assert.ok(big.w < small.w, 'a narrow slot lets the plate take more of its width');
-  assert.strictEqual(t.plateFor({ ...art, collection: '' }, 2560, 1440, 'big').detail, '');
+  assert.strictEqual(t.plateFor({ ...art, collection: '' }, 2560, 1440, 'big').detail, 'Oil on canvas');
+  assert.strictEqual(t.plateFor({ ...art, collection: '', medium: '' }, 2560, 1440, 'big').detail, '');
 });
 
 test('text size tier: a big canvas (the Frame) is named from the reported size; the X (1872) is not big', async () => {

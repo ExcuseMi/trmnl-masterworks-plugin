@@ -44,10 +44,10 @@ var GENRE_WEIGHT = {
   mythology: 0.8, history: 0.5, religious: 0.5, portrait: 0.5, 'still life': 0.5,
 };
 var FAME_FLOOR = 10; // a work with fewer sitelinks counts as this famous: the genre tiers (landscapes, prints, posters...) hold works of 2 to 10 sitelinks
-// Gallery sizes. The 0.75 share holds for the dimension that is not the work's limit; the limiting one may go further: a wide
+// Gallery sizes. The 0.8 share holds for the dimension that is not the work's limit; the limiting one may go further: a wide
 // work (wider than its slot) up to GALLERY_WIDE_MAX of the width, a tall one up to GALLERY_TALL_MAX of the height, always with
 // room for the label (picture, gap and label stay inside GALLERY_USE of the height).
-var GALLERY_SHARE = 0.75;
+var GALLERY_SHARE = 0.8;
 var GALLERY_WIDE_MAX = 0.92;
 var GALLERY_TALL_MAX = 0.88;
 var GALLERY_USE = 0.93;
@@ -264,12 +264,12 @@ var cmText = function (z) {
   return n(z[0]) + ' \u00d7 ' + n(z[1]) + ' cm';
 };
 
-/** The lines of the label: "ARTIST \u00b7 year" in capitals, and where the work hangs. Material and size stay in the data, not on the label. */
+/** The lines of the label: "ARTIST \u00b7 year" in capitals, then "technique \u00b7 where it hangs" (a technique the build could not name is left out). The size stays in the data, not on the label. */
 function whoLine(art) {
   return String(art.artist || '').toUpperCase() + (art.year ? (art.artist ? ' \u00b7 ' : '') + art.year : '');
 }
 function detailLine(art) {
-  return art.collection || '';
+  return [art.medium, art.collection].filter(Boolean).join(' \u00b7 ');
 }
 
 /**
@@ -280,7 +280,7 @@ function detailLine(art) {
 function plateFor(art, slotW, slotH, kind) {
   return {
     m: kind === 'big' ? 8 : slotW >= 500 ? 4 : 3, w: slotW >= 700 ? 45 : 80,
-    who: whoLine(art), detail: slotH >= 240 ? (art.collection || '') : '',
+    who: whoLine(art), detail: slotH >= 240 ? detailLine(art) : '',
   };
 }
 
