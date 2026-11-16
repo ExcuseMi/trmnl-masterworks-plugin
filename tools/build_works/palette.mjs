@@ -62,6 +62,14 @@ export async function fetchThumb(file, dir) {
   return path;
 }
 
+export const DARK_MAT_BELOW = 0.33; // mean brightness (0 to 1) under which the work hangs on a black mat, else on a white one
+
+/** Mean brightness of a cached thumbnail, 0 to 1 (plain gray, before any contrast step). */
+export async function meanBrightness(path) {
+  const { stdout } = await run('convert', [path + '[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', '-colorspace', 'Gray', '-format', '%[fx:mean]', 'info:'], { encoding: 'utf8' });
+  return Number(stdout);
+}
+
 /** Score a cached thumbnail: the picture after TRMNL's contrast step, to the nearest ink, plus its near-black share. */
 export async function scoreFile(path, inks) {
   const { stdout } = await run('convert', [path + '[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', ...TRMNL_CONTRAST_ARGS, '-depth', '8', 'rgb:-'], { encoding: 'buffer', maxBuffer: 4 << 20 });

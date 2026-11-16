@@ -15,6 +15,7 @@ function shard(works) {
     w: works.map((w, k) => ({ i: 'Q' + (k + 1), t: 'Work ' + (k + 1), a: 'Artist', f: `File ${k + 1}.jpg`, w: 4000, h: 3000, s: 20, p: 0.3, c: 0, ...w })),
   };
 }
+const raw = (f) => encodeURIComponent(f).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 const seeded = (seed) => () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 const ctx = { fit: 'fill', aspect: 16 / 9, movement: '' };
 const answer = (json, status = 200) => async () => ({ ok: status === 200, status, json: async () => json });
@@ -39,10 +40,14 @@ test('thumb URL follows the Commons md5 rule: first hex digit / first two, under
   assert.match(t.thumbUrl(f, 1280), /\/thumb\/e\/ec\//); // checked against upload.wikimedia.org by hand
 });
 
+test('thumb URL: rawurlencode form, as Wikipedia pages carry it (apostrophe and parentheses encoded)', () => {
+  assert.match(t.thumbUrl("Tiziano's Venere (1538).jpg", 960), /\/Tiziano%27s_Venere_%281538%29\.jpg\/960px-Tiziano%27s_Venere_%281538%29\.jpg$/);
+});
+
 test('thumb URL of a TIFF is the lossy JPEG form Commons serves', () => {
   const f = 'The Kitchen Maid (Rembrandt) - Nationalmuseum - 17587.tif';
   const g = f.replace(/ /g, '_'), h = crypto.createHash('md5').update(g).digest('hex');
-  assert.strictEqual(t.thumbUrl(f, 960), `https://upload.wikimedia.org/wikipedia/commons/thumb/${h[0]}/${h.slice(0, 2)}/${encodeURIComponent(g)}/lossy-page1-960px-${encodeURIComponent(g)}.jpg`);
+  assert.strictEqual(t.thumbUrl(f, 960), `https://upload.wikimedia.org/wikipedia/commons/thumb/${h[0]}/${h.slice(0, 2)}/${raw(g)}/lossy-page1-960px-${raw(g)}.jpg`);
   assert.match(t.thumbUrl('X.TIFF', 960), /\/lossy-page1-960px-X\.TIFF\.jpg$/);
   assert.doesNotMatch(t.thumbUrl('X.jpg', 960), /lossy/);
 });
@@ -55,7 +60,7 @@ test('thumb width: only widths Commons serves, never above the file, a step down
     assert.ok(got <= w, `${got} above the file width ${w}`);
   }
   assert.strictEqual(t.thumbWidth(5000, 3000, 800, 480, 'fill'), 960);
-  assert.strictEqual(t.thumbWidth(5000, 3000, 2560, 1440, 'fill'), 1920); // 1920 is 75% of 2560: close enough
+  assert.strictEqual(t.thumbWidth(5000, 3000, 2560, 1440, 'fill'), 1920); // 3840 would be asked for: capped at 1920
   assert.strictEqual(t.thumbWidth(1600, 1500, 2560, 1440, 'fill'), 1280); // the file is 1600 wide
 });
 
@@ -69,9 +74,9 @@ test('screen: portrait and landscape from the device, long side across for lands
 
 test('settings: fit, label and movement fall back to defaults on anything unknown', () => {
   const s = (c) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: c } } });
-  assert.deepStrictEqual(s({}), { fit: 'fill', label: 'corner', movement: '' });
-  assert.deepStrictEqual(s({ fit: 'whole', label: 'off', movement: 'Baroque' }), { fit: 'whole', label: 'off', movement: 'Baroque' });
-  assert.deepStrictEqual(s({ fit: 'x', label: 'x', movement: 'all' }), { fit: 'fill', label: 'corner', movement: '' });
+  assert.deepStrictEqual(s({}), { presentation: 'gallery', fit: 'fill', label: 'corner', movement: '' });
+  assert.deepStrictEqual(s({ presentation: 'full', fit: 'whole', label: 'off', movement: 'Baroque' }), { presentation: 'full', fit: 'whole', label: 'off', movement: 'Baroque' });
+  assert.deepStrictEqual(s({ presentation: 'x', fit: 'x', label: 'x', movement: 'all' }), { presentation: 'gallery', fit: 'fill', label: 'corner', movement: '' });
 });
 
 test('weighting: a more famous work comes up more often', () => {
@@ -152,20 +157,22 @@ test('run: picks a work, builds the thumbnail URL at a standard width, saves the
   let asked;
   globalThis.fetch = async (url) => { asked = url; return answer(sh)(); };
   const out = await t.run(input());
-  assert.match(asked, /\/data\/landscape\.json$/);
+  assert.match(asked, /\/data\/landscape-\d\.json$/);
   assert.strictEqual(out.art.id, 'Q1');
   assert.strictEqual(out.art.year, '1503');
   assert.strictEqual(out.art.collection, 'Louvre');
+  assert.strictEqual(out.settings.presentation, 'gallery');
+  assert.ok(out.geo.full.a > 0 && out.geo.full.label.lines.length >= 2);
   assert.match(out.art.url, /^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/thumb\/[0-9a-f]\/[0-9a-f]{2}\/File_1\.jpg\/\d+px-File_1\.jpg$/);
   assert.deepStrictEqual(out.trmnl_state, { h: [1] });
   assert.strictEqual(out.art.fit, 'cover');
 });
 
-test('run: a portrait screen reads the portrait shard; Whole work contains', async () => {
+test('run: a portrait screen reads the portrait shard; Full screen with Whole work contains', async () => {
   let asked;
   globalThis.fetch = async (url) => { asked = url; return answer(shard([{ w: 3000, h: 4000 }]))(); };
-  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: { fit: 'whole' } } }));
-  assert.match(asked, /\/data\/portrait\.json$/);
+  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: { presentation: 'full', fit: 'whole' } } }));
+  assert.match(asked, /\/data\/portrait-\d\.json$/);
   assert.strictEqual(out.art.fit, 'contain');
 });
 
@@ -200,4 +207,85 @@ test('run: with no state at all it still works', async () => {
   globalThis.fetch = answer(shard([{}]));
   const out = await t.run({ trmnl: {} });
   assert.strictEqual(out.art.id, 'Q1');
+});
+
+const fs = require('node:fs');
+test('SHARDS equals the part files in data/ (a stale constant would fetch a part that is not there, or never fetch one)', () => {
+  const dir = path.join(__dirname, '..', '..', 'data');
+  if (!fs.existsSync(dir)) return;
+  for (const o of ['landscape', 'portrait']) {
+    const files = fs.readdirSync(dir).filter((f) => new RegExp(`^${o}-\\d+\\.json$`).test(f));
+    assert.strictEqual(files.length, t.SHARDS[o], `${o}: ${files.join(', ')}`);
+    for (const f of files) {
+      const doc = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      assert.ok(t.validShard(doc), f);
+      assert.strictEqual(doc.parts, t.SHARDS[o], f);
+      assert.ok(fs.statSync(path.join(dir, f)).size < 120000, `${f} is ${fs.statSync(path.join(dir, f)).size} bytes`);
+    }
+  }
+});
+
+const ART = { title: 'The Great Wave off Kanagawa', artist: 'Katsushika Hokusai', year: '1831', medium: 'Woodblock print', size: [25.7, 37.9], collection: 'The Metropolitan Museum of Art', w: 8000, h: 5400 };
+
+test('gallery geometry: the picture box has the work\'s shape, fits the share, leaves room for the label, all slots and shapes', () => {
+  for (const [sw, sh] of [[2560, 1440], [1440, 2560], [1872, 1404], [800, 480], [800, 240], [400, 480], [400, 240]]) {
+    for (const [w, h] of [[8000, 5400], [3000, 4500], [3000, 3000], [9000, 2000], [2000, 9000]]) {
+      for (const label of [true, false]) {
+        const g = t.galleryFor({ ...ART, w, h }, sw, sh, label);
+        const tag = `${sw}x${sh} work ${w}x${h} label ${label}`;
+        assert.ok(g.a >= 1 && g.a <= 100 && g.b >= 1 && g.b <= 100, tag);
+        assert.ok(g.pw <= sw * 0.75 + sw * 0.015 && g.ph <= sh * 0.75 + sh * 0.015, `${tag}: ${g.pw}x${g.ph}`);
+        const shapeErr = Math.abs(g.pw / g.ph / (w / h) - 1);
+        assert.ok(shapeErr < 0.06, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
+        if (label) {
+          const top = (sh - (g.ph + Math.round(sh * 0.018) + g.label.vh)) / 2;
+          assert.ok(top >= -1, `${tag}: the picture and label are taller than the slot (${top})`);
+          for (const l of g.label.lines) assert.ok(t.emWidth(l.t, /^[A-Z\s\u00b7\d]+$/.test(l.t), l.fs === 'italic') * l.s <= g.label.vw * 1.02, `${tag}: "${l.t}" is wider than the label`);
+        }
+      }
+    }
+  }
+});
+
+test('gallery label: lines are right-aligned at the picture edge; missing parts are left out cleanly', () => {
+  const g = t.galleryFor({ ...ART, medium: '', size: null, collection: '' }, 2560, 1440, true);
+  assert.deepStrictEqual(g.label.lines.map((l) => l.a), ['end', 'end']);
+  assert.ok(g.label.lines.every((l) => l.x === g.label.vw));
+  assert.ok(!g.label.lines.some((l) => /undefined|null|NaN|\u00b7 \u00b7/.test(l.t)));
+  const full = t.galleryFor(ART, 2560, 1440, true);
+  assert.match(full.label.lines[2].t, /^Woodblock print \u00b7 25\.7 \u00d7 37\.9 cm \u00b7 /);
+  assert.match(full.label.lines[1].t, /^KATSUSHIKA HOKUSAI \u00b7 1831$/);
+  assert.strictEqual(t.galleryFor(ART, 400, 240, true).label.lines.length, 2, 'a small slot: no detail line');
+  assert.strictEqual(t.galleryFor(ART, 2560, 1440, false).label, undefined);
+});
+
+test('label text never leaves its box: long titles wrap or end in an ellipsis', () => {
+  const long = 'Portrait of a Gentleman Seated in an Armchair Holding a Letter and Wearing a Very Large Hat with a Plume';
+  assert.ok(t.fitText(long, 36, 600, false, true).endsWith('\u2026'));
+  assert.ok(t.emWidth(t.fitText(long, 36, 600, false, true), false, true) * 36 <= 600);
+  const lines = t.wrapText(long, 36, 800, 2, false, true);
+  assert.strictEqual(lines.length, 2);
+  lines.forEach((l) => assert.ok(t.emWidth(l, false, true) * 36 <= 800));
+  assert.strictEqual(t.fitText('Short', 36, 600), 'Short');
+  const plate = t.plateLabel({ ...ART, title: long }, 400, 240);
+  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? 1.07 : 1) <= plate.vw));
+});
+
+test('mat: a dark work hangs on black, else white; Full screen has the plate model and no gallery boxes', async () => {
+  globalThis.fetch = answer(shard([{ n: 1 }]));
+  assert.strictEqual((await t.run(input())).art.mat, 'black');
+  globalThis.fetch = answer(shard([{}]));
+  assert.strictEqual((await t.run(input())).art.mat, 'white');
+  const full = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full' } } }));
+  assert.ok(full.geo.full.lines.length >= 2 && full.geo.full.pct > 0 && full.geo.full.pct <= 60);
+  const off = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full', label: 'off' } } }));
+  assert.strictEqual(off.geo.full, null);
+});
+
+test('gallery thumbnail is sized by the picture box, not the screen', async () => {
+  globalThis.fetch = answer(shard([{ w: 6000, h: 4000 }]));
+  const gal = await t.run(input());
+  const full = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full' } } }));
+  assert.ok(gal.art.width <= full.art.width);
+  assert.strictEqual(gal.art.width, 1920);
 });

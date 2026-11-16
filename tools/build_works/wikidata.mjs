@@ -6,7 +6,7 @@ export const ENDPOINTS = [
   { name: 'QLever', url: 'https://qlever.dev/api/wikidata', pauseMs: 1000, tries: 3 },
   { name: 'WDQS', url: 'https://query.wikidata.org/sparql', pauseMs: 2500, tries: 3 },
 ];
-const PREFIXES = 'PREFIX wd: <http://www.wikidata.org/entity/> PREFIX wdt: <http://www.wikidata.org/prop/direct/> PREFIX wikibase: <http://wikiba.se/ontology#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> ';
+const PREFIXES = 'PREFIX wd: <http://www.wikidata.org/entity/> PREFIX wdt: <http://www.wikidata.org/prop/direct/> PREFIX wikibase: <http://wikiba.se/ontology#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> PREFIX p: <http://www.wikidata.org/prop/> PREFIX psn: <http://www.wikidata.org/prop/statement/value-normalized/> ';
 
 // Classes (P31 with any subclass, P279*) the works must belong to.
 export const ROOT_CLASSES = {
@@ -113,6 +113,50 @@ export async function fetchDetails(ids) {
     }
   }
   return [...info.values()];
+}
+
+// What a museum label adds: the material (P186) and the size (P2048 height, P2049 width; the normalised value is in metres).
+const SUPPORTS = /canvas|panel|wood|paper|copper|silk|parchment|vellum|linen|poplar|oak|board|cardboard|plaster|stone|wall|ivory|cloth|plate/i;
+const MAX_CM = 5000; // a painting 50 m wide is a data error here
+
+/** "oil paint" + "canvas" -> "Oil on canvas"; one material alone stays as it is; at most two of each kind. */
+export function composeMedium(labels) {
+  const ls = [...new Set(labels.map((l) => l.trim()).filter(Boolean))];
+  if (!ls.length) return undefined;
+  const supports = ls.filter((l) => SUPPORTS.test(l)).slice(0, 2);
+  const paints = ls.filter((l) => !SUPPORTS.test(l)).map((l) => l.replace(/\s+paint$/i, '')).slice(0, 2);
+  const text = paints.length && supports.length ? `${paints.join(' and ')} on ${supports.join(' and ')}` : [...paints, ...supports].join(', ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Height and width in cm, both or neither: [h, w], one decimal. */
+export function sizeCm(heights, widths) {
+  const ok = (m) => Number.isFinite(m) && m > 0 && m * 100 <= MAX_CM;
+  const h = heights.find(ok), w = widths.find(ok);
+  if (h === undefined || w === undefined) return undefined;
+  const cm = (m) => Math.round(m * 1000) / 10;
+  return [cm(h), cm(w)];
+}
+
+/** Map qid -> { medium, size } for a batch of works (what is missing is simply absent). */
+export async function fetchExtra(ids) {
+  const out = new Map(ids.map((id) => [id, { media: [], h: [], w: [] }]));
+  const rows = await sparql(`SELECT ?item ?m ?h ?w WHERE { VALUES ?item { ${values(ids)} }
+    OPTIONAL { ?item wdt:P186 ?m } OPTIONAL { ?item p:P2048/psn:P2048/wikibase:quantityAmount ?h } OPTIONAL { ?item p:P2049/psn:P2049/wikibase:quantityAmount ?w } }`);
+  const mediaIds = new Set();
+  for (const r of rows) {
+    const o = out.get(qid(val(r, 'item')));
+    if (!o) continue;
+    if (val(r, 'm')) { o.media.push(qid(val(r, 'm'))); mediaIds.add(qid(val(r, 'm'))); }
+    if (val(r, 'h')) o.h.push(Number(val(r, 'h')));
+    if (val(r, 'w')) o.w.push(Number(val(r, 'w')));
+  }
+  const names = await fetchNames([...mediaIds]);
+  const res = new Map();
+  for (const [id, o] of out) {
+    res.set(id, { medium: composeMedium([...new Set(o.media)].map((m) => names.get(m)).filter(Boolean)), size: sizeCm(o.h, o.w) });
+  }
+  return res;
 }
 
 export const PUBLIC_DOMAIN = 'Q19652'; // P6216 copyright status: public domain

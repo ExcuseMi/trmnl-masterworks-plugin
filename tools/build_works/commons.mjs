@@ -19,9 +19,12 @@ export function md5Path(name) {
 /** TIFF files are thumbnailed as JPEG: .../File.tif/lossy-page1-120px-File.tif.jpg (the plain name gives HTTP 400). */
 export const isTiff = (name) => /\.tiff?$/i.test(name);
 
+/** PHP rawurlencode form, as Wikipedia pages carry it: encodeURIComponent plus ! ' ( ) * (the CDN already holds thumbnails under this name). */
+export const rawurlencode = (f) => encodeURIComponent(f).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+
 export function thumbUrl(name, width) {
   const f = fileKey(name);
-  const enc = encodeURIComponent(f);
+  const enc = rawurlencode(f);
   const leaf = isTiff(f) ? `lossy-page1-${width}px-${enc}.jpg` : `${width}px-${enc}`;
   return `https://upload.wikimedia.org/wikipedia/commons/thumb/${md5Path(f)}/${enc}/${leaf}`;
 }

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { cutoffs, isPublicDomain, yearOf } from '../wikidata.mjs';
+import { composeMedium, cutoffs, isPublicDomain, sizeCm, yearOf } from '../wikidata.mjs';
 import { md5Path, thumbUrl, usable } from '../commons.mjs';
 import { hexToRgb, scoreRgb, FALLBACK_PALETTE, TRMNL_CONTRAST_ARGS } from '../palette.mjs';
 import { groupMovement, pickMovement } from '../movements.mjs';
-import { aspect, landscapeOf, pack, portraitOf } from '../shards.mjs';
+import { aspect, landscapeOf, pack, portraitOf, splitParts } from '../shards.mjs';
 
 const d = (o) => ({ rights: [], creators: [], years: [], ...o });
 const cr = (...death) => ({ id: 'Q1', name: 'A', death, mov: [] });
@@ -54,6 +54,10 @@ test('md5 path and thumb URL (checked on upload.wikimedia.org: Mona Lisa is e/ec
 test('TIFF thumbnails use the lossy JPEG leaf; the same rule as the plugin', () => {
   assert.match(thumbUrl('A b.tif', 120), /\/A_b\.tif\/lossy-page1-120px-A_b\.tif\.jpg$/);
   assert.match(thumbUrl('A b.jpg', 120), /\/A_b\.jpg\/120px-A_b\.jpg$/);
+});
+
+test('thumb URL: apostrophe and parentheses in rawurlencode form', () => {
+  assert.match(thumbUrl("Tiziano's Venere (1538).jpg", 120), /\/Tiziano%27s_Venere_%281538%29\.jpg\/120px-Tiziano%27s_Venere_%281538%29\.jpg$/);
 });
 
 test('usable: bitmaps with a long side of 1500 px or more', () => {
@@ -109,4 +113,32 @@ test('movements fold into broad groups; the first mappable label wins; unknown l
   assert.strictEqual(pickMovement(['Japonisme', 'ukiyo-e']), 'Ukiyo-e');
   assert.strictEqual(pickMovement(['Kasei culture']), 'Kasei culture');
   assert.strictEqual(pickMovement([]), undefined);
+});
+
+test('museum label: material and size', () => {
+  assert.strictEqual(composeMedium(['oil paint', 'canvas']), 'Oil on canvas');
+  assert.strictEqual(composeMedium(['tempera', 'poplar panel', 'gold leaf']), 'Tempera and gold leaf on poplar panel');
+  assert.strictEqual(composeMedium(['woodblock print']), 'Woodblock print');
+  assert.strictEqual(composeMedium([]), undefined);
+  assert.deepStrictEqual(sizeCm([0.794], [0.534]), [79.4, 53.4]);
+  assert.deepStrictEqual(sizeCm([0.26], [0.38]), [26, 38]);
+  assert.strictEqual(sizeCm([0.7], []), undefined, 'both or neither');
+  assert.strictEqual(sizeCm([900], [1]), undefined, 'a 90 km painting is a data error');
+});
+
+test('parts: each stays near the byte limit; a work goes to Q-number mod parts; nothing lost or doubled', () => {
+  const big = Array.from({ length: 1600 }, (_, k) => ({ id: 'Q' + (k + 1), title: 'Work number ' + k, artist: 'An Artist', file: `Some long file name for work ${k}.jpg`, w: 3000, h: 2000, sl: 10, score: 0.2, dark: 0.1 }));
+  const parts = splitParts(big, { v: 1 });
+  assert.ok(parts.length >= 2);
+  for (const part of parts) assert.ok(JSON.stringify(pack(part, { v: 1 })).length < 110000);
+  assert.strictEqual(parts.flat().length, 1600);
+  parts.forEach((part, k) => part.forEach((x) => assert.strictEqual(Number(x.id.slice(1)) % parts.length, k)));
+  assert.strictEqual(splitParts(big.slice(0, 20), { v: 1 }).length, 1);
+});
+
+test('pack: material table, size, dark-mat flag', () => {
+  const p = pack([{ id: 'Q1', title: 't', artist: 'a', file: 'f.jpg', w: 2, h: 1, sl: 1, score: 0.1, dark: 0, medium: 'Oil on canvas', size: [77, 53], dm: true }, { id: 'Q2', title: 't', artist: 'a', file: 'g.jpg', w: 2, h: 1, sl: 1, score: 0.1, dark: 0 }], { v: 1 });
+  assert.deepStrictEqual(p.med, ['Oil on canvas']);
+  assert.deepStrictEqual([p.w[0].e, p.w[0].z, p.w[0].n], [0, [77, 53], 1]);
+  assert.deepStrictEqual([p.w[1].e, p.w[1].z, p.w[1].n], [undefined, undefined, undefined]);
 });

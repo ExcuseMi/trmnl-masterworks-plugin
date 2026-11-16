@@ -2,15 +2,15 @@
 // Builds data/works.json (+ landscape.json, portrait.json): famous public-domain artworks from Wikidata, checked
 // against Commons, scored against the TRMNL colour palette. Network stages are cached in tools/build_works/.cache.
 //   node tools/build_works/build.mjs [--limit 2000] [--fresh]
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, isPublicDomain } from './wikidata.mjs';
+import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, isPublicDomain } from './wikidata.mjs';
 import { fetchImageInfo, usable } from './commons.mjs';
-import { PALETTE_ID, fetchThumb, loadPalette, scoreFile } from './palette.mjs';
+import { DARK_MAT_BELOW, PALETTE_ID, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
-import { landscapeOf, pack, portraitOf } from './shards.mjs';
+import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -103,6 +103,16 @@ for (const [id, label] of missing) {
 }
 if (missing.length) { log('build check failed: a must-have work is missing; nothing written'); process.exit(1); }
 
+// 3b. what a museum label adds (material and size from Wikidata)
+const extra = readCache('extra.json', {});
+for (const batch of chunks(works.map((w) => w.id).filter((id) => !extra[id]), 100)) {
+  for (const [id, e] of await fetchExtra(batch)) extra[id] = e;
+  writeCache('extra.json', extra);
+  log(`extra ${Object.keys(extra).length}/${works.length}`);
+}
+for (const w of works) Object.assign(w, { medium: (extra[w.id] || {}).medium, size: (extra[w.id] || {}).size });
+log(`with a material: ${works.filter((w) => w.medium).length}, with a size: ${works.filter((w) => w.size).length}`);
+
 // 4. palette score: download the small thumbnails once (kept in the cache), then score them locally
 const inks = await loadPalette();
 log(`palette ${PALETTE_ID}`, inks.join(' '));
@@ -126,7 +136,8 @@ const final = [];
 for (const w of works) {
   if (!existsSync(thumbPath(w.file))) continue;
   const s = await scoreFile(thumbPath(w.file), inks);
-  final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100 });
+  const bright = await meanBrightness(thumbPath(w.file));
+  final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100, dm: bright < DARK_MAT_BELOW });
 }
 log(`scored ${final.length}, dropped without a thumbnail: ${works.length - final.length}`);
 // build check: a work lost here is lost for a reason worth a look (the 16 TIFF files once were, silently); more than 1 % stops the build
@@ -138,8 +149,12 @@ if (lost > works.length * 0.01 || lostMust.length) { log(`build check failed: ${
 const minSitelinks = Math.min(...final.map((w) => w.sl));
 const meta = { v: 1, built: new Date().toISOString().slice(0, 10), palette: PALETTE_ID, source: 'Wikidata + Wikimedia Commons', min_sitelinks: minSitelinks, died_by: cutoffs(BUILD_YEAR).diedBy, made_by: cutoffs(BUILD_YEAR).madeBy };
 mkdirSync(join(root, 'data'), { recursive: true });
-const out = (name, ws) => writeFileSync(join(root, 'data', name), JSON.stringify(pack(ws, { ...meta, shard: name.replace('.json', '') })));
-out('works.json', final);
-out('landscape.json', landscapeOf(final));
-out('portrait.json', portraitOf(final));
+const out = (name, ws, extraMeta = {}) => writeFileSync(join(root, 'data', name), JSON.stringify(pack(ws, { ...meta, ...extraMeta })));
+for (const f of readdirSync(join(root, 'data'))) if (/^(landscape|portrait)(-\d+)?\.json$/.test(f)) rmSync(join(root, 'data', f)); // old shard files
+out('works.json', final, { shard: 'all' });
+for (const [name, ws] of [['landscape', landscapeOf(final)], ['portrait', portraitOf(final)]]) {
+  const parts = splitParts(ws, meta);
+  parts.forEach((part, k) => out(`${name}-${k}.json`, part, { shard: name, part: k, parts: parts.length }));
+  log(`${name}: ${ws.length} works in ${parts.length} parts of ${parts.map((p) => p.length).join(', ')}`);
+}
 log(`classes: ${[...Object.values(ROOT_CLASSES), ...Object.values(EXACT_CLASSES)].join(', ')}; sitelinks from ${MIN_SITELINKS}; lowest in the data set ${minSitelinks}; done`);
