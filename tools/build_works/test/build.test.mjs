@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { composeMedium, cutoffs, isPublicDomain, sizeCm, yearOf } from '../wikidata.mjs';
 import { md5Path, thumbUrl, usable } from '../commons.mjs';
 import { hexToRgb, scoreRgb, FALLBACK_PALETTE, TRMNL_CONTRAST_ARGS } from '../palette.mjs';
+import { shortCollection } from '../names.mjs';
 import { groupMovement, pickMovement } from '../movements.mjs';
 import { aspect, landscapeOf, pack, portraitOf, splitParts } from '../shards.mjs';
 
@@ -141,4 +142,12 @@ test('pack: material table, size, dark-mat flag', () => {
   assert.deepStrictEqual(p.med, ['Oil on canvas']);
   assert.deepStrictEqual([p.w[0].e, p.w[0].z, p.w[0].n], [0, [77, 53], 1]);
   assert.deepStrictEqual([p.w[1].e, p.w[1].z, p.w[1].n], [undefined, undefined, undefined]);
+});
+
+test('collection names: department prefixes are dropped, real museum names stay', () => {
+  assert.strictEqual(shortCollection('Department of Paintings of the Louvre'), 'Louvre');
+  assert.strictEqual(shortCollection('Department of Prints and Drawings at the British Museum'), 'British Museum');
+  assert.strictEqual(shortCollection('The Metropolitan Museum of Art'), 'The Metropolitan Museum of Art');
+  assert.strictEqual(shortCollection('Museum of Fine Arts, Boston'), 'Museum of Fine Arts, Boston');
+  assert.strictEqual(shortCollection(undefined), undefined);
 });

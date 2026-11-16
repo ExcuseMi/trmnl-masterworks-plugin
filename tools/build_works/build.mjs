@@ -10,6 +10,7 @@ import { fetchImageInfo, usable } from './commons.mjs';
 import { DARK_MAT_BELOW, PALETTE_ID, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
+import { shortCollection } from './names.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -87,7 +88,7 @@ for (const p of picked) {
   works.push({
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     year: p.d.years.length ? Math.min(...p.d.years) : undefined,
-    coll: p.d.coll[0], mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
+    coll: shortCollection(p.d.coll[0]), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
   if (works.length >= LIMIT) break;
 }

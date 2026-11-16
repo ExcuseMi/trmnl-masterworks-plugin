@@ -4,7 +4,7 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh, fillin
 
 | Part | What |
 |---|---|
-| `data/*.json` | About 2,000 works (paintings, drawings, prints), ranked by Wikidata sitelinks, with a palette score. `landscape.json` and `portrait.json` are what the plugin fetches |
+| `data/*.json` | About 2,000 works (paintings, drawings, prints), ranked by Wikidata sitelinks, with a palette score, material, size and a mat flag. `landscape-N.json` and `portrait-N.json` (3 parts of about 80 kB each, a work in part Q-number mod 3) are what the plugin fetches, one part per refresh; `works.json` is the whole set |
 | `tools/build_works/` | Builds the data: Wikidata SPARQL, Commons image info, colour score. `node tools/build_works/build.mjs` (Node 22+, ImageMagick `convert`); monthly by `.github/workflows/build-data.yml` |
 | `plugin/` | The TRMNL plugin (serverless `transform.js`, Liquid markup, `trmnlp test` specs) |
 
@@ -12,15 +12,18 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh, fillin
 
 | Setting | Values |
 |---|---|
-| Fit | Fill (cover, edges cropped, default) / Whole work (contain, white mat) |
-| Label | Corner placard (default) / Off |
-| Movement or period | All, or one of the most common movements in the data |
+| Presentation | Gallery (default): the work centred on a pure white or black mat (by the work's brightness), a thin bevel line in the opposite colour, a museum label right-aligned under it (title in italic, ARTIST and year, then material, size in cm and collection; missing parts are left out). Full screen: the work fills the view |
+| Fit | Full screen only: Fill (cover, edges cropped, default) / Whole work (contain, white mat) |
+| Label | Gallery: the museum label or off. Full screen: a corner placard or off |
+| Movement or period | All, or one of the ten most common movements in the data |
+
+Label text is SVG text in the screen's own pixels (the transform computes sizes and cuts long lines): the Frame is `screen--md` at 1x like the OG, so no Framework text class can size type for 2560 px. No `style=` anywhere. A failed picture still leaves the mat and the label (or the placard) on screen.
 
 ## How a work is picked
 
 Random, weighted. Weight = `sitelinks^0.8` (fame, the main factor) x colour factor (the worst palette match is picked 0.75 times as often as the best) x dark factor (`exp(-6 x (near-black share - 0.45))`, only for very dark works) x a shape factor (aspect close to the screen's; weaker for Whole work). The last 50 works shown are never repeated (their Q-numbers sit in `trmnl_state`, about 400 bytes). The constants are named at the top of `plugin/src/transform.js`.
 
-The image is a Wikimedia Commons thumbnail at the screen's width. Commons serves only the widths 120, 250, 500, 960, 1280, 1920 and 3840; the plugin asks for the smallest that covers the screen (a step down when it holds 70 % of the width needed). TRMNL does the dithering; the plugin only marks the image `image-dither`.
+The image is a Wikimedia Commons thumbnail at the screen's width. Commons serves only the widths 120, 250, 500, 960, 1280, 1920 and 3840; the plugin asks for the smallest that covers the picture (a step down when it holds 80 % of the width needed), never above 1920 (3840 px files are 2 to 9 MB). The URL is in the form Wikipedia pages use (`'`, `(` and `)` percent-encoded), TIFF files as `lossy-page1-...px-File.tif.jpg`. TRMNL does the dithering; the plugin only marks the image `image-dither`.
 
 ## Data rules
 

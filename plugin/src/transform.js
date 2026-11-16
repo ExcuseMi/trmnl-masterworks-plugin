@@ -243,8 +243,12 @@ function galleryLabel(art, slotH, pw) {
   if (art.artist || art.year) { y += Math.round(z.artist * 1.35); lines.push({ x: pw, y: y, s: z.artist, a: 'end', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, pw, true, false) }); }
   var parts = [art.medium, art.size ? cmText(art.size) : '', art.collection].filter(Boolean);
   if (parts.length && slotH >= 400) {
-    // the collection gives way first when the line is too long
+    // the collection, then the material, give way when the line is too wide; a cut-off word is the last resort
     var detail = parts.join(' \u00b7 ');
+    while (parts.length > 1 && emWidth(detail, false, false) * z.detail > pw) {
+      parts = parts.slice(0, -1);
+      detail = parts.join(' \u00b7 ');
+    }
     y += Math.round(z.detail * 1.55);
     lines.push({ x: pw, y: y, s: z.detail, a: 'end', fs: 'normal', fw: 'normal', t: fitText(detail, z.detail, pw, false, false) });
   }

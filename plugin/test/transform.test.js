@@ -259,6 +259,14 @@ test('gallery label: lines are right-aligned at the picture edge; missing parts 
   assert.strictEqual(t.galleryFor(ART, 2560, 1440, false).label, undefined);
 });
 
+test('gallery detail line: the collection is dropped before a word is cut off', () => {
+  const art = { ...ART, collection: 'The Collection of the Very Long Named Imperial and Royal Museum of Fine Arts and Antiquities and Natural History of the Whole Realm' };
+  const g = t.galleryFor(art, 2560, 1440, true);
+  const detail = g.label.lines[g.label.lines.length - 1].t;
+  assert.ok(!detail.endsWith('\u2026'), detail);
+  assert.match(detail, /^Woodblock print \u00b7 25\.7 \u00d7 37\.9 cm$/);
+});
+
 test('label text never leaves its box: long titles wrap or end in an ellipsis', () => {
   const long = 'Portrait of a Gentleman Seated in an Armchair Holding a Letter and Wearing a Very Large Hat with a Plume';
   assert.ok(t.fitText(long, 36, 600, false, true).endsWith('\u2026'));

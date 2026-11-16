@@ -1,4 +1,20 @@
 {
-  "re:/data/landscape\\.json": { "json_file": "tests/fixtures/one-landscape.json" },
-  "re:/data/portrait\\.json": { "json_file": "tests/fixtures/one-portrait.json" }
+  "re:/data/landscape-0\\.json": {
+    "json_file": "tests/fixtures/one-landscape.json"
+  },
+  "re:/data/landscape-1\\.json": {
+    "json_file": "tests/fixtures/one-landscape.json"
+  },
+  "re:/data/landscape-2\\.json": {
+    "json_file": "tests/fixtures/one-landscape.json"
+  },
+  "re:/data/portrait-0\\.json": {
+    "json_file": "tests/fixtures/one-portrait.json"
+  },
+  "re:/data/portrait-1\\.json": {
+    "json_file": "tests/fixtures/one-portrait.json"
+  },
+  "re:/data/portrait-2\\.json": {
+    "json_file": "tests/fixtures/one-portrait.json"
+  }
 }
