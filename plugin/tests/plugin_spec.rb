@@ -70,7 +70,14 @@ RSpec.describe 'Masterworks' do
     # the placard once stuck out by 1 px in the 105 px wide half_vertical slot of a playdate (found by the shared base checks)
     [%w[half_vertical playdate portrait], %w[quadrant playdate landscape], %w[half_vertical og_png landscape]].each do |view, device, orientation|
       it "#{view} on #{device} #{orientation} has no overflow" do
-        expect(screen(view, device, {}, orientation: orientation.to_sym)).to have_no_overflow
+        page = screen(view, device, {}, orientation: orientation.to_sym)
+        expect(page).to have_no_overflow
+        # geometry, not the matcher: the plate (left offset included) must end inside the slot, whatever the font does
+        page.has_css?('[data-placard]')
+        edge = page.evaluate(<<~JS)
+          (() => { const p = document.querySelector('[data-placard]').getBoundingClientRect(), l = document.querySelector('.layout').getBoundingClientRect(); return [p.right, l.right]; })()
+        JS
+        expect(edge[0]).to be <= edge[1] - 4
       end
     end
   end
