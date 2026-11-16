@@ -60,7 +60,8 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 | Part | What |
 |---|---|
 | Sources | Wikidata (works, fame, genre, subjects, dates, where they hang) and Wikimedia Commons (the images), found through QLever with query.wikidata.org as the fallback. No hosting of our own |
-| Files | `data/landscape-N.json` and `data/portrait-N.json`, parts of about 100 kB served from raw.githubusercontent.com; a run fetches one part, chosen at random. `data/works.json` is the whole set |
+| Files | `data/landscape-N.json` and `data/portrait-N.json`, parts of about 100 kB; a run fetches one part, chosen at random. `data/works.json` is the whole set |
+| Mirrors | The same files are asked from all of these at once (`DATA_BASES`), and the newest valid answer wins (HTML, an error status or a wrong shape is ignored): `raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/`, `cdn.jsdelivr.net/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/`, `excusemi.github.io/trmnl-masterworks-plugin/data/` (GitHub Pages), `cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/`. With none answering, the last work is shown again, else a short message |
 | Public domain | The creator died at least 70 full years before the build year AND the work is at least 96 years old (EU and US rules; both cut-offs are computed from the build date, 1955 and 1930 in 2026). A date uses the latest year it allows. Wikidata's own public-domain statement never lifts the date rule |
 | Images | A bitmap on Commons with a long side of at least 1500 px; thumbnails at 500, 960, 1280 and 1920 px |
 | Updates | A monthly GitHub Action (`.github/workflows/build-data.yml`) rebuilds and commits the data |
@@ -69,7 +70,7 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 
 | Limit | Detail |
 |---|---|
-| First thumbnails can be slow | An uncached 1920 px thumbnail is generated on first request; a render that gives up shows the mat and label without the picture |
+| First thumbnails can be slow | An uncached 1920 px thumbnail is generated on first request. If the picture fails (an error event), a backup work swaps in: a second, famous work with its own label, look and mat, hidden until needed and not fetched until then. A request that hangs without an error is not caught, and the screenshot may be taken before the swap; the state records the primary |
 | Family friendly is careful, not perfect | It uses Wikidata's subjects, the titles in several languages and a short reviewed list |
 | xteink_x3 | The shared base check fails there: the model's screen CSS is 800 px wide inside a 792 px window, so any full-bleed layout overflows |
 
