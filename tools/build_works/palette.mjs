@@ -1,6 +1,9 @@
-// Palette score: how far a work's colours are from the nearest ink of a TRMNL colour palette. No dithering here:
-// TRMNL dithers on its side; this only ranks works that suit the panel's inks better.
+// Palette score: how far a work's colours are, after TRMNL's contrast step, from the nearest ink of a TRMNL colour
+// palette, and how much of it is near-black. No dithering here: TRMNL dithers on its side; this only ranks works.
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { politeFetch } from './http.mjs';
 import { thumbUrl } from './commons.mjs';
@@ -23,14 +26,23 @@ export async function loadPalette(id = PALETTE_ID) {
 
 export const hexToRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 
-/** Mean distance from every pixel of an RGB buffer (3 bytes a pixel) to its nearest ink, 0 (exact) to 1. */
+/**
+ * What a colour panel does to a picture before it maps pixels to its inks (trmnlp's ImageQuantizer, as TRMNL does it when a
+ * page asks for image-dither): a sigmoidal contrast of 5,50% on the HSV brightness channel. Dark pictures lose their
+ * shadow detail there, so the score is taken on the picture after this step.
+ */
+export const TRMNL_CONTRAST_ARGS = ['-colorspace', 'HSV', '-channel', 'B', '-sigmoidal-contrast', '5,50%', '+channel', '-colorspace', 'sRGB'];
+export const DARK_V = 0.2; // a pixel below this brightness (V of HSV, 0 to 1) after the contrast step counts as near-black
+
+/** From an RGB buffer (3 bytes a pixel): mean distance to the nearest ink, 0 (exact) to 1, and the share of near-black pixels. */
 export function scoreRgb(buf, inks) {
   const rgb = inks.map(hexToRgb);
-  let sum = 0;
+  let sum = 0, dark = 0;
   const n = Math.floor(buf.length / 3);
-  if (!n) return NaN;
+  if (!n) return { error: NaN, dark: NaN };
   for (let i = 0; i < n; i++) {
     const r = buf[i * 3], g = buf[i * 3 + 1], b = buf[i * 3 + 2];
+    if (Math.max(r, g, b) / 255 < DARK_V) dark++;
     let best = Infinity;
     for (const [pr, pg, pb] of rgb) {
       const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
@@ -38,15 +50,20 @@ export function scoreRgb(buf, inks) {
     }
     sum += Math.sqrt(best);
   }
-  return sum / n / MAX_DIST;
+  return { error: sum / n / MAX_DIST, dark: dark / n };
 }
 
-/** Download the small thumbnail of a Commons file and score it. Returns a number, or throws. */
-export async function scoreFile(file, inks) {
-  const res = await politeFetch(thumbUrl(file, SCORE_WIDTH), {}, { pauseMs: 150, tries: 4, timeoutMs: 60000 });
-  const img = Buffer.from(await res.arrayBuffer());
-  const child = run('convert', ['-[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', '-depth', '8', 'rgb:-'], { encoding: 'buffer', maxBuffer: 4 << 20 });
-  child.child.stdin.end(img);
-  const { stdout } = await child;
+/** Download the small Commons thumbnail of a file into the cache (once); returns its path. Throws when Commons refuses. */
+export async function fetchThumb(file, dir) {
+  const path = join(dir, createHash('md5').update(file).digest('hex') + '.img');
+  if (existsSync(path)) return path;
+  const res = await politeFetch(thumbUrl(file, SCORE_WIDTH), {}, { pauseMs: 250, tries: 6, timeoutMs: 60000 });
+  writeFileSync(path, Buffer.from(await res.arrayBuffer()));
+  return path;
+}
+
+/** Score a cached thumbnail: the picture after TRMNL's contrast step, to the nearest ink, plus its near-black share. */
+export async function scoreFile(path, inks) {
+  const { stdout } = await run('convert', [path + '[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', ...TRMNL_CONTRAST_ARGS, '-depth', '8', 'rgb:-'], { encoding: 'buffer', maxBuffer: 4 << 20 });
   return scoreRgb(stdout, inks);
 }

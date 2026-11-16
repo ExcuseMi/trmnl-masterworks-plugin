@@ -39,6 +39,14 @@ test('thumb URL follows the Commons md5 rule: first hex digit / first two, under
   assert.match(t.thumbUrl(f, 1280), /\/thumb\/e\/ec\//); // checked against upload.wikimedia.org by hand
 });
 
+test('thumb URL of a TIFF is the lossy JPEG form Commons serves', () => {
+  const f = 'The Kitchen Maid (Rembrandt) - Nationalmuseum - 17587.tif';
+  const g = f.replace(/ /g, '_'), h = crypto.createHash('md5').update(g).digest('hex');
+  assert.strictEqual(t.thumbUrl(f, 960), `https://upload.wikimedia.org/wikipedia/commons/thumb/${h[0]}/${h.slice(0, 2)}/${encodeURIComponent(g)}/lossy-page1-960px-${encodeURIComponent(g)}.jpg`);
+  assert.match(t.thumbUrl('X.TIFF', 960), /\/lossy-page1-960px-X\.TIFF\.jpg$/);
+  assert.doesNotMatch(t.thumbUrl('X.jpg', 960), /lossy/);
+});
+
 test('thumb width: only widths Commons serves, never above the file, a step down when close enough', () => {
   const STEPS = [120, 250, 500, 960, 1280, 1920, 3840];
   for (const [w, h, sw, sh, fit] of [[5000, 3000, 2560, 1440, 'fill'], [3000, 5000, 1440, 2560, 'fill'], [5000, 3000, 1872, 1404, 'whole'], [5000, 3000, 800, 480, 'fill'], [1600, 1500, 2560, 1440, 'fill']]) {
@@ -71,15 +79,35 @@ test('weighting: a more famous work comes up more often', () => {
   const rnd = seeded(7);
   let famous = 0;
   for (let n = 0; n < 2000; n++) if (t.choose(sh, ctx, [], rnd) === 0) famous++;
-  assert.ok(famous > 1300 && famous < 1900, `famous picked ${famous} of 2000`);
+  assert.ok(famous > 1700, `famous picked ${famous} of 2000`);
 });
 
-test('weighting: a better palette score comes up more often', () => {
+test('weighting: a better palette score comes up a little more often (small weight)', () => {
   const sh = shard([{ p: 0.1 }, { p: 0.6 }]);
   const rnd = seeded(11);
   let good = 0;
-  for (let n = 0; n < 2000; n++) if (t.choose(sh, ctx, [], rnd) === 0) good++;
-  assert.ok(good > 1700, `good score picked ${good} of 2000`);
+  for (let n = 0; n < 4000; n++) if (t.choose(sh, ctx, [], rnd) === 0) good++;
+  assert.ok(good / 4000 > 0.5 && good / 4000 < 0.65, `good score picked ${good} of 4000`);
+});
+
+test('weighting: a very dark work comes up far less often; a little darkness costs nothing', () => {
+  const rnd = seeded(13);
+  const share = (k) => {
+    const sh = shard([{ k: 0.05 }, { k }]);
+    let dark = 0;
+    for (let n = 0; n < 4000; n++) if (t.choose(sh, ctx, [], rnd) === 1) dark++;
+    return dark / 4000;
+  };
+  assert.ok(Math.abs(share(0.45) - 0.5) < 0.04, 'at the free share: even');
+  assert.ok(share(0.9) < 0.1, 'very dark: ' + share(0.9));
+});
+
+test('weighting: fame is the main factor: a 4x more famous work beats a worse colour match', () => {
+  const sh = shard([{ s: 80, p: 0.6, k: 0.1 }, { s: 20, p: 0.1, k: 0.1 }]);
+  const rnd = seeded(17);
+  let famous = 0;
+  for (let n = 0; n < 2000; n++) if (t.choose(sh, ctx, [], rnd) === 0) famous++;
+  assert.ok(famous > 1250, `famous picked ${famous} of 2000`);
 });
 
 test('weighting: a work shaped like the screen beats a far-off shape, and less so for Whole work', () => {

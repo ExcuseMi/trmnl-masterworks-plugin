@@ -9,10 +9,12 @@
 var DATA_BASE = 'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/';
 var FETCH_MS = 3500; // the run has 5 s in all
 var HISTORY = 50; // never one of the last HISTORY works shown
-// tunable weights of a work: fame ^ FAME_EXP, (1 - colour error) ^ COLOR_EXP, exp(-ASPECT_K * |ln(work aspect / screen aspect)|)
-var FAME_EXP = 0.6; // fame = sitelink count; 0 = all alike, 1 = in proportion to fame
-var COLOR_EXP = 3; // palette score, rescaled over the shard; higher favours the works that suit the inks
-var ASPECT_K_FILL = 3; // "Fill" crops, so a far-off shape is a poor pick
+// Weight of a work = fame ^ FAME_EXP x colour factor x dark factor x shape factor. Fame is the main factor.
+var FAME_EXP = 0.8; // fame = sitelink count; 0 = all alike, 1 = in proportion to fame
+var COLOR_WEIGHT = 0.25; // palette distance (after TRMNL's contrast step), rescaled over the shard: the worst match is picked (1 - this) times as often. Small: the 6-colour dither copes with most colours
+var DARK_FREE = 0.45; // share of near-black pixels (after TRMNL's contrast step) that costs nothing
+var DARK_K = 6; // beyond DARK_FREE the weight is multiplied by exp(-DARK_K x the excess): the strong penalty, for very dark works only
+var ASPECT_K_FILL = 3; // shape factor exp(-K x |ln(work aspect / screen aspect)|); "Fill" crops, so a far-off shape is a poor pick
 var ASPECT_K_WHOLE = 1; // "Whole work" leaves a mat: shape matters less
 var MIN_POOL = 5; // a movement with fewer works than this is ignored
 var STEPS = [120, 250, 500, 960, 1280, 1920, 3840]; // the thumbnail widths Wikimedia serves (Commons returns 400 for others)
@@ -62,7 +64,9 @@ function thumbUrl(file, width) {
   var f = String(file).replace(/ /g, '_');
   var h = md5(f);
   var enc = encodeURIComponent(f);
-  return 'https://upload.wikimedia.org/wikipedia/commons/thumb/' + h.charAt(0) + '/' + h.slice(0, 2) + '/' + enc + '/' + width + 'px-' + enc;
+  // a TIFF is thumbnailed as JPEG: .../File.tif/lossy-page1-1280px-File.tif.jpg (the plain name gives HTTP 400)
+  var leaf = /\.tiff?$/i.test(f) ? 'lossy-page1-' + width + 'px-' + enc + '.jpg' : width + 'px-' + enc;
+  return 'https://upload.wikimedia.org/wikipedia/commons/thumb/' + h.charAt(0) + '/' + h.slice(0, 2) + '/' + enc + '/' + leaf;
 }
 
 /** Width of the thumbnail to ask for: the smallest standard step that covers what the screen needs, never above the file. */
@@ -108,15 +112,16 @@ function cleanState(s) {
 
 var qnum = function (id) { return Number(String(id).replace(/^Q/, '')) || 0; };
 
-/** Weight of one work: famous, suits the inks, and shaped like the screen. rangeP = [min, max] of the shard's scores. */
+/** Weight of one work (see the constants). ctx.pMin and ctx.pMax: the shard's lowest and highest palette distance. */
 function weightOf(work, ctx) {
   var fame = Math.pow(Math.max(1, work.s || 1), FAME_EXP);
   var span = ctx.pMax - ctx.pMin;
-  var bad = span > 0 ? (work.p - ctx.pMin) / span : 0; // 0 = best score of the shard, 1 = worst
-  var color = Math.pow(Math.max(0.02, 1 - bad), COLOR_EXP);
+  var bad = span > 0 ? (work.p - ctx.pMin) / span : 0; // 0 = the best match of the shard, 1 = the worst
+  var color = 1 - COLOR_WEIGHT * Math.min(1, Math.max(0, bad));
+  var dark = Math.exp(-DARK_K * Math.max(0, (work.k || 0) - DARK_FREE));
   var k = ctx.fit === 'fill' ? ASPECT_K_FILL : ASPECT_K_WHOLE;
   var aspect = Math.exp(-k * Math.abs(Math.log((work.w / work.h) / ctx.aspect)));
-  return fame * color * aspect;
+  return fame * color * dark * aspect;
 }
 
 /** Index of the work to show. rnd() is a uniform [0, 1) source, injected so tests can drive it. */

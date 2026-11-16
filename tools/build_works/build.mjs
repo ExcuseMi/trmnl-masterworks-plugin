@@ -7,7 +7,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, isPublicDomain } from './wikidata.mjs';
 import { fetchImageInfo, usable } from './commons.mjs';
-import { PALETTE_ID, loadPalette, scoreFile } from './palette.mjs';
+import { PALETTE_ID, fetchThumb, loadPalette, scoreFile } from './palette.mjs';
+import { createHash } from 'node:crypto';
+import { pickMovement } from './movements.mjs';
 import { landscapeOf, pack, portraitOf } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +22,8 @@ const OVERSHOOT = 1.5; // ask Wikidata for this many times LIMIT: rights, image 
 const FRESH = args.includes('--fresh');
 const BUILD_YEAR = new Date().getUTCFullYear();
 // the work list must hold these (the gap report's five): the build stops, and writes nothing, when one is missing
+// Wikidata labels with a known error; the fix belongs on Wikidata, this keeps the data set right until then
+const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa' };
 const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens', Q714802: 'Along the River During the Qingming Festival' };
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
 
@@ -27,6 +31,7 @@ mkdirSync(cacheDir, { recursive: true });
 const cachePath = (n) => join(cacheDir, n);
 const readCache = (n, d) => (!FRESH && existsSync(cachePath(n)) ? JSON.parse(readFileSync(cachePath(n), 'utf8')) : d);
 const writeCache = (n, v) => writeFileSync(cachePath(n), JSON.stringify(v));
+const thumbPath = (file) => join(cacheDir, 'thumbs', createHash('md5').update(file).digest('hex') + '.img');
 const chunks = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
 // 1. candidates, ranked by sitelinks
@@ -77,11 +82,12 @@ for (const p of picked) {
   const info = infoCache[file];
   if (seenFile.has(info.file)) { stats.dupe++; continue; }
   seenFile.add(info.file);
+  const title = TITLE_FIXES[p.id] || p.title;
   const artist = p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
   works.push({
-    id: p.id, title: p.title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
+    id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     year: p.d.years.length ? Math.min(...p.d.years) : undefined,
-    coll: p.d.coll[0], mov: p.d.mov[0] || p.d.creators.flatMap((c) => c.mov)[0],
+    coll: p.d.coll[0], mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
   if (works.length >= LIMIT) break;
 }
@@ -97,22 +103,32 @@ for (const [id, label] of missing) {
 }
 if (missing.length) { log('build check failed: a must-have work is missing; nothing written'); process.exit(1); }
 
-// 4. palette score from a small thumbnail
+// 4. palette score: download the small thumbnails once (kept in the cache), then score them locally
 const inks = await loadPalette();
 log(`palette ${PALETTE_ID}`, inks.join(' '));
-const scores = readCache('scores.json', {});
-const todo = works.filter((w) => scores[w.file] == null); // also the ones that failed before (429 from Commons)
-let next = 0, done = 0;
-await Promise.all(Array.from({ length: 3 }, async () => {
-  while (next < todo.length) {
-    const w = todo[next++];
-    try { scores[w.file] = Math.round((await scoreFile(w.file, inks)) * 1000) / 1000; } catch (e) { scores[w.file] = null; log('no score', w.file, e.message); }
-    if (++done % 50 === 0) { writeCache('scores.json', scores); log(`scores ${done}/${todo.length}`); }
-  }
-}));
-writeCache('scores.json', scores);
-const final = works.filter((w) => scores[w.file] != null).map((w) => ({ ...w, score: scores[w.file] }));
-log(`dropped without a score: ${works.length - final.length}`);
+const thumbDir = join(cacheDir, 'thumbs');
+mkdirSync(thumbDir, { recursive: true });
+const failed = new Set();
+for (let round = 1; round <= 3; round++) { // a round: three workers; what Commons refused (429) is tried again in the next round, slower
+  const todo = works.filter((w) => !existsSync(thumbPath(w.file)));
+  if (!todo.length) break;
+  if (round > 1) { log(`round ${round}: ${todo.length} thumbnails left, waiting`); await new Promise((r) => setTimeout(r, 60000)); }
+  let next = 0, done = 0;
+  await Promise.all(Array.from({ length: round === 1 ? 3 : 1 }, async () => {
+    while (next < todo.length) {
+      const w = todo[next++];
+      try { await fetchThumb(w.file, thumbDir); } catch (e) { failed.add(w.file); if (round === 3) log('no thumbnail', w.file, e.message); }
+      if (++done % 100 === 0) log(`thumbnails ${done}/${todo.length}`);
+    }
+  }));
+}
+const final = [];
+for (const w of works) {
+  if (!existsSync(thumbPath(w.file))) continue;
+  const s = await scoreFile(thumbPath(w.file), inks);
+  final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100 });
+}
+log(`scored ${final.length}, dropped without a thumbnail: ${works.length - final.length}`);
 
 // 5. write
 const minSitelinks = Math.min(...final.map((w) => w.sl));

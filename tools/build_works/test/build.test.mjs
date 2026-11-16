@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { cutoffs, isPublicDomain, yearOf } from '../wikidata.mjs';
 import { md5Path, thumbUrl, usable } from '../commons.mjs';
-import { hexToRgb, scoreRgb, FALLBACK_PALETTE } from '../palette.mjs';
+import { hexToRgb, scoreRgb, FALLBACK_PALETTE, TRMNL_CONTRAST_ARGS } from '../palette.mjs';
+import { groupMovement, pickMovement } from '../movements.mjs';
 import { aspect, landscapeOf, pack, portraitOf } from '../shards.mjs';
 
 const d = (o) => ({ rights: [], creators: [], years: [], ...o });
@@ -50,6 +51,11 @@ test('md5 path and thumb URL (checked on upload.wikimedia.org: Mona Lisa is e/ec
   assert.match(thumbUrl('Mona Lisa, by Leonardo da Vinci, from C2RMF retouched.jpg', 120), /\/thumb\/e\/ec\/Mona_Lisa%2C_by_.*\/120px-Mona_Lisa%2C_by_/);
 });
 
+test('TIFF thumbnails use the lossy JPEG leaf; the same rule as the plugin', () => {
+  assert.match(thumbUrl('A b.tif', 120), /\/A_b\.tif\/lossy-page1-120px-A_b\.tif\.jpg$/);
+  assert.match(thumbUrl('A b.jpg', 120), /\/A_b\.jpg\/120px-A_b\.jpg$/);
+});
+
 test('usable: bitmaps with a long side of 1500 px or more', () => {
   assert.ok(usable({ bitmap: true, w: 1500, h: 900 }));
   assert.ok(!usable({ bitmap: true, w: 1499, h: 900 }));
@@ -57,19 +63,26 @@ test('usable: bitmaps with a long side of 1500 px or more', () => {
   assert.ok(!usable(undefined));
 });
 
-test('palette score: 0 for an exact ink, grows with distance, 1 at most', () => {
-  assert.strictEqual(scoreRgb(Buffer.from([255, 0, 0, 0, 0, 0]), FALLBACK_PALETTE), 0);
-  const grey = scoreRgb(Buffer.from([128, 128, 128]), FALLBACK_PALETTE);
-  const pink = scoreRgb(Buffer.from([255, 150, 150]), FALLBACK_PALETTE);
+test('palette score: 0 for an exact ink, grows with distance, 1 at most; near-black share counted', () => {
+  assert.strictEqual(scoreRgb(Buffer.from([255, 0, 0, 0, 0, 0]), FALLBACK_PALETTE).error, 0);
+  const grey = scoreRgb(Buffer.from([128, 128, 128]), FALLBACK_PALETTE).error;
+  const pink = scoreRgb(Buffer.from([255, 150, 150]), FALLBACK_PALETTE).error;
   assert.ok(grey > 0.1 && grey < 0.5, String(grey));
   assert.ok(pink > 0 && pink < grey + 0.2);
-  assert.ok(Number.isNaN(scoreRgb(Buffer.alloc(0), FALLBACK_PALETTE)));
+  assert.ok(Number.isNaN(scoreRgb(Buffer.alloc(0), FALLBACK_PALETTE).error));
   assert.deepStrictEqual(hexToRgb('#FFFF00'), [255, 255, 0]);
+  // 3 of 4 pixels have V < 0.2 (max channel below 51)
+  assert.strictEqual(scoreRgb(Buffer.from([10, 10, 10, 50, 0, 0, 0, 40, 0, 200, 200, 200]), FALLBACK_PALETTE).dark, 0.75);
+  assert.strictEqual(scoreRgb(Buffer.from([51, 0, 0]), FALLBACK_PALETTE).dark, 0, 'V = 0.2 is not below it');
+});
+
+test('the TRMNL contrast step is the one trmnlp applies (HSV brightness, sigmoidal 5,50%)', () => {
+  assert.deepStrictEqual(TRMNL_CONTRAST_ARGS.join(' '), '-colorspace HSV -channel B -sigmoidal-contrast 5,50% +channel -colorspace sRGB');
 });
 
 test('shards: aspect ranges overlap near square; pack shares collection and movement tables', () => {
   const ws = [
-    { id: 'Q1', title: 'wide', artist: 'a', file: 'a.jpg', w: 3000, h: 2000, sl: 10, score: 0.2, coll: 'Louvre', mov: 'Baroque', year: 1600 },
+    { id: 'Q1', title: 'wide', artist: 'a', file: 'a.jpg', w: 3000, h: 2000, sl: 10, score: 0.2, dark: 0.1, coll: 'Louvre', mov: 'Baroque', year: 1600 },
     { id: 'Q2', title: 'tall', artist: 'b', file: 'b.jpg', w: 2000, h: 3000, sl: 9, score: 0.3, coll: 'Louvre' },
     { id: 'Q3', title: 'square', artist: 'c', file: 'c.jpg', w: 2000, h: 2000, sl: 8, score: 0.4, mov: 'Baroque' },
   ];
@@ -80,6 +93,20 @@ test('shards: aspect ranges overlap near square; pack shares collection and move
   assert.deepStrictEqual(p.col, ['Louvre']);
   assert.deepStrictEqual(p.mov, ['Baroque']);
   assert.strictEqual(p.n, 3);
-  assert.deepStrictEqual(p.w[0], { i: 'Q1', t: 'wide', a: 'a', f: 'a.jpg', w: 3000, h: 2000, s: 10, p: 0.2, y: 1600, c: 0, m: 0 });
+  assert.deepStrictEqual(p.w[0], { i: 'Q1', t: 'wide', a: 'a', f: 'a.jpg', w: 3000, h: 2000, s: 10, p: 0.2, k: 0.1, y: 1600, c: 0, m: 0 });
   assert.strictEqual(p.w[1].m, undefined);
+});
+
+test('movements fold into broad groups; the first mappable label wins; unknown labels stay', () => {
+  assert.strictEqual(groupMovement('High Renaissance'), 'Renaissance');
+  assert.strictEqual(groupMovement('Early Netherlandish painting'), 'Renaissance');
+  assert.strictEqual(groupMovement('Flemish Baroque painting'), 'Baroque');
+  assert.strictEqual(groupMovement('Dutch Golden Age painting'), 'Dutch Golden Age');
+  assert.strictEqual(groupMovement('Post-impressionism'), 'Post-Impressionism');
+  assert.strictEqual(groupMovement('Impressionism'), 'Impressionism');
+  assert.strictEqual(groupMovement('Hudson River school'), 'Realism');
+  assert.strictEqual(pickMovement(['woodblock printing in Japan', 'Japonisme']), 'Ukiyo-e');
+  assert.strictEqual(pickMovement(['Japonisme', 'ukiyo-e']), 'Ukiyo-e');
+  assert.strictEqual(pickMovement(['Kasei culture']), 'Kasei culture');
+  assert.strictEqual(pickMovement([]), undefined);
 });

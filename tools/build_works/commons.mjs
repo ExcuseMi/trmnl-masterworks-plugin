@@ -16,9 +16,14 @@ export function md5Path(name) {
   return `${h[0]}/${h.slice(0, 2)}`;
 }
 
+/** TIFF files are thumbnailed as JPEG: .../File.tif/lossy-page1-120px-File.tif.jpg (the plain name gives HTTP 400). */
+export const isTiff = (name) => /\.tiff?$/i.test(name);
+
 export function thumbUrl(name, width) {
   const f = fileKey(name);
-  return `https://upload.wikimedia.org/wikipedia/commons/thumb/${md5Path(f)}/${encodeURIComponent(f)}/${width}px-${encodeURIComponent(f)}`;
+  const enc = encodeURIComponent(f);
+  const leaf = isTiff(f) ? `lossy-page1-${width}px-${enc}.jpg` : `${width}px-${enc}`;
+  return `https://upload.wikimedia.org/wikipedia/commons/thumb/${md5Path(f)}/${enc}/${leaf}`;
 }
 
 /** Image info for up to 50 file names: Map name -> { w, h, mime } for files that exist as bitmaps. */

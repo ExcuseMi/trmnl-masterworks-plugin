@@ -42,6 +42,16 @@ custom_fields:
   help_text: Only works of one movement. With few works in a movement the filter is ignored.
   options:
   - All: all
+  - Renaissance: Renaissance
+  - Baroque: Baroque
+  - Impressionism: Impressionism
+  - Post-Impressionism: Post-Impressionism
+  - Dutch Golden Age: Dutch Golden Age
+  - Realism: Realism
+  - Mannerism: Mannerism
+  - Romanticism: Romanticism
+  - Neoclassicism: Neoclassicism
+  - Rococo: Rococo
 name: Masterworks
 description: A new famous artwork each refresh
 refresh_interval: 60

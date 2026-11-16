@@ -18,16 +18,18 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh, fillin
 
 ## How a work is picked
 
-Random, weighted: `sitelinks^0.6` (fame) x `(1 - colour error)^3` (suits the 6 inks) x a shape factor (aspect close to the screen's; weaker for Whole work). The last 50 works shown are never repeated (their Q-numbers sit in `trmnl_state`, about 400 bytes). The constants are at the top of `plugin/src/transform.js`.
+Random, weighted. Weight = `sitelinks^0.8` (fame, the main factor) x colour factor (the worst palette match is picked 0.75 times as often as the best) x dark factor (`exp(-6 x (near-black share - 0.45))`, only for very dark works) x a shape factor (aspect close to the screen's; weaker for Whole work). The last 50 works shown are never repeated (their Q-numbers sit in `trmnl_state`, about 400 bytes). The constants are named at the top of `plugin/src/transform.js`.
 
 The image is a Wikimedia Commons thumbnail at the screen's width. Commons serves only the widths 120, 250, 500, 960, 1280, 1920 and 3840; the plugin asks for the smallest that covers the screen (a step down when it holds 70 % of the width needed). TRMNL does the dithering; the plugin only marks the image `image-dither`.
 
 ## Data rules
 
-- Candidates: items of class painting, watercolor painting, drawing, print, woodblock print, fresco, mural with an image (P18) and at least a few sitelinks.
-- Public domain: Wikidata's own statement (P6216 = public domain), else every creator died before 1955; a work with no creator only when dated before 1850. A rights statement that does not say public domain rules a work out.
+- Candidates: items with an image (P18) and at least 7 sitelinks, of a class that is painting, print, drawing, fresco, mural, watercolor painting, woodcut print, handscroll, hanging scroll, miniature, painting series or byobu (with subclasses), or exactly a triptych or altarpiece. QLever (a Wikidata mirror) first, query.wikidata.org as the fallback.
+- Build check: the build stops and writes nothing when one of these is missing: Great Wave, Red Fuji, Creation of Adam, School of Athens, Along the River During the Qingming Festival.
+- Public domain: the rule at the end of this list; a rights statement that does not say public domain rules a work out; no creator named: only when dated before 1850.
 - Commons: file exists, is a bitmap, long side at least 1500 px.
-- Palette score: a 120 px thumbnail, each pixel to the nearest ink of TRMNL's `color-6a` (red, green, blue, yellow, black, white), mean RGB distance scaled 0 to 1. Lower is better. No dithering.
+- Palette score (`p`): a 120 px thumbnail after the contrast step TRMNL applies before dithering (HSV brightness, sigmoidal 5,50%, as in trmnlp's `ImageQuantizer`), each pixel to the nearest ink of `color-6a` (red, green, blue, yellow, black, white), mean RGB distance scaled 0 to 1; lower is better. Dark share (`k`): the share of pixels with V below 0.2 after that step. No dithering of our own.
+- Public domain, as constants computed from the build year (2026): the creator died at least 70 full years before the build year (died 1955 or earlier) AND the work is dated at least 96 years before it (1930 or earlier; US). American Gothic (1930) is in; a 1931 work is not. Wikidata's own "public domain" statement (P6216) stands in for a missing death date, never for the work's date.
 
 ## Test
 
