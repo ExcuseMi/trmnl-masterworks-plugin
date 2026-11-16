@@ -9,7 +9,7 @@
     {% if show_label %}
     {% comment %} the plate is black on white in dark mode too (dark: swaps the tokens back): a picture is no dark-mode content, the plate is what must stay readable and equal {% endcomment %}
     {% comment %} one inline font-size, the exception the framework allows for a value no class has: the Frame is screen--md at 1x like the OG, so no size class can tell 2560 px from 800 px; this scales with the layout (cqmax: the longer side of the layout) and never goes below the OG's own label size {% endcomment %}
-    <div class="absolute bottom--3 left--3 z--2 px--3 py--2 bg--white dark:bg--black outline flex flex--col flex--left text--left gap--none text--black dark:text--white" data-placard="1" style="font-size:max(15px,1.35cqmax)">
+    <div class="absolute bottom--3 left--3 w--max-[75cqw] z--2 px--3 py--2 bg--white dark:bg--black outline flex flex--col flex--left text--left gap--none text--black dark:text--white" data-placard="1" style="font-size:max(15px,1.35cqmax)">
       <span class="text--bold" data-clamp="2">{{ art.title | escape }}</span>
       <span class="text--regular" data-clamp="1">{{ art.artist | escape }}{% if art.year != blank %}, {{ art.year }}{% endif %}</span>
       {% if view == 1 or view == 2 %}{% if art.collection != blank %}<span class="text--regular" data-clamp="1">{{ art.collection | escape }}</span>{% endif %}{% endif %}

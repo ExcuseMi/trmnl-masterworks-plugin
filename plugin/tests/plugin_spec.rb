@@ -66,6 +66,15 @@ RSpec.describe 'Masterworks' do
     end
   end
 
+  describe 'narrow slots' do
+    # the placard once stuck out by 1 px in the 105 px wide half_vertical slot of a playdate (found by the shared base checks)
+    [%w[half_vertical playdate portrait], %w[quadrant playdate landscape], %w[half_vertical og_png landscape]].each do |view, device, orientation|
+      it "#{view} on #{device} #{orientation} has no overflow" do
+        expect(screen(view, device, {}, orientation: orientation.to_sym)).to have_no_overflow
+      end
+    end
+  end
+
   describe 'portrait' do
     %w[frame v2 og_png].each do |device|
       it "reads the portrait shard on #{device}" do
