@@ -185,7 +185,7 @@ test('run: picks a work, builds the thumbnail URL at a standard width, saves the
   assert.strictEqual(out.art.collection, 'Louvre');
   assert.strictEqual(out.settings.label, true);
   assert.strictEqual(out.geo.full.mode, 'gallery'); // a 4:3 work on a 16:9 screen: a fill would crop 25 %
-  assert.ok(out.geo.full.gallery.a > 0 && out.geo.full.gallery.label.lines.length >= 2);
+  assert.ok(out.geo.full.gallery.a > 0 && out.geo.full.gallery.label.who.length > 0);
   assert.deepStrictEqual(out.filters_relaxed, []);
   assert.match(out.art.url, /^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/thumb\/[0-9a-f]\/[0-9a-f]{2}\/File_1\.jpg\/\d+px-File_1\.jpg$/);
   assert.deepStrictEqual(out.trmnl_state, { h: [1] });
@@ -253,58 +253,6 @@ test('SHARDS equals the part files in data/ (a stale constant would fetch a part
 
 const ART = { title: 'The Great Wave off Kanagawa', artist: 'Katsushika Hokusai', year: '1831', medium: 'Woodblock print', size: [25.7, 37.9], collection: 'The Metropolitan Museum of Art', w: 8000, h: 5400 };
 
-test('gallery geometry: the picture box has the work\'s shape, fits the share, leaves room for the label, all slots and shapes', () => {
-  for (const [sw, sh] of [[2560, 1440], [1440, 2560], [1872, 1404], [800, 480], [800, 240], [400, 480], [400, 240]]) {
-    for (const [w, h] of [[8000, 5400], [3000, 4500], [3000, 3000], [9000, 2000], [2000, 9000]]) {
-      for (const label of [true, false]) {
-        const g = t.galleryFor({ ...ART, w, h }, sw, sh, label);
-        const tag = `${sw}x${sh} work ${w}x${h} label ${label}`;
-        assert.ok(g.a >= 1 && g.a <= 100 && g.b >= 1 && g.b <= 100, tag);
-        assert.ok(g.pw <= sw * 0.75 + sw * 0.015 && g.ph <= sh * 0.75 + sh * 0.015, `${tag}: ${g.pw}x${g.ph}`);
-        const shapeErr = Math.abs(g.pw / g.ph / (w / h) - 1);
-        assert.ok(shapeErr < 0.06, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
-        if (label) {
-          const top = (sh - (g.ph + Math.round(sh * 0.018) + g.label.vh)) / 2;
-          assert.ok(top >= -1, `${tag}: the picture and label are taller than the slot (${top})`);
-          for (const l of g.label.lines) assert.ok(t.emWidth(l.t, /^[A-Z\s\u00b7\d]+$/.test(l.t), l.fs === 'italic') * l.s <= g.label.vw * 1.02, `${tag}: "${l.t}" is wider than the label`);
-        }
-      }
-    }
-  }
-});
-
-test('gallery label: lines are right-aligned at the picture edge; missing parts are left out cleanly', () => {
-  const g = t.galleryFor({ ...ART, medium: '', size: null, collection: '' }, 2560, 1440, true);
-  assert.deepStrictEqual(g.label.lines.map((l) => l.a), ['end', 'end']);
-  assert.ok(g.label.lines.every((l) => l.x <= g.label.vw && l.x >= g.label.vw - 0.35 * l.s - 2), 'right-aligned within a slant of the picture edge');
-  assert.ok(!g.label.lines.some((l) => /undefined|null|NaN|\u00b7 \u00b7/.test(l.t)));
-  const full = t.galleryFor(ART, 2560, 1440, true);
-  assert.match(full.label.lines[2].t, /^Woodblock print \u00b7 25\.7 \u00d7 37\.9 cm \u00b7 /);
-  assert.match(full.label.lines[1].t, /^KATSUSHIKA HOKUSAI \u00b7 1831$/);
-  assert.strictEqual(t.galleryFor(ART, 400, 240, true).label.lines.length, 2, 'a small slot: no detail line');
-  assert.strictEqual(t.galleryFor(ART, 2560, 1440, false).label, undefined);
-});
-
-test('gallery detail line: the collection is dropped before a word is cut off', () => {
-  const art = { ...ART, collection: 'The Collection of the Very Long Named Imperial and Royal Museum of Fine Arts and Antiquities and Natural History of the Whole Realm' };
-  const g = t.galleryFor(art, 2560, 1440, true);
-  const detail = g.label.lines[g.label.lines.length - 1].t;
-  assert.ok(!detail.endsWith('\u2026'), detail);
-  assert.match(detail, /^Woodblock print \u00b7 25\.7 \u00d7 37\.9 cm$/);
-});
-
-test('label text never leaves its box: long titles wrap or end in an ellipsis', () => {
-  const long = 'Portrait of a Gentleman Seated in an Armchair Holding a Letter and Wearing a Very Large Hat with a Plume';
-  assert.ok(t.fitText(long, 36, 600, false, true).endsWith('\u2026'));
-  assert.ok(t.emWidth(t.fitText(long, 36, 600, false, true), false, true) * 36 <= 600);
-  const lines = t.wrapText(long, 36, 800, 2, false, true);
-  assert.strictEqual(lines.length, 2);
-  lines.forEach((l) => assert.ok(t.emWidth(l, false, true) * 36 <= 800));
-  assert.strictEqual(t.fitText('Short', 36, 600), 'Short');
-  const plate = t.plateLabel({ ...ART, title: long }, 400, 240);
-  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, /^[^a-z]+$/.test(l.t), l.fs === 'italic') * l.s <= plate.vw));
-});
-
 test('mat: a dark work hangs on black, else white; a work that fills the view has the plate model and no gallery boxes', async () => {
   globalThis.fetch = answer(shard([{ n: 1 }]));
   assert.strictEqual((await t.run(input())).art.mat, 'black');
@@ -312,7 +260,7 @@ test('mat: a dark work hangs on black, else white; a work that fills the view ha
   assert.strictEqual((await t.run(input())).art.mat, 'white');
   globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
   const full = await t.run(input());
-  assert.ok(full.geo.full.mode === 'full' && full.geo.full.plate.lines.length >= 2 && full.geo.full.plate.pct > 0 && full.geo.full.plate.pct <= 60);
+  assert.ok(full.geo.full.mode === 'full' && full.geo.full.plate.who.length > 0 && full.geo.full.plate.m >= 3 && full.geo.full.plate.w <= 80);
   assert.strictEqual(full.geo.full.gallery, null);
   const off = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
   assert.strictEqual(off.geo.full.plate, null, 'label off: no plate');
@@ -418,22 +366,6 @@ test('year label: a range or a century from the data is shown as the label says'
   assert.strictEqual((await t.run(input())).art.year, '1503');
 });
 
-test('the placard of a work that fills the view: italic regular title, ARTIST in caps with the year, collection small, left-aligned, margin to the edges', () => {
-  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
-  for (const [sw, sh] of [[2560, 1440], [1872, 1404], [800, 480], [400, 240]]) {
-    const p = t.plateLabel(art, sw, sh);
-    assert.deepStrictEqual(p.lines.map((l) => [l.fs, l.fw, l.a]).slice(0, 1), [['italic', 'normal', 'start']], 'the title');
-    assert.ok(p.lines.every((l) => l.fw === 'normal'), 'no bold anywhere');
-    assert.strictEqual(p.lines[1].t, 'VINCENT VAN GOGH \u00b7 1890');
-    assert.ok(p.lines.length === 2 || p.lines[2].t === 'Van Gogh Museum');
-    assert.ok(p.lines[0].s >= p.lines[1].s && (p.lines[2] ? p.lines[1].s >= p.lines[2].s : true), 'title, then artist, then collection');
-    assert.ok(p.m >= 3, 'a margin step');
-    assert.ok(p.pct <= 60);
-  }
-  assert.ok(t.plateLabel(art, 2560, 1440).m > t.plateLabel(art, 400, 240).m, 'the margin grows with the screen');
-  assert.strictEqual(t.plateLabel(art, 2560, 1440).lines[0].s, t.galleryFor(art, 2560, 1440, true).label.lines[0].s, 'the title is the size of the gallery label\'s title');
-});
-
 test('the plate is black on a dark corner and white on a light one', async () => {
   globalThis.fetch = answer(shard([{ w: 1600, h: 900, q: 1 }]));
   assert.strictEqual((await t.run(input())).art.corner, 'black');
@@ -472,4 +404,102 @@ test('every genre option names genres the data has', () => {
     assert.deepStrictEqual(g, [key], key);
   }
   assert.ok(['landscape', 'seascape', 'cityscape', 'still life', 'nature', 'japanese print', 'modern', 'poster', 'religious', 'history', 'mythology', 'genre scene', 'portrait'].every((g) => have.has(g)));
+});
+
+const FRAME = [2560, 1440];
+const slotsOf = ([w, h]) => [[w, h], [w, h / 2], [w / 2, h], [w / 2, h / 2]].map(([a, b]) => [Math.round(a), Math.round(b)]);
+
+test('gallery geometry: the picture has the work\'s shape and fits; the limiting dimension may go beyond the 0.75 share; the label always has room', () => {
+  for (const scr of [[2560, 1440], [1440, 2560], [1872, 1404], [800, 480], [480, 800]]) {
+    for (const [sw, sh] of slotsOf(scr)) {
+      for (const [w, h] of [[8000, 5400], [3000, 4500], [3000, 3000], [9000, 2000], [2000, 9000], [2000, 847]]) {
+        for (const label of [true, false]) {
+          const g = t.galleryFor({ ...ART, w, h }, sw, sh, label, 'big');
+          const tag = `${sw}x${sh} work ${w}x${h} label ${label}`;
+          assert.ok(g.a >= 1 && g.a <= 100 && g.b >= 1 && g.b <= 100, tag);
+          const wide = w / h >= sw / sh;
+          assert.ok(g.pw <= sw * (wide ? 0.92 : 0.75) + sw * 0.015, `${tag}: width ${g.pw}`);
+          assert.ok(g.ph <= sh * (wide ? 0.75 : 0.88) + sh * 0.015, `${tag}: height ${g.ph}`);
+          const shapeErr = Math.abs(g.pw / g.ph / (w / h) - 1);
+          assert.ok(shapeErr < 0.1, `${tag}: shape off by ${(100 * shapeErr).toFixed(1)}%`);
+          if (label) assert.ok(g.ph + sh * (sh < 400 ? 0.085 : 0.105) + sh * 0.018 <= sh * 0.94 + sh * 0.015, `${tag}: no room for the label (${g.ph} of ${sh})`);
+        }
+      }
+    }
+  }
+});
+
+test('panoramic and tall extremes use the room their shape allows (The Funeral of Patroclus, 2.36:1, on the Frame)', () => {
+  const pano = t.galleryFor({ ...ART, w: 2000, h: 847 }, ...FRAME, true, 'big');
+  assert.ok(pano.pw >= 0.9 * 2560 && pano.pw <= 0.935 * 2560, `a panoramic work: ${pano.pw} of 2560`);
+  const tall = t.galleryFor({ ...ART, w: 1000, h: 3000 }, ...FRAME, true, 'big');
+  assert.ok(tall.ph >= 0.78 * 1440, `a tall work: ${tall.ph} of 1440`);
+  assert.ok(tall.ph + 1440 * 0.123 <= 1440 * 0.945, 'with the label under it');
+  const normal = t.galleryFor({ ...ART, w: 3000, h: 2000 }, ...FRAME, true, 'big');
+  assert.ok(normal.pw < pano.pw, 'a 3:2 work is not blown up like a panorama');
+});
+
+test('label lines: ARTIST in caps with the year, then material, size and where it hangs; missing parts are left out cleanly', () => {
+  const full = t.galleryFor(ART, ...FRAME, true, 'big').label;
+  assert.strictEqual(full.who, 'KATSUSHIKA HOKUSAI \u00b7 1831');
+  assert.strictEqual(full.detail, 'Woodblock print \u00b7 25.7 \u00d7 37.9 cm \u00b7 The Metropolitan Museum of Art');
+  const bare = t.galleryFor({ ...ART, medium: '', size: null, collection: '', year: '' }, ...FRAME, true, 'big').label;
+  assert.strictEqual(bare.detail, '');
+  assert.strictEqual(bare.who, 'KATSUSHIKA HOKUSAI');
+  assert.ok(!/undefined|null|NaN|\u00b7 \u00b7/.test(bare.who + bare.detail));
+  assert.strictEqual(t.galleryFor(ART, 400, 240, true, 'normal').label.detail, '', 'a small slot: no detail line');
+  assert.strictEqual(t.galleryFor(ART, ...FRAME, false, 'big').label, undefined);
+  assert.strictEqual(t.whoLine({ artist: '', year: '1500' }), '1500');
+});
+
+test('a long title takes more label room (two lines where the slot is high enough)', () => {
+  const long = { ...ART, title: 'Portrait of a Gentleman Seated in an Armchair Holding a Letter and Wearing a Very Large Hat with a Plume' };
+  assert.strictEqual(t.galleryFor(long, 1440, 2560, true, 'big').label.lines, 2);
+  assert.strictEqual(t.galleryFor(ART, ...FRAME, true, 'big').label.lines, 1);
+  assert.strictEqual(t.galleryFor(long, 800, 480, true, 'normal').label.lines, 1, 'a low slot: one line, the Framework clamps it');
+  const tallWork = { w: 1000, h: 3000 };
+  assert.ok(t.galleryFor({ ...long, ...tallWork }, 1440, 2560, true, 'big').ph < t.galleryFor({ ...long, ...tallWork, title: 'Short' }, 1440, 2560, true, 'big').ph, 'a second title line costs picture height');
+});
+
+test('the placard of a work that fills the view: who, the collection, a margin that grows with the screen', () => {
+  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
+  const big = t.plateFor(art, 2560, 1440, 'big'), small = t.plateFor(art, 400, 240, 'normal');
+  assert.strictEqual(big.who, 'VINCENT VAN GOGH \u00b7 1890');
+  assert.strictEqual(big.detail, 'Van Gogh Museum');
+  assert.ok(big.m > small.m && small.m >= 3, 'a margin step to the picture\'s edges that grows with the screen');
+  assert.ok(big.w < small.w, 'a narrow slot lets the plate take more of its width');
+  assert.strictEqual(t.plateFor({ ...art, collection: '' }, 2560, 1440, 'big').detail, '');
+});
+
+test('text size tier: a big canvas (the Frame) is named from the reported size; the X (1872) is not big', async () => {
+  globalThis.fetch = answer(shard([{}]));
+  const kind = async (w, h) => (await t.run(input({ device: { width: w, height: h, orientation: 'landscape' } }))).art.kind;
+  assert.strictEqual(await kind(2560, 1440), 'big');
+  assert.strictEqual(await kind(1440, 2560), 'big');
+  assert.strictEqual(await kind(1872, 1404), 'normal');
+  assert.strictEqual(await kind(800, 480), 'normal');
+});
+
+test('thumbnail: the requested width is at least 0.8 x the displayed width (up to the 1920 cap and the file\'s own width)', async () => {
+  for (const scr of [[2560, 1440], [1440, 2560], [1872, 1404], [800, 480]]) {
+    for (const [w, h] of [[2000, 847], [3000, 2000], [1600, 900], [2000, 3000], [9000, 2000], [1500, 1500], [4000, 3000]]) {
+      globalThis.fetch = answer(shard([{ w, h }]));
+      const out = await t.run(input({ device: { width: scr[0], height: scr[1], orientation: scr[0] >= scr[1] ? 'landscape' : 'portrait' } }));
+      const g = out.geo.full;
+      const shown = g.mode === 'gallery' ? g.gallery.pw : scr[0];
+      const fileStep = [120, 250, 500, 960, 1280, 1920].filter((x) => x <= w).pop();
+      const need = Math.min(0.8 * shown, 1920, fileStep);
+      assert.ok(out.art.width >= need, `${scr} work ${w}x${h}: asked ${out.art.width}, shown ${shown}`);
+      assert.ok([120, 250, 500, 960, 1280, 1920].includes(out.art.width));
+    }
+  }
+});
+
+test('srcset: the standard widths up to 1920 and the file\'s own width, so the browser chooses by its real viewport', () => {
+  const set = (f, w) => t.srcsetOf(f, w).split(', ').map((x) => Number(x.split(' ').pop().replace('w', '')));
+  assert.deepStrictEqual(set('A.jpg', 5000), [500, 960, 1280, 1920]);
+  assert.deepStrictEqual(set('A.jpg', 2000), [500, 960, 1280, 1920]);
+  assert.deepStrictEqual(set('A.jpg', 1500), [500, 960, 1280]);
+  assert.ok(set('A.jpg', 600).length >= 1);
+  assert.ok(t.srcsetOf('A b\'s (c).jpg', 5000).split(', ').every((x) => /^https:\/\/upload\.wikimedia\.org\/.+ \d+w$/.test(x) && !/[,]\S*\s\d+w$/.test(x.replace(/ \d+w$/, '')) ));
 });

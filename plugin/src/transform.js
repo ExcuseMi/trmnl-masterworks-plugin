@@ -7,8 +7,9 @@
  * A failed fetch shows the last work again, else a clean message. Never a blank screen.
  * The plugin decides per work and per view how to show it: full screen with a corner placard when filling the view would
  * crop less than AUTO_CROP_MAX of the work, otherwise the work hangs whole on a white or black mat with a museum label
- * (geo[view].mode). The label text is drawn as SVG text in the screen's own pixels: the Frame is screen--md at 1x like the
- * OG, so no Framework text class can tell 2560 px from 800 px.
+ * (geo[view].mode). The label and placard text are Framework classes (title, label, size utilities, data-clamp). The Frame is
+ * screen--frame screen--md at 1x like the OG and the Framework has no variant for a device class, so the transform names the
+ * size tier from the reported screen size (art.kind) and the markup picks the classes.
  */
 
 var DATA_BASE = 'https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/';
@@ -21,11 +22,11 @@ var COLOR_WEIGHT = 0.25; // palette distance (after TRMNL's contrast step), resc
 var DARK_FREE = 0.45; // share of near-black pixels (after TRMNL's contrast step) that costs nothing
 var DARK_K = 6; // beyond DARK_FREE the weight is multiplied by exp(-DARK_K x the excess): the strong penalty, for very dark works only
 var MIN_POOL = 5; // a movement with fewer works than this is ignored
+var BIG_SCREEN_PX = 2200; // a reported screen with a side this long is a big canvas (the Frame is 2560; TRMNL gives it screen--md, a bug): the largest Framework text sizes. The X (1872) is lg and scales by itself
 var STEPS = [120, 250, 500, 960, 1280, 1920, 3840]; // the thumbnail widths Wikimedia serves (Commons returns 400 for others)
 var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
-var TEXT_FIT = 0.9; // lines are cut to this share of their box: the width table is an estimate for faces the renderer picks
 var AUTO_CROP_MAX = 0.10; // full screen when filling the view would crop less than this share of the work's area, else the gallery
 var ASPECT_K = 2; // shape factor exp(-ASPECT_K x |ln(work aspect / screen aspect)|): works shaped like the screen come up more often
 // the genre choices of the settings and the genres (the data's own names) each one lets through
@@ -43,8 +44,18 @@ var GENRE_WEIGHT = {
   mythology: 0.8, history: 0.5, religious: 0.5, portrait: 0.5, 'still life': 0.5,
 };
 var FAME_FLOOR = 10; // a work with fewer sitelinks counts as this famous: the genre tiers (landscapes, prints, posters...) hold works of 2 to 10 sitelinks
-var GALLERY_SHARE = 0.75; // gallery: the picture takes up to this share of the slot's width and of its height
-var GALLERY_USE = 0.94; // picture, gap and label together stay inside this share of the height
+// Gallery sizes. The 0.75 share holds for the dimension that is not the work's limit; the limiting one may go further: a wide
+// work (wider than its slot) up to GALLERY_WIDE_MAX of the width, a tall one up to GALLERY_TALL_MAX of the height, always with
+// room for the label (picture, gap and label stay inside GALLERY_USE of the height).
+var GALLERY_SHARE = 0.75;
+var GALLERY_WIDE_MAX = 0.92;
+var GALLERY_TALL_MAX = 0.88;
+var GALLERY_USE = 0.94;
+var LABEL_SHARE = 0.105; // the room the label (title line, artist line, detail line) needs, as a share of the slot's height
+var LABEL_SHARE_SMALL = 0.085; // the same in a slot under 400 px high: no detail line
+var LABEL_LINE_SHARE = 0.032; // every further title line
+var LABEL_GAP_SHARE = 0.018;
+var TITLE_PX = { big: 40, normal: 18 }; // the title size the markup uses, to guess how many lines a title takes
 var VIEWS = { full: [1, 1], half_horizontal: [1, 0.5], half_vertical: [0.5, 1], quadrant: [0.5, 0.5] }; // slot size as a share of the screen
 
 /** MD5 as lowercase hex of a UTF-8 string, in plain JS: Commons paths are built from it and a sandbox may lack `crypto`. */
@@ -247,117 +258,47 @@ async function fetchShard(orientation, rnd) {
 
 // ---- label text, drawn as SVG text: sizes are the slot's own pixels ---------------------------------------------------
 
-/**
- * Width of a text in em, from character classes. The face is whatever "serif" is on the render box: Times-like locally,
- * DejaVu Serif (about 25 % wider) in the trmnlp Docker image where the base checks found text 1 px past its box. The
- * numbers are those of the wide one, so a line is cut a little early on a narrow face and never late on a wide one.
- */
-function emWidth(str, caps, italic) {
-  var w = 0;
-  for (var i = 0; i < str.length; i++) {
-    var c = str.charAt(i), code = str.charCodeAt(i);
-    if (c === ' ') w += 0.32;
-    else if (code > 0x2e80) w += 1;
-    else if (c >= 'A' && c <= 'Z') w += 0.82;
-    else if (c >= '0' && c <= '9') w += 0.64;
-    else if (c >= 'a' && c <= 'z') w += caps ? 0.82 : (italic ? 0.62 : 0.6);
-    else if (code > 0x7f) w += 0.62;
-    else w += 0.42;
-  }
-  return w;
-}
-
-/** The text cut at a word, or at a letter, with an ellipsis, so that it is at most maxPx wide at this size. */
-function fitText(str, size, maxPx, caps, italic) {
-  str = String(str);
-  if (emWidth(str, caps, italic) * size <= maxPx) return str;
-  var cut = str;
-  while (cut.length > 1 && emWidth(cut + '\u2026', caps, italic) * size > maxPx) cut = cut.slice(0, -1);
-  return cut.replace(/[\s,;:\u00b7-]+$/, '') + '\u2026';
-}
-
-/** Words onto at most maxLines lines of maxPx; what does not fit ends the last line with an ellipsis. */
-function wrapText(str, size, maxPx, maxLines, caps, italic) {
-  var words = String(str).split(/\s+/), lines = [], cur = '', i;
-  for (i = 0; i < words.length; i++) {
-    var next = cur ? cur + ' ' + words[i] : words[i];
-    if (!cur || emWidth(next, caps, italic) * size <= maxPx) cur = next;
-    else { lines.push(cur); cur = words[i]; }
-  }
-  if (cur) lines.push(cur);
-  if (lines.length > maxLines) lines = lines.slice(0, maxLines - 1).concat(lines.slice(maxLines - 1).join(' '));
-  return lines.map(function (l) { return fitText(l, size, maxPx, caps, italic); });
-}
-
 var cmText = function (z) {
   var n = function (v) { return String(Math.round(v * 10) / 10).replace(/\.0$/, ''); };
   return n(z[0]) + ' \u00d7 ' + n(z[1]) + ' cm';
 };
 
-/** Type sizes (px) for a slot of this height. */
-function sizesFor(slotH) {
-  var title = Math.max(14, Math.round(slotH / 40));
-  return { title: title, artist: Math.max(11, Math.round(title * 0.72)), detail: Math.max(10, Math.round(title * 0.6)) };
+/** "ARTIST \u00b7 year" in capitals, and "material \u00b7 size \u00b7 where it hangs": the lines of the label, missing parts left out. */
+function whoLine(art) {
+  return String(art.artist || '').toUpperCase() + (art.year ? (art.artist ? ' \u00b7 ' : '') + art.year : '');
 }
-
-/** The museum label under the picture: right-aligned lines in an svg of width pw. Returns { vw, vh, lines }. */
-function galleryLabel(art, slotH, pw) {
-  var z = sizesFor(slotH), lines = [], y = 0, i;
-  var pad = Math.round(z.title * 0.35);
-  // right edge of the text: a face without a real italic is slanted by the renderer, and the slant reaches past the advance
-  // (the base checks measured 0.55 em in the Docker image), so the italic title ends a little early and the rest 2 px
-  var inset = 3, tin = Math.round(z.title * 0.3);
-  var titleLines = wrapText(art.title, z.title, (pw - tin) * TEXT_FIT, slotH >= 700 ? 2 : 1, false, true);
-  y = pad;
-  for (i = 0; i < titleLines.length; i++) { y += Math.round(z.title * 1.1); lines.push({ x: pw - tin, y: y, s: z.title, a: 'end', fs: 'italic', fw: 'normal', t: titleLines[i] }); y += Math.round(z.title * 0.15); }
-  var who = String(art.artist || '').toUpperCase() + (art.year ? ' \u00b7 ' + art.year : '');
-  if (art.artist || art.year) { y += Math.round(z.artist * 1.35); lines.push({ x: pw - inset, y: y, s: z.artist, a: 'end', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, (pw - inset) * TEXT_FIT, true, false) }); }
-  var parts = [art.medium, art.size ? cmText(art.size) : '', art.collection].filter(Boolean);
-  if (parts.length && slotH >= 400) {
-    // the collection, then the material, give way when the line is too wide; a cut-off word is the last resort
-    var detail = parts.join(' \u00b7 ');
-    while (parts.length > 1 && emWidth(detail, false, false) * z.detail > (pw - inset) * TEXT_FIT) {
-      parts = parts.slice(0, -1);
-      detail = parts.join(' \u00b7 ');
-    }
-    y += Math.round(z.detail * 1.55);
-    lines.push({ x: pw - inset, y: y, s: z.detail, a: 'end', fs: 'normal', fw: 'normal', t: fitText(detail, z.detail, (pw - inset) * TEXT_FIT, false, false) });
-  }
-  return { vw: Math.round(pw), vh: y + Math.round(z.detail * 0.5), lines: lines };
+function detailLine(art) {
+  return [art.medium, art.size ? cmText(art.size) : '', art.collection].filter(Boolean).join(' \u00b7 ');
 }
 
 /**
- * The placard of a work that fills the view: left-aligned lines in a plate in the picture's bottom-left corner, in the type of
- * the gallery label (italic title, ARTIST in caps with the year, the collection small). Returns { vw, vh, lines, pct, m }:
- * m is the Framework spacing step of the margin to the picture's edges (never across an edge).
+ * The placard of a work that fills the view: Framework text classes in a plate in the picture's bottom-left corner.
+ * Returns { m, w, who, detail }: m the spacing step of the margin to the picture's edges (never across an edge), w the
+ * widest the plate gets, as a share of the slot's width.
  */
-function plateLabel(art, slotW, slotH) {
-  var z = sizesFor(slotH), pad = Math.round(z.title * 0.45), maxW = (Math.round(slotW * 0.6) - 2 * pad) * TEXT_FIT;
-  var lines = [], y = pad, i;
-  var titleLines = wrapText(art.title, z.title, maxW - Math.round(z.title * 0.3), 2, false, true);
-  for (i = 0; i < titleLines.length; i++) { y += Math.round(z.title * 1.15); lines.push({ x: pad, y: y, s: z.title, a: 'start', fs: 'italic', fw: 'normal', t: titleLines[i] }); }
-  var who = String(art.artist || '').toUpperCase() + (art.year ? ' \u00b7 ' + art.year : '');
-  if (art.artist || art.year) { y += Math.round(z.artist * 1.4); lines.push({ x: pad, y: y, s: z.artist, a: 'start', fs: 'normal', fw: 'normal', t: fitText(who, z.artist, maxW, true, false) }); }
-  if (art.collection && slotH >= 240) { y += Math.round(z.detail * 1.55); lines.push({ x: pad, y: y, s: z.detail, a: 'start', fs: 'normal', fw: 'normal', t: fitText(art.collection, z.detail, maxW, false, false) }); }
-  var widest = 0;
-  lines.forEach(function (l) { widest = Math.max(widest, emWidth(l.t, l.s === z.artist && /^[^a-z]+$/.test(l.t), l.fs === 'italic') * l.s + (l.fs === 'italic' ? l.s * 0.3 : 0)); });
-  var vw = Math.min(Math.round(slotW * 0.6), Math.round(widest + 2 * pad));
-  return { vw: vw, vh: y + Math.round(z.detail * 0.6), lines: lines, pct: Math.min(60, Math.ceil(100 * vw / slotW)), m: slotW >= 1800 ? 8 : slotW >= 1000 ? 6 : slotW >= 500 ? 4 : 3 };
+function plateFor(art, slotW, slotH, kind) {
+  return {
+    m: kind === 'big' ? 8 : slotW >= 500 ? 4 : 3, w: slotW >= 700 ? 45 : 80,
+    who: whoLine(art), detail: slotH >= 240 ? (art.collection || '') : '',
+  };
 }
 
 /**
  * Gallery geometry of one slot: percent sizes of the picture box (the Framework has whole-percent sizes only; the pair
  * nearest the work's shape is taken and the picture covers its box, so an error of a fraction of a percent is cropped,
- * never a gap), and the label. withLabel false: the picture alone, centred.
+ * never a gap), and what the label needs. withLabel false: the picture alone, centred.
  */
-function galleryFor(art, slotW, slotH, withLabel) {
-  var aspect = art.w / art.h;
-  var pw = Math.min(GALLERY_SHARE * slotW, GALLERY_SHARE * slotH * aspect), label = null, i;
-  for (i = 0; i < 3; i++) { // the label wraps by the picture's width, the picture's size leaves room for the label
-    label = withLabel ? galleryLabel(art, slotH, pw) : null;
-    var gap = withLabel ? Math.round(slotH * 0.018) : 0;
-    var phMax = Math.min(GALLERY_SHARE * slotH, GALLERY_USE * slotH - (label ? label.vh + gap : 0));
-    pw = Math.min(GALLERY_SHARE * slotW, phMax * aspect);
+function galleryFor(art, slotW, slotH, withLabel, kind) {
+  var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
+  var widthCap = (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE) * slotW;
+  var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
+  var maxLines = slotH >= 700 ? 2 : 1, titlePx = TITLE_PX[kind || 'normal'];
+  var lines = 1, ph = 0, pw = 0, i;
+  for (i = 0; i < 3; i++) { // the title wraps by the picture's width, the picture's size leaves room for the label
+    var reserve = withLabel ? slotH * ((slotH < 400 ? LABEL_SHARE_SMALL : LABEL_SHARE) + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE) : 0;
+    ph = Math.min(heightCap, GALLERY_USE * slotH - reserve, widthCap / aspect);
+    pw = ph * aspect;
+    lines = Math.min(maxLines, Math.max(1, Math.ceil(String(art.title).length * 0.5 * titlePx / Math.max(pw, 1))));
   }
   var ideal = 100 * pw / slotW, best = null, da, db;
   for (da = -1; da <= 1; da++) {
@@ -369,7 +310,7 @@ function galleryFor(art, slotW, slotH, withLabel) {
     }
   }
   var out = { a: best.a, b: best.b, pw: Math.round(best.a * slotW / 100), ph: Math.round(best.b * slotH / 100) };
-  if (withLabel) out.label = galleryLabel(art, slotH, out.pw);
+  if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: slotH >= 400 ? detailLine(art) : '' };
   return out;
 }
 
@@ -384,23 +325,35 @@ function modeFor(art, slotW, slotH) {
   return cropShare(art.w / art.h, slotW / slotH) < AUTO_CROP_MAX ? 'full' : 'gallery';
 }
 
+/**
+ * The widths the browser may choose from (srcset, with sizes in the markup): the renderer knows its own viewport, the
+ * transform only the device TRMNL reports (the first device of the playlist), so the picture's width is left to the browser.
+ */
+function srcsetOf(file, workWidth) {
+  var out = [];
+  STEPS.forEach(function (w) { if (w >= 500 && w <= MAX_STEP && w <= workWidth) out.push(thumbUrl(file, w) + ' ' + w + 'w'); });
+  if (!out.length) out.push(thumbUrl(file, thumbWidth(workWidth, 1, 1, 1, 'fill')) + ' ' + thumbWidth(workWidth, 1, 1, 1, 'fill') + 'w');
+  return out.join(', ');
+}
+
 function artOf(work, shard, set, scr) {
   var art = {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
     collection: work.c === undefined ? '' : shard.col[work.c], movement: work.m === undefined ? '' : shard.mov[work.m],
     genre: genreOfWork(shard, work), medium: work.e === undefined || !shard.med ? '' : shard.med[work.e], size: work.z || null,
-    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
+    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: Math.max(scr.w, scr.h) >= BIG_SCREEN_PX ? 'big' : 'normal', w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
   };
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
-    if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label), plate: null };
-    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateLabel(art, sw, sh) : null };
+    if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind), plate: null };
+    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null };
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
   art.width = geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
     thumbWidth(work.w, work.h, scr.w, scr.h, 'fill');
   art.url = thumbUrl(work.f, art.width);
+  art.srcset = srcsetOf(work.f, work.w);
   return { art: art, geo: geo };
 }
 
@@ -434,7 +387,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, validShard: validShard, pick: pick, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateLabel: plateLabel, fitText: fitText, wrapText: wrapText,
-    emWidth: emWidth, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, validShard: validShard, pick: pick, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }

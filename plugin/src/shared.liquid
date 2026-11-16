@@ -1,11 +1,18 @@
 {% template main %}
 {% comment %} Masterworks. No title bar. Each view is drawn as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label; "full": the work fills the view with a corner placard. Label text is SVG text in the slot's own pixels (geo, from the transform): the Frame is screen--md at 1x, so no text class could scale to it. {% endcomment %}
+{% comment %} Masterworks. No title bar. Each view is drawn as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label; full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp). The Frame is screen--frame screen--md at 1x like the OG and the Framework has no variant for a device class, so art.kind (from the reported screen size) names the tier: big = the largest sizes. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
 {% if art.url %}
 {% assign gv = geo[vname] %}
+{% comment %} THE ONE PLACE that sizes text by screen. Known TRMNL bug: the Frame (2560 px, screen--frame) carries screen--md, not screen--lg, so lg: prefixes never apply to it and its Framework text is OG-sized on a 2560 px canvas. Until TRMNL fixes the class, a Frame (trmnl.device.model, or art.kind from the reported size) gets the largest Framework sizes; the X is lg and uses lg: prefixes. When the class is fixed, replace this branch with lg: prefixes and delete it. {% endcomment %}
+{% if art.kind == "big" or trmnl.device.model == "frame" %}
+  {% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign dcls = "label--large" %}{% assign lpad = "pt--4" %}{% assign ppad = "px--6 py--4" %}
+{% else %}
+  {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}{% assign ppad = "px--3 py--2" %}
+{% endif %}
 {% if gv.mode == "full" %}
 <div class="layout layout--center p--0" data-mode="full">
   <div class="relative w--full h--full bg--white">
-    <img src="{{ art.url }}" class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw" class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
     {% assign pl = gv.plate %}
     {% if pl %}
     {% comment %} the plate sits inside the picture's bottom-left corner with a margin (never across an edge): solid black with white text on a dark corner, solid white with black text on a light one, a thin solid edge in the other colour; dark: swaps the tokens back so a dark-mode screen does not repaint it {% endcomment %}
@@ -14,11 +21,11 @@
     {% else %}
       {% assign plate = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
     {% endif %}
-    <div class="absolute bottom--{{ pl.m }} left--{{ pl.m }} z--2 {{ edge }} p--0.5" data-placard="1">
-      <div class="{{ plate }}">
-        <svg class="block w--[{{ pl.pct }}cqw] {{ ink }}" viewBox="0 0 {{ pl.vw }} {{ pl.vh }}" role="img" aria-label="{{ art.title | escape }}">
-          {% for l in pl.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
-        </svg>
+    <div class="absolute bottom--{{ pl.m }} left--{{ pl.m }} z--2 {{ edge }} p--0.5 w--max-[{{ pl.w }}cqw]" data-placard="1">
+      <div class="{{ plate }} {{ ppad }} flex flex--col flex--left gap--none">
+        <span class="title {{ tcls }} {{ ink }} block text--left" data-clamp="2">{{ art.title | escape }}</span>
+        {% if pl.who != blank %}<span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1">{{ pl.who | escape }}</span>{% endif %}
+        {% if pl.detail != blank %}<span class="label {{ dcls }} {{ ink }} block text--left" data-clamp="1">{{ pl.detail | escape }}</span>{% endif %}
       </div>
     </div>
     {% endif %}
@@ -37,13 +44,15 @@
     {% comment %} the bevel: an outer line in the opposite colour, then a gap of mat colour, then the picture; the box is whole-percent sized and the picture covers it {% endcomment %}
     <div class="{{ edge }} p--0.5 w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
       <div class="{{ mat }} p--0.5 w--full h--full">
-        <img src="{{ art.url }}" class="image image--cover image-dither block w--full h--full" alt="" />
+        <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw" class="image image--cover image-dither block w--full h--full" alt="" />
       </div>
     </div>
     {% if gl.label %}
-    <svg class="block w--[{{ gl.a }}cqw] {{ ink }}" viewBox="0 0 {{ gl.label.vw }} {{ gl.label.vh }}" role="img" aria-label="{{ art.title | escape }}" data-label="1">
-      {% for l in gl.label.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
-    </svg>
+    <div class="flex flex--col flex--right gap--none w--[{{ gl.a }}cqw] {{ lpad }}" data-label="1">
+      <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}">{{ art.title | escape }}</span>
+      {% if gl.label.who != blank %}<span class="label {{ acls }} {{ ink }} block w--full text--right" data-clamp="1">{{ gl.label.who | escape }}</span>{% endif %}
+      {% if gl.label.detail != blank %}<span class="label {{ dcls }} {{ ink }} block w--full text--right" data-clamp="1">{{ gl.label.detail | escape }}</span>{% endif %}
+    </div>
     {% endif %}
   </div>
 </div>

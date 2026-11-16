@@ -78,7 +78,7 @@ RSpec.describe 'Masterworks' do
           [light, wide].each do |m|
             on = screen(view, device, mocks: m)
             wait(on)
-            expect(on).to have_css('[data-label] text, [data-placard] text')
+            expect(on).to have_css('[data-label] .title, [data-placard] .title')
             off = screen(view, device, { 'label' => 'false' }, mocks: m)
             wait(off)
             expect(off).to have_no_css('[data-label], [data-placard]')
@@ -94,9 +94,8 @@ RSpec.describe 'Masterworks' do
           lab = rect(page, '[data-label]')
           lay = layout_rect(page)
           expect(lab[2]).to be_within(3).of(edge[2])
-          # the text itself, not only its box, ends on the picture's right edge (right-aligned)
-          text_right = page.evaluate("document.querySelector('[data-label] text').getBoundingClientRect().right")
-          expect(text_right).to be_within(0.4 * page.evaluate("parseFloat(document.querySelector('[data-label] text').getAttribute('font-size'))") + 4).of(edge[2])
+          # the text itself is right-aligned, so it ends on the picture's right edge
+          expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] .title')).textAlign")).to eq('right')
           expect(lab[3]).to be <= lay[3] + 1
           expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.78
         end
@@ -141,17 +140,47 @@ RSpec.describe 'Masterworks' do
   end
 
   describe 'label type is legible at every size' do
-    # the Frame is screen--md at 1x like the OG, so only SVG text in the screen's own pixels is big enough there
+    # the Frame is screen--frame screen--md (a TRMNL bug: no lg:), so its text sizes come from the one branch in shared.liquid
     { 'frame' => 28, 'v2' => 25, 'og_png' => 10 }.each do |device, min_px|
       it "draws the gallery title and the placard title at least #{min_px} px high on #{device}" do
         gal = screen('full', device, mocks: shard_mocks('one-landscape', 'one-portrait'))
         wait(gal)
-        expect(gal.evaluate("document.querySelector('[data-label] text').getBoundingClientRect().height")).to be >= min_px
+        expect(gal.evaluate("document.querySelector('[data-label] .title').getBoundingClientRect().height")).to be >= min_px
         full = screen('full', device, mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
         wait(full)
         next unless full.has_css?('[data-placard]')
 
-        expect(full.evaluate("document.querySelector('[data-placard] text').getBoundingClientRect().height")).to be >= min_px
+        expect(full.evaluate("document.querySelector('[data-placard] .title').getBoundingClientRect().height")).to be >= min_px
+      end
+    end
+  end
+
+  describe 'the label can be read: ink with contrast against its mat, in every gallery render' do
+    # a label drawn in the mat's own colour is invisible (a black label on a black mat was missing on the Frame): count the
+    # pixels of the label's box that differ from the mat in the picture the device gets
+    def label_ink_share(page, selector)
+      wait(page)
+      box = page.evaluate("(() => { const r = document.querySelector('#{selector}').getBoundingClientRect(); return [r.left, r.top, r.width, r.height, window.innerWidth]; })()")
+      scale = `identify -format '%w' #{page.png_path}`.to_i / box[4].to_f
+      x, y, w, h = [box[0] * scale, box[1] * scale, box[2] * scale, box[3] * scale].map(&:round)
+      out = `convert #{page.png_path} -crop #{w}x#{h}+#{x}+#{y} +repage -colorspace Gray -format '%[fx:mean]' info:`
+      out.to_f
+    end
+
+    %w[frame v2 og_png og_plus].each do |device|
+      VIEWS.each do |view|
+        { 'one-landscape' => :white, 'one-dark-landscape' => :black }.each do |fixture_name, mat|
+          it "#{view} on #{device}, #{mat} mat: the label has ink that contrasts with the mat" do
+            page = screen(view, device, mocks: shard_mocks(fixture_name, 'one-portrait'))
+            wait(page)
+            next unless page.has_css?('[data-label]') && page.has_css?("[data-gallery=\"#{mat}\"]")
+
+            mean = label_ink_share(page, '[data-label]')
+            # the share of the label's box that is not the mat colour: some, but a label is mostly mat
+            ink = mat == :black ? mean : 1 - mean
+            expect(ink).to be > 0.01
+          end
+        end
       end
     end
   end
@@ -177,14 +206,14 @@ RSpec.describe 'Masterworks' do
       broken = { url => { body: 'not a picture', content_type: 'text/plain' } }
       page = trmnl.render(view: 'full', device: 'og_png', mocks: one, custom_fields:, asset_overrides: broken)
       page.has_css?('[data-gallery]')
-      expect(page).to have_css('[data-label] text', text: title)
+      expect(page).to have_css('[data-label] .title', text: title)
       wide = shard_mocks('one-wide-landscape', 'one-portrait')
       wide_url = trmnl.transform(mocks: wide, custom_fields:).data['art']['url']
       wide_title = fixture('one-wide-landscape')['w'].first['t']
       full = trmnl.render(view: 'full', device: 'og_png', mocks: wide, custom_fields:,
                           asset_overrides: { wide_url => { body: 'not a picture', content_type: 'text/plain' } })
       full.has_css?('[data-placard]')
-      expect(full).to have_css('[data-placard] text', text: wide_title)
+      expect(full).to have_css('[data-placard] .title', text: wide_title)
     end
   end
 
@@ -219,11 +248,10 @@ RSpec.describe 'Masterworks' do
           next unless page.has_css?(sel)
 
           expect(rect(page, sel)[2]).to be <= layout_rect(page)[2] - 3
-          # every line of text stays inside its svg (the face is whatever "serif" is: wider in the Docker image)
-          # (an italic line is slanted by a face without a real italic: its box may reach 0.6 em past the right edge)
+          # every line of text stays inside its block (the Framework clamps what is too long)
           out = page.evaluate(<<~JS)
-            (() => { const svg = document.querySelector('#{sel} text').ownerSVGElement.getBoundingClientRect();
-              return [...document.querySelectorAll('#{sel} text')].filter((t) => { const r = t.getBoundingClientRect(), slack = t.getAttribute('font-style') === 'italic' ? 0.6 * parseFloat(t.getAttribute('font-size')) : 0.5; return r.left < svg.left - 0.5 || r.right > svg.right + slack; }).map((t) => [t.textContent, t.getBoundingClientRect().left.toFixed(1), t.getBoundingClientRect().right.toFixed(1), svg.left.toFixed(1), svg.right.toFixed(1), t.getAttribute('font-size')]); })()
+            (() => { const box = document.querySelector('#{sel}').getBoundingClientRect();
+              return [...document.querySelectorAll('#{sel} .title, #{sel} .label')].filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5 || t.scrollWidth > t.clientWidth + 1; }).map((t) => [t.textContent, t.scrollWidth, t.clientWidth]); })()
           JS
           expect(out).to eq([])
         end
