@@ -1,0 +1,27 @@
+# Rebuilds data/*.json from Wikidata and Wikimedia Commons once a month and commits the result.
+name: build-data
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 1 * *'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests of the build tool
+        run: node --test tools/build_works/test
+      - name: Build the data set
+        run: node tools/build_works/build.mjs
+      - name: Commit when it changed
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/works.json data/landscape.json data/portrait.json
+          git diff --cached --quiet || git commit -m "Rebuild data set" && git push

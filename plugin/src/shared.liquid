@@ -1,0 +1,24 @@
+{% template main %}
+{% comment %} Masterworks: the artwork fills the view; no title bar. art.fit is cover (Fill) or contain (Whole work, on a plain white mat). {% endcomment %}
+{% if art.url %}
+{% assign show_label = true %}
+{% if opts.label == "off" %}{% assign show_label = false %}{% endif %}
+<div class="layout layout--center p--0">
+  <div class="relative w--full h--full bg--white">
+    <img src="{{ art.url }}" class="image image--{{ art.fit }} image-dither block w--full h--full" alt="{{ art.title | escape }}" />
+    {% if show_label %}
+    <div class="absolute bottom--3 left--3 z--2 px--3 py--2 bg--white outline flex flex--col gap--none" data-placard="1">
+      <span class="title title--small lg:title--base" data-clamp="2">{{ art.title | escape }}</span>
+      <span class="label label--small lg:label--base" data-clamp="1">{{ art.artist | escape }}{% if art.year != blank %}, {{ art.year }}{% endif %}</span>
+      {% if view == 1 or view == 2 %}{% if art.collection != blank %}<span class="label label--small lg:label--base" data-clamp="1">{{ art.collection | escape }}</span>{% endif %}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="layout layout--col layout--center">
+  <span class="title title--small">Masterworks</span>
+  <span class="description">{{ notice | default: "No artwork available right now. The next refresh tries again." }}</span>
+</div>
+{% endif %}
+{% endtemplate %}

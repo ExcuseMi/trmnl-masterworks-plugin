@@ -1,0 +1,47 @@
+strategy: polling
+no_screen_padding: 'yes'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.4.6
+serverless_language: node
+polling_url: ''
+polling_headers: ''
+polling_body: ''
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+custom_fields:
+- keyname: author_bio
+  field_type: author_bio
+  name: About This Plugin
+  description: A famous painting, print or drawing from the public domain, a new one at every refresh, filling the whole screen. About 2,000 well-known works chosen by how widely they are written about, drawn from Wikidata and Wikimedia Commons; works whose colours suit colour e-paper come up more often.<br />Faithful photographs of two-dimensional public-domain works are themselves public domain. Each work is credited on its label; the plugin code is CC-BY 4.0.
+  category: art,images
+  github_url: https://github.com/ExcuseMi/trmnl-masterworks-plugin
+  learn_more_url: https://www.wikidata.org
+- keyname: fit
+  field_type: select
+  name: Fit
+  default: fill
+  help_text: "<b>Fill</b>: the work covers the whole screen, the edges are cropped. Works shaped like your screen are picked first.<br /><b>Whole work</b>: nothing is cut off; a plain white mat fills what is left."
+  options:
+  - Fill (crop the edges): fill
+  - Whole work (plain mat): whole
+- keyname: label
+  field_type: select
+  name: Label
+  default: corner
+  help_text: "<b>Corner placard</b>: a small museum label with title, artist, year and collection.<br /><b>Off</b>: only the artwork."
+  options:
+  - Corner placard: corner
+  - 'Off': 'off'
+- keyname: movement
+  field_type: select
+  name: Movement or period
+  default: all
+  optional: true
+  help_text: Only works of one movement. With few works in a movement the filter is ignored.
+  options:
+  - All: all
+name: Masterworks
+description: A famous artwork, new at every refresh
+refresh_interval: 60
