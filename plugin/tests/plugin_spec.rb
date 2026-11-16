@@ -12,7 +12,13 @@ RSpec.describe 'Masterworks' do
   let(:mocks) { { "#{base}/landscape.json" => { json: landscape }, "#{base}/portrait.json" => { json: portrait } } }
   let(:custom_fields) { {} }
 
-  it_behaves_like 'a publishable recipe'
+  # one work per shard: the recipe compares a light and a dark render of the same screen, which a random pick would break
+  it_behaves_like 'a publishable recipe' do
+    let(:mocks) do
+      { "#{base}/landscape.json" => { json: JSON.parse(File.read(File.join(__dir__, 'fixtures', 'one-landscape.json'))) },
+        "#{base}/portrait.json" => { json: JSON.parse(File.read(File.join(__dir__, 'fixtures', 'one-portrait.json'))) } }
+    end
+  end
 
   VIEWS = %w[full half_horizontal half_vertical quadrant].freeze
   DEVICES = %w[frame v2 og_png og_plus].freeze

@@ -129,6 +129,10 @@ for (const w of works) {
   final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100 });
 }
 log(`scored ${final.length}, dropped without a thumbnail: ${works.length - final.length}`);
+// build check: a work lost here is lost for a reason worth a look (the 16 TIFF files once were, silently); more than 1 % stops the build
+const lost = works.length - final.length;
+const lostMust = Object.keys(MUST_HAVE).filter((id) => !final.some((w) => w.id === id));
+if (lost > works.length * 0.01 || lostMust.length) { log(`build check failed: ${lost} works without a thumbnail (limit 1 %), must-have lost: ${lostMust.join(' ') || 'none'}; nothing written`); process.exit(1); }
 
 // 5. write
 const minSitelinks = Math.min(...final.map((w) => w.sl));

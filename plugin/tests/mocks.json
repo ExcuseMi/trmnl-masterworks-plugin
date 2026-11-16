@@ -1,4 +1,4 @@
 {
-  "re:/data/landscape\\.json": { "json_file": "tests/fixtures/landscape.json" },
-  "re:/data/portrait\\.json": { "json_file": "tests/fixtures/portrait.json" }
+  "re:/data/landscape\\.json": { "json_file": "tests/fixtures/one-landscape.json" },
+  "re:/data/portrait\\.json": { "json_file": "tests/fixtures/one-portrait.json" }
 }

@@ -17,5 +17,11 @@ for (const name of ['landscape', 'portrait']) {
     coll: w.c === undefined ? undefined : doc.col[w.c], mov: w.m === undefined ? undefined : doc.mov[w.m],
   }));
   const { v, built, palette, shard, source } = doc;
-  writeFileSync(join(root, 'plugin', 'tests', 'fixtures', `${name}.json`), JSON.stringify(pack(works, { v, built, palette, shard, source })));
+  const meta = { v, built, palette, shard, source };
+  writeFileSync(join(root, 'plugin', 'tests', 'fixtures', `${name}.json`), JSON.stringify(pack(works, meta)));
+  // one work only, for the shared base checks: they compare a light and a dark render of the same screen, and with a
+  // random pick the two renders would show different pictures. Not dark, shaped like the screen, as famous as possible.
+  const target = name === 'landscape' ? 1.5 : 0.7;
+  const one = works.filter((w) => w.dark < 0.3).sort((a, b) => Math.abs(a.w / a.h - target) - Math.abs(b.w / b.h - target) || b.sl - a.sl)[0];
+  writeFileSync(join(root, 'plugin', 'tests', 'fixtures', `one-${name}.json`), JSON.stringify(pack([one], meta)));
 }
