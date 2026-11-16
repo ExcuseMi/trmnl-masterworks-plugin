@@ -5,12 +5,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, isPublicDomain } from './wikidata.mjs';
+import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, isPublicDomain, TIERS } from './wikidata.mjs';
 import { fetchImageInfo, usable } from './commons.mjs';
-import { DARK_MAT_BELOW, PALETTE_ID, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
+import { DARK_MAT_BELOW, PALETTE_ID, cornerBrightness, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
-import { shortCollection } from './names.mjs';
+import { DEPICTS_RE, genreOf, is2dArtwork, unfriendlyReasons } from './classify.mjs';
+import { latestYear, yearInfo } from './dates.mjs';
+import { venueOf } from './names.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +35,11 @@ const cachePath = (n) => join(cacheDir, n);
 const readCache = (n, d) => (!FRESH && existsSync(cachePath(n)) ? JSON.parse(readFileSync(cachePath(n), 'utf8')) : d);
 const writeCache = (n, v) => writeFileSync(cachePath(n), JSON.stringify(v));
 const thumbPath = (file) => join(cacheDir, 'thumbs', createHash('md5').update(file).digest('hex') + '.img');
+/** What genreOf needs for a work: Wikidata's labels, the work's own movements and its creators' movements. */
+const genreInput = (p, title, year) => ({
+  title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, classes: tags[p.id].classes,
+  movements: p.d.mov, creatorMovements: p.d.creators.flatMap((c) => c.mov), year,
+});
 const chunks = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
 // 1. candidates, ranked by sitelinks
@@ -42,8 +49,20 @@ if (!cand) {
   writeCache('candidates.json', cand);
 }
 cand.sort((a, b) => b[1] - a[1]);
-const top = cand.slice(0, Math.ceil(LIMIT * OVERSHOOT));
-log(`candidates ${cand.length}, asking details for the top ${top.length} (sitelinks down to ${top.at(-1)[1]})`);
+const mainTop = cand.slice(0, Math.ceil(LIMIT * OVERSHOOT));
+// the genre tier: landscapes, seascapes and cityscapes beyond the fame list (their own, lower, sitelink counts)
+let tierCand = readCache('tier.json');
+if (!tierCand) {
+  tierCand = await fetchTierCandidates(log);
+  writeCache('tier.json', tierCand);
+}
+const mainIds = new Set(mainTop.map(([id]) => id));
+const tierOf = new Map(tierCand.map(([id, , t]) => [id, t]));
+const tierCap = Object.fromEntries(TIERS.map((t) => [t.name, t.cap]));
+const tierCount = {};
+const tierTop = tierCand.filter(([id]) => !mainIds.has(id)).sort((a, b) => b[1] - a[1]).map(([id, sl]) => [id, sl]);
+const top = [...mainTop, ...tierTop];
+log(`candidates ${cand.length}, asking details for the top ${mainTop.length} (sitelinks down to ${mainTop.at(-1)[1]}) and ${tierTop.length} of the genre tier`);
 
 // 2. details in batches
 const details = readCache('details.json', {});
@@ -53,14 +72,26 @@ for (const batch of chunks(top.map(([id]) => id).filter((id) => !details[id]), 1
   log(`details ${Object.keys(details).length}/${top.length}`);
 }
 
+// 2b. genre, classes, location, depicted subjects and dates (precision, earliest/latest) of the same works
+const tags = readCache('tags.json', {});
+for (const batch of chunks(top.map(([id]) => id).filter((id) => !tags[id]), 100)) {
+  for (const [id, t] of await fetchTags(batch, DEPICTS_RE)) tags[id] = t;
+  writeCache('tags.json', tags);
+  log(`tags ${Object.keys(tags).length}/${top.length}`);
+}
+
 // 3. rights, label, image; then Commons size checks
-const stats = { noLabel: 0, noImage: 0, notPublicDomain: 0, commons: 0, dupe: 0 };
+const stats = { noLabel: 0, noImage: 0, not2d: 0, notPublicDomain: 0, commons: 0, dupe: 0 };
 const picked = [];
 for (const [id, sl] of top) {
   const d = details[id];
   const title = d.labels.en || d.labels.mul || d.labels.nl || d.labels.de || d.labels.fr || d.labels.ja;
   if (!title) { stats.noLabel++; continue; }
   if (!d.files.length) { stats.noImage++; continue; }
+  const tg = tags[id];
+  if (!is2dArtwork(tg.classes)) { stats.not2d++; continue; }
+  // the public-domain test uses the latest year a date allows (a century is its last year, a range its end)
+  if (tg.dates.length) d.years = [latestYear(tg.dates)];
   if (!isPublicDomain(d, BUILD_YEAR)) { stats.notPublicDomain++; continue; }
   picked.push({ id, sl, d, title });
 }
@@ -77,22 +108,30 @@ for (const batch of chunks(names, 50)) {
 
 const seenFile = new Set();
 const works = [];
+let mainCount = 0;
 for (const p of picked) {
+  const isMain = mainIds.has(p.id);
+  if (isMain && mainCount >= LIMIT) continue; // the fame list is cut at LIMIT; each genre tier has its own list, cut at its cap
+  if (!isMain && (tierCount[tierOf.get(p.id)] || 0) >= tierCap[tierOf.get(p.id)]) continue;
   const file = p.d.files.slice(0, 3).find((n) => usable(infoCache[n]));
   if (!file) { stats.commons++; continue; }
   const info = infoCache[file];
   if (seenFile.has(info.file)) { stats.dupe++; continue; }
   seenFile.add(info.file);
+  if (isMain) mainCount++;
+  else tierCount[tierOf.get(p.id)] = (tierCount[tierOf.get(p.id)] || 0) + 1;
   const title = TITLE_FIXES[p.id] || p.title;
   const artist = p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
   works.push({
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
-    year: p.d.years.length ? Math.min(...p.d.years) : undefined,
-    coll: shortCollection(p.d.coll[0]), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
+    year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), yearLabel: yearInfo(tags[p.id].dates).label,
+    genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
+    reasons: unfriendlyReasons({ id: p.id, title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)) }),
+    locations: tags[p.id].locations, collections: p.d.coll,
+    coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
-  if (works.length >= LIMIT) break;
 }
-log(`works ${works.length}`, stats);
+log(`works ${works.length} (fame list ${mainCount}, tiers ${JSON.stringify(tierCount)})`, stats);
 
 // build check: the famous five
 const missing = Object.entries(MUST_HAVE).filter(([id]) => !works.some((w) => w.id === id));
@@ -138,7 +177,7 @@ for (const w of works) {
   if (!existsSync(thumbPath(w.file))) continue;
   const s = await scoreFile(thumbPath(w.file), inks);
   const bright = await meanBrightness(thumbPath(w.file));
-  final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100, dm: bright < DARK_MAT_BELOW });
+  final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100, dm: bright < DARK_MAT_BELOW, dc: (await cornerBrightness(thumbPath(w.file))) < DARK_MAT_BELOW });
 }
 log(`scored ${final.length}, dropped without a thumbnail: ${works.length - final.length}`);
 // build check: a work lost here is lost for a reason worth a look (the 16 TIFF files once were, silently); more than 1 % stops the build
@@ -147,6 +186,8 @@ const lostMust = Object.keys(MUST_HAVE).filter((id) => !final.some((w) => w.id =
 if (lost > works.length * 0.01 || lostMust.length) { log(`build check failed: ${lost} works without a thumbnail (limit 1 %), must-have lost: ${lostMust.join(' ') || 'none'}; nothing written`); process.exit(1); }
 
 // 5. write
+// what the review needs: why each work got its genre and flag (kept in the cache, not in the data)
+writeCache('classification.json', Object.fromEntries(final.map((w) => [w.id, { title: w.title, sl: w.sl, genre: w.genre, reasons: w.reasons, genres: tags[w.id].genres, depicts: tags[w.id].depicts, classes: tags[w.id].classes, locations: w.locations, collections: w.collections, yearLabel: w.yearLabel }])));
 const minSitelinks = Math.min(...final.map((w) => w.sl));
 const meta = { v: 1, built: new Date().toISOString().slice(0, 10), palette: PALETTE_ID, source: 'Wikidata + Wikimedia Commons', min_sitelinks: minSitelinks, died_by: cutoffs(BUILD_YEAR).diedBy, made_by: cutoffs(BUILD_YEAR).madeBy };
 mkdirSync(join(root, 'data'), { recursive: true });

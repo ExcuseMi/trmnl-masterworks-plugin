@@ -12,6 +12,7 @@ test.afterEach(() => { globalThis.fetch = realFetch; });
 function shard(works) {
   return {
     v: 1, built: '2026-11-16', n: works.length, col: ['Louvre'], mov: ['Impressionism', 'Baroque'],
+    gen: ['portrait', 'landscape', 'seascape', 'cityscape', 'still life', 'religious', 'history', 'mythology', 'genre scene', 'nature', 'japanese print', 'modern', 'poster', 'other'],
     w: works.map((w, k) => ({ i: 'Q' + (k + 1), t: 'Work ' + (k + 1), a: 'Artist', f: `File ${k + 1}.jpg`, w: 4000, h: 3000, s: 20, p: 0.3, c: 0, ...w })),
   };
 }
@@ -72,11 +73,31 @@ test('screen: portrait and landscape from the device, long side across for lands
   assert.deepStrictEqual(t.screenOf({}), { w: 800, h: 480, o: 'landscape' });
 });
 
-test('settings: fit, label and movement fall back to defaults on anything unknown', () => {
+test('settings: label, genres (a multiple choice), period and family friendly; unknown values mean the default; Presentation, Fit and Skip portraits are gone', () => {
   const s = (c) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: c } } });
-  assert.deepStrictEqual(s({}), { presentation: 'gallery', fit: 'fill', label: 'corner', movement: '' });
-  assert.deepStrictEqual(s({ presentation: 'full', fit: 'whole', label: 'off', movement: 'Baroque' }), { presentation: 'full', fit: 'whole', label: 'off', movement: 'Baroque' });
-  assert.deepStrictEqual(s({ presentation: 'x', fit: 'x', label: 'x', movement: 'all' }), { presentation: 'gallery', fit: 'fill', label: 'corner', movement: '' });
+  const D = { label: true, genres: [], movement: '', family_friendly: true };
+  assert.deepStrictEqual(s({}), D);
+  assert.deepStrictEqual(s({ label: 'false', movement: 'Baroque', genres: ['cities'], family_friendly: 'false' }),
+    { label: false, genres: ['cities'], movement: 'Baroque', family_friendly: false });
+  assert.deepStrictEqual(s({ label: 'x', movement: 'all', genres: 'x', family_friendly: '' }), D);
+  assert.strictEqual(s({ family_friendly: false }).family_friendly, false);
+  assert.strictEqual(s({ family_friendly: 'no' }).family_friendly, false);
+  assert.strictEqual(s({ label: 'off' }).label, false, 'a select value of an older version');
+  assert.strictEqual(s({ label: 'corner' }).label, true);
+  for (const gone of ['presentation', 'fit', 'skip_portraits']) assert.strictEqual(s({ [gone]: 'full' })[gone], undefined, gone);
+});
+
+test('genres arrive as an array, a JSON string, a comma list or nothing; "all" and unknown names mean every genre', () => {
+  const g = (v) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: { genres: v } } } }).genres;
+  assert.deepStrictEqual(g(['landscapes', 'cities']), ['landscapes', 'cities']);
+  assert.deepStrictEqual(g('["landscapes","cities"]'), ['landscapes', 'cities']);
+  assert.deepStrictEqual(g('landscapes, portraits'), ['landscapes', 'portraits']);
+  assert.deepStrictEqual(g('[]'), []);
+  assert.deepStrictEqual(g(''), []);
+  assert.deepStrictEqual(g(undefined), []);
+  assert.deepStrictEqual(g('all'), []);
+  assert.deepStrictEqual(g(['cities', 'nonsense', 'cities']), ['cities']);
+  assert.deepStrictEqual(g('["cities"'), ['["cities"'].filter(() => false), 'a broken JSON string is no genre');
 });
 
 test('weighting: a more famous work comes up more often', () => {
@@ -115,16 +136,17 @@ test('weighting: fame is the main factor: a 4x more famous work beats a worse co
   assert.ok(famous > 1250, `famous picked ${famous} of 2000`);
 });
 
-test('weighting: a work shaped like the screen beats a far-off shape, and less so for Whole work', () => {
+test('weighting: a work shaped like the screen comes up more often (ASPECT_K)', () => {
   const sh = shard([{ w: 1600, h: 900 }, { w: 3000, h: 3000 }]);
-  const share = (fit) => {
+  const share = (k) => {
     const rnd = seeded(5);
     let like = 0;
-    for (let n = 0; n < 2000; n++) if (t.choose(sh, { ...ctx, fit }, [], rnd) === 0) like++;
+    for (let n = 0; n < 2000; n++) if (t.choose(sh, { ...ctx, k }, [], rnd) === 0) like++;
     return like / 2000;
   };
-  assert.ok(share('fill') > 0.8, 'fill ' + share('fill'));
-  assert.ok(share('whole') < share('fill'));
+  assert.ok(share(2) > 0.7, 'default shape factor ' + share(2));
+  assert.ok(share(0) < 0.65 && share(0) > 0.35, 'no shape factor: even ' + share(0));
+  assert.ok(share(2) > share(0));
 });
 
 test('no repeats: none of the history is picked while others remain', () => {
@@ -161,19 +183,23 @@ test('run: picks a work, builds the thumbnail URL at a standard width, saves the
   assert.strictEqual(out.art.id, 'Q1');
   assert.strictEqual(out.art.year, '1503');
   assert.strictEqual(out.art.collection, 'Louvre');
-  assert.strictEqual(out.settings.presentation, 'gallery');
-  assert.ok(out.geo.full.a > 0 && out.geo.full.label.lines.length >= 2);
+  assert.strictEqual(out.settings.label, true);
+  assert.strictEqual(out.geo.full.mode, 'gallery'); // a 4:3 work on a 16:9 screen: a fill would crop 25 %
+  assert.ok(out.geo.full.gallery.a > 0 && out.geo.full.gallery.label.lines.length >= 2);
+  assert.deepStrictEqual(out.filters_relaxed, []);
   assert.match(out.art.url, /^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/thumb\/[0-9a-f]\/[0-9a-f]{2}\/File_1\.jpg\/\d+px-File_1\.jpg$/);
   assert.deepStrictEqual(out.trmnl_state, { h: [1] });
-  assert.strictEqual(out.art.fit, 'cover');
+  assert.strictEqual(out.geo.full.fit, 'cover');
 });
 
-test('run: a portrait screen reads the portrait shard; Full screen with Whole work contains', async () => {
+test('run: a portrait screen reads the portrait shard and decides by the portrait screen', async () => {
   let asked;
-  globalThis.fetch = async (url) => { asked = url; return answer(shard([{ w: 3000, h: 4000 }]))(); };
-  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: { presentation: 'full', fit: 'whole' } } }));
+  globalThis.fetch = async (url) => { asked = url; return answer(shard([{ w: 1440, h: 2560 }]))(); };
+  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' } }));
   assert.match(asked, /\/data\/portrait-\d\.json$/);
-  assert.strictEqual(out.art.fit, 'contain');
+  assert.strictEqual(out.geo.full.mode, 'full', 'a 9:16 work fills a 9:16 screen');
+  globalThis.fetch = answer(shard([{ w: 3000, h: 2000 }]));
+  assert.strictEqual((await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' } }))).geo.full.mode, 'gallery');
 });
 
 test('run: history is capped at 50 and the state stays small', async () => {
@@ -276,24 +302,174 @@ test('label text never leaves its box: long titles wrap or end in an ellipsis', 
   lines.forEach((l) => assert.ok(t.emWidth(l, false, true) * 36 <= 800));
   assert.strictEqual(t.fitText('Short', 36, 600), 'Short');
   const plate = t.plateLabel({ ...ART, title: long }, 400, 240);
-  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, false, false) * l.s * (l.fw === 'bold' ? 1.2 : 1) <= plate.vw));
+  plate.lines.forEach((l) => assert.ok(t.emWidth(l.t, /^[^a-z]+$/.test(l.t), l.fs === 'italic') * l.s <= plate.vw));
 });
 
-test('mat: a dark work hangs on black, else white; Full screen has the plate model and no gallery boxes', async () => {
+test('mat: a dark work hangs on black, else white; a work that fills the view has the plate model and no gallery boxes', async () => {
   globalThis.fetch = answer(shard([{ n: 1 }]));
   assert.strictEqual((await t.run(input())).art.mat, 'black');
   globalThis.fetch = answer(shard([{}]));
   assert.strictEqual((await t.run(input())).art.mat, 'white');
-  const full = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full' } } }));
-  assert.ok(full.geo.full.lines.length >= 2 && full.geo.full.pct > 0 && full.geo.full.pct <= 60);
-  const off = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full', label: 'off' } } }));
-  assert.strictEqual(off.geo.full, null);
+  globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
+  const full = await t.run(input());
+  assert.ok(full.geo.full.mode === 'full' && full.geo.full.plate.lines.length >= 2 && full.geo.full.plate.pct > 0 && full.geo.full.plate.pct <= 60);
+  assert.strictEqual(full.geo.full.gallery, null);
+  const off = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
+  assert.strictEqual(off.geo.full.plate, null, 'label off: no plate');
+  globalThis.fetch = answer(shard([{ w: 3000, h: 4500 }]));
+  const gal = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
+  assert.strictEqual(gal.geo.full.mode, 'gallery');
+  assert.strictEqual(gal.geo.full.gallery.label, undefined, 'label off: the mat without a label');
 });
 
-test('gallery thumbnail is sized by the picture box, not the screen', async () => {
+test('the thumbnail is sized by the picture box in the gallery, by the screen when the work fills it', async () => {
   globalThis.fetch = answer(shard([{ w: 6000, h: 4000 }]));
   const gal = await t.run(input());
-  const full = await t.run(input({ plugin_settings: { custom_fields_values: { presentation: 'full' } } }));
+  assert.strictEqual(gal.geo.full.mode, 'gallery');
+  globalThis.fetch = answer(shard([{ w: 6400, h: 3600 }]));
+  const full = await t.run(input());
+  assert.strictEqual(full.geo.full.mode, 'full');
+  assert.strictEqual(full.art.width, 1920);
   assert.ok(gal.art.width <= full.art.width);
-  assert.strictEqual(gal.art.width, 1920);
+});
+
+test('automatic choice: full screen when a fill crops under AUTO_CROP_MAX of the work, else gallery (16:9 Frame)', () => {
+  const frame = [2560, 1440];
+  const mode = (w, h, [sw, sh] = frame) => t.modeFor({ w, h }, sw, sh);
+  assert.strictEqual(t.AUTO_CROP_MAX, 0.1);
+  assert.strictEqual(mode(1920, 1080), 'full', 'a 16:9 work');
+  assert.strictEqual(mode(3000, 2000), 'gallery', '3:2 crops 15.6 %');
+  assert.strictEqual(mode(2000, 3000), 'gallery', 'a tall portrait on a landscape Frame');
+  assert.strictEqual(mode(1440, 2560, [1440, 2560]), 'full', 'the same shape on the portrait Frame');
+  // the edge: crop = 1 - work aspect / screen aspect; 0.099 is under, 0.101 over (exactly 0.1 is not under)
+  const A = 16 / 9;
+  assert.strictEqual(mode(100000 * A * 0.901, 100000), 'full');
+  assert.strictEqual(mode(100000 * A * 0.899, 100000), 'gallery');
+  assert.strictEqual(mode(100000 * A * 1.11, 100000), 'full', 'a work wider than the screen is cut at the sides: 1 - 1/1.11 = 9.9 %');
+  assert.strictEqual(mode(100000 * A * 1.12, 100000), 'gallery');
+  assert.ok(Math.abs(t.cropShare(1.5, 1.5)) < 1e-12);
+});
+
+test('the choice is per view: the same work fills the screen and hangs in a mat in a half slot', async () => {
+  globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
+  const out = await t.run(input()); // Frame 2560 x 1440
+  assert.strictEqual(out.geo.full.mode, 'full');
+  assert.strictEqual(out.geo.half_horizontal.mode, 'gallery'); // 2560 x 720 slot, aspect 3.6
+  assert.strictEqual(out.geo.quadrant.mode, 'full'); // 1280 x 720
+  assert.ok(out.geo.full.plate && !out.geo.full.gallery && out.geo.half_horizontal.gallery && !out.geo.half_horizontal.plate);
+  globalThis.fetch = answer(shard([{ w: 2000, h: 3000 }]));
+  assert.strictEqual((await t.run(input())).geo.full.mode, 'gallery');
+});
+
+test('genres: any of the ticked kinds; nothing ticked is all; too few works fall back to all and say so', () => {
+  const works = [
+    ...Array.from({ length: 8 }, () => ({ g: 1 })), // landscape
+    ...Array.from({ length: 8 }, () => ({ g: 3 })), // cityscape
+    ...Array.from({ length: 8 }, () => ({ g: 0 })), // portrait
+    { g: 4 }, { g: 4 }, // still life: too few
+  ];
+  const sh = shard(works);
+  const rnd = seeded(21);
+  const base = { k: 1, aspect: 16 / 9 };
+  const kinds = (genres, n = 400) => {
+    const seen = new Set();
+    for (let i = 0; i < n; i++) seen.add(sh.w[t.pick(sh, { ...base, genres }, [], rnd).index].g);
+    return [...seen].sort();
+  };
+  assert.deepStrictEqual(kinds(['landscapes']), [1]);
+  assert.deepStrictEqual(kinds(['landscapes', 'cities']), [1, 3], 'landscapes + cities');
+  assert.deepStrictEqual(kinds(['portraits']), [0], 'only Portraits shows portraits');
+  assert.deepStrictEqual(kinds([]), [0, 1, 3, 4], 'nothing ticked: all');
+  assert.deepStrictEqual(kinds(['landscapes', 'cities', 'flowers_still_life']), [1, 3, 4], 'a small kind rides along when the whole combination is big enough');
+  assert.deepStrictEqual(t.pick(sh, { ...base, genres: ['flowers_still_life'] }, [], rnd).relaxed, ['genre'], 'too small alone');
+  assert.deepStrictEqual(kinds(['flowers_still_life']), [0, 1, 3, 4], 'then all genres');
+  assert.deepStrictEqual(t.pick(sh, { ...base, genres: ['landscapes', 'cities'] }, [], rnd).relaxed, []);
+  // every kind but Portraits is how portraits are skipped
+  assert.deepStrictEqual(kinds(['landscapes', 'cities', 'flowers_still_life', 'religious', 'history_myth', 'everyday']), [1, 3, 4]);
+});
+
+test('family friendly: flagged works are never picked, and this is never relaxed', () => {
+  const sh = shard([...Array.from({ length: 6 }, () => ({ u: 1, s: 500 })), ...Array.from({ length: 3 }, () => ({ s: 5 }))]);
+  const rnd = seeded(8);
+  for (let n = 0; n < 300; n++) assert.ok(!sh.w[t.pick(sh, { k: 1, aspect: 1.6, family: true }, [], rnd).index].u);
+  let flagged = 0;
+  for (let n = 0; n < 300; n++) if (sh.w[t.pick(sh, { k: 1, aspect: 1.6, family: false }, [], rnd).index].u) flagged++;
+  assert.ok(flagged > 250, 'off: the famous flagged works come up');
+  const none = shard(Array.from({ length: 4 }, () => ({ u: 1 })));
+  assert.ok(t.pick(none, { k: 1, aspect: 1.6, family: true }, [], rnd).index >= 0, 'never an empty screen');
+});
+
+test('run: the settings reach the picker (family friendly on by default, genres)', async () => {
+  globalThis.fetch = answer(shard([{ u: 1, s: 900 }, ...Array.from({ length: 6 }, () => ({ g: 1 })), ...Array.from({ length: 6 }, () => ({ g: 0 }))]));
+  for (let n = 0; n < 40; n++) {
+    const out = await t.run(input());
+    assert.notStrictEqual(out.art.id, 'Q1', 'the flagged famous work is left out by default');
+    const por = await t.run(input({ plugin_settings: { custom_fields_values: { genres: '["portraits"]', family_friendly: 'false' } } }));
+    assert.strictEqual(por.art.genre, 'portrait');
+  }
+  const cities = await t.run(input({ plugin_settings: { custom_fields_values: { genres: ['cities'] } } }));
+  assert.deepStrictEqual(cities.filters_relaxed, ['genre']);
+});
+
+test('year label: a range or a century from the data is shown as the label says', async () => {
+  globalThis.fetch = answer(shard([{ y: 1536, yl: '1536\u201341' }]));
+  assert.strictEqual((await t.run(input())).art.year, '1536\u201341');
+  globalThis.fetch = answer(shard([{ y: 1503 }]));
+  assert.strictEqual((await t.run(input())).art.year, '1503');
+});
+
+test('the placard of a work that fills the view: italic regular title, ARTIST in caps with the year, collection small, left-aligned, margin to the edges', () => {
+  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
+  for (const [sw, sh] of [[2560, 1440], [1872, 1404], [800, 480], [400, 240]]) {
+    const p = t.plateLabel(art, sw, sh);
+    assert.deepStrictEqual(p.lines.map((l) => [l.fs, l.fw, l.a]).slice(0, 1), [['italic', 'normal', 'start']], 'the title');
+    assert.ok(p.lines.every((l) => l.fw === 'normal'), 'no bold anywhere');
+    assert.strictEqual(p.lines[1].t, 'VINCENT VAN GOGH \u00b7 1890');
+    assert.ok(p.lines.length === 2 || p.lines[2].t === 'Van Gogh Museum');
+    assert.ok(p.lines[0].s >= p.lines[1].s && (p.lines[2] ? p.lines[1].s >= p.lines[2].s : true), 'title, then artist, then collection');
+    assert.ok(p.m >= 3, 'a margin step');
+    assert.ok(p.pct <= 60);
+  }
+  assert.ok(t.plateLabel(art, 2560, 1440).m > t.plateLabel(art, 400, 240).m, 'the margin grows with the screen');
+  assert.strictEqual(t.plateLabel(art, 2560, 1440).lines[0].s, t.galleryFor(art, 2560, 1440, true).label.lines[0].s, 'the title is the size of the gallery label\'s title');
+});
+
+test('the plate is black on a dark corner and white on a light one', async () => {
+  globalThis.fetch = answer(shard([{ w: 1600, h: 900, q: 1 }]));
+  assert.strictEqual((await t.run(input())).art.corner, 'black');
+  globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
+  assert.strictEqual((await t.run(input())).art.corner, 'white');
+});
+
+test('default mix: with nothing ticked the genre weights favour landscapes, nature, prints and the like and lower religious art, portraits and history', () => {
+  const GEN = shard([]).gen;
+  const idx = (name) => GEN.indexOf(name);
+  const works = [];
+  for (const name of ['landscape', 'cityscape', 'still life', 'nature', 'japanese print', 'modern', 'poster', 'religious', 'portrait', 'history', 'genre scene']) {
+    for (let k = 0; k < 20; k++) works.push({ g: idx(name), s: 40 });
+  }
+  const sh = shard(works);
+  const rnd = seeded(77);
+  const share = (genres) => {
+    const n = {};
+    for (let i = 0; i < 20000; i++) { const g = GEN[sh.w[t.pick(sh, { k: 0, aspect: 1.6, genres }, [], rnd).index].g]; n[g] = (n[g] || 0) + 1; }
+    return n;
+  };
+  const mix = share([]);
+  assert.ok(mix.landscape > mix.portrait * 2.5, `landscape ${mix.landscape} vs portrait ${mix.portrait}`);
+  assert.ok(mix.religious < mix['genre scene'] * 0.6 && mix.history < mix['genre scene'] * 0.6);
+  assert.ok(mix.nature > mix['genre scene'] && mix['japanese print'] > mix['genre scene'] && mix.poster > mix['genre scene']);
+  // ticked genres: fame alone (equal fame, so an even split between the ticked kinds)
+  const ticked = share(['portraits', 'religious']);
+  assert.ok(Math.abs(ticked.portrait - ticked.religious) < 800, `ticked: ${ticked.portrait} / ${ticked.religious}`);
+});
+
+test('every genre option names genres the data has', () => {
+  const have = new Set(shard([]).gen);
+  const keys = ['landscapes', 'cities', 'flowers_still_life', 'nature', 'japanese_prints', 'modern', 'posters', 'religious', 'history_myth', 'everyday', 'portraits'];
+  for (const key of keys) {
+    const g = t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: { genres: [key] } } } }).genres;
+    assert.deepStrictEqual(g, [key], key);
+  }
+  assert.ok(['landscape', 'seascape', 'cityscape', 'still life', 'nature', 'japanese print', 'modern', 'poster', 'religious', 'history', 'mythology', 'genre scene', 'portrait'].every((g) => have.has(g)));
 });

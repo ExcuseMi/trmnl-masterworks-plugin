@@ -24,7 +24,8 @@ function load(name) {
       works.push({
         id: w.i, title: w.t, artist: w.a, file: w.f, w: w.w, h: w.h, sl: w.s, score: w.p, dark: w.k, year: w.y,
         coll: w.c === undefined ? undefined : doc.col[w.c], mov: w.m === undefined ? undefined : doc.mov[w.m],
-        medium: w.e === undefined ? undefined : doc.med[w.e], size: w.z, dm: !!w.n,
+        medium: w.e === undefined ? undefined : doc.med[w.e], size: w.z, dm: !!w.n, dc: !!w.q,
+        genre: w.g === undefined ? undefined : doc.gen[w.g], reasons: w.u ? ['flag'] : [], yearLabel: w.yl,
       });
     }
   }
@@ -44,5 +45,9 @@ for (const name of ['landscape', 'portrait']) {
   const pick = (pool) => pool.sort((a, b) => Math.abs(a.w / a.h - target) - Math.abs(b.w / b.h - target) || b.sl - a.sl)[0];
   const full = (w) => w.medium && w.size && w.coll;
   writeFileSync(join(out, `one-${name}.json`), JSON.stringify(pack([pick(all.filter((w) => !w.dm && full(w) && w.dark < 0.3))], { ...meta, parts: 1 })));
+  // the shapes the automatic choice is tested with: 16:9 fills the Frame; 9:16 fills the portrait Frame
+  const shape = name === 'landscape' ? 16 / 9 : 9 / 16;
+  const nearest = (pool) => pool.sort((a, b) => Math.abs(Math.log(a.w / a.h / shape)) - Math.abs(Math.log(b.w / b.h / shape)) || b.sl - a.sl)[0];
+  writeFileSync(join(out, name === 'landscape' ? 'one-wide-landscape.json' : 'one-tall.json'), JSON.stringify(pack([nearest(all.filter((w) => !w.dm && full(w) && w.dark < 0.3 && !w.reasons.length))], { ...meta, parts: 1 })));
   if (name === 'landscape') writeFileSync(join(out, 'one-dark-landscape.json'), JSON.stringify(pack([pick(all.filter((w) => w.dm && full(w)))], { ...meta, parts: 1 })));
 }

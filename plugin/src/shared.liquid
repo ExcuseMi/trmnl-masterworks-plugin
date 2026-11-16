@@ -1,23 +1,32 @@
 {% template main %}
-{% comment %} Masterworks. No title bar. Presentation "gallery": the work on a pure white or black mat with a thin bevel line and a museum label; "full": the work fills the view with a corner placard. Label text is SVG text in the slot's own pixels (geo, from the transform): the Frame is screen--md at 1x, so no text class could scale to it. {% endcomment %}
+{% comment %} Masterworks. No title bar. Each view is drawn as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label; "full": the work fills the view with a corner placard. Label text is SVG text in the slot's own pixels (geo, from the transform): the Frame is screen--md at 1x, so no text class could scale to it. {% endcomment %}
 {% if art.url %}
 {% assign gv = geo[vname] %}
-{% if opts.presentation == "full" %}
-<div class="layout layout--center p--0">
+{% if gv.mode == "full" %}
+<div class="layout layout--center p--0" data-mode="full">
   <div class="relative w--full h--full bg--white">
-    <img src="{{ art.url }}" class="image image--{{ art.fit }} image-dither block w--full h--full" alt="" />
-    {% if gv %}
-    {% comment %} the plate is black on white in dark mode too (dark: swaps the tokens back): a picture is no dark-mode content, the plate is what must stay readable {% endcomment %}
-    <div class="absolute bottom--3 left--3 z--2 bg--white dark:bg--black outline" data-placard="1">
-      <svg class="block w--[{{ gv.pct }}cqw] text--black dark:text--white" viewBox="0 0 {{ gv.vw }} {{ gv.vh }}" role="img" aria-label="{{ art.title | escape }}">
-        {% for l in gv.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
-      </svg>
+    <img src="{{ art.url }}" class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+    {% assign pl = gv.plate %}
+    {% if pl %}
+    {% comment %} the plate sits inside the picture's bottom-left corner with a margin (never across an edge): solid black with white text on a dark corner, solid white with black text on a light one, a thin solid edge in the other colour; dark: swaps the tokens back so a dark-mode screen does not repaint it {% endcomment %}
+    {% if art.corner == "black" %}
+      {% assign plate = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
+    {% else %}
+      {% assign plate = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
+    {% endif %}
+    <div class="absolute bottom--{{ pl.m }} left--{{ pl.m }} z--2 {{ edge }} p--0.5" data-placard="1">
+      <div class="{{ plate }}">
+        <svg class="block w--[{{ pl.pct }}cqw] {{ ink }}" viewBox="0 0 {{ pl.vw }} {{ pl.vh }}" role="img" aria-label="{{ art.title | escape }}">
+          {% for l in pl.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
+        </svg>
+      </div>
     </div>
     {% endif %}
   </div>
 </div>
 {% else %}
 {% comment %} mat, ink and bevel are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
+{% assign gl = gv.gallery %}
 {% if art.mat == "black" %}
   {% assign mat = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
 {% else %}
@@ -26,14 +35,14 @@
 <div class="layout layout--col layout--center gap--none p--0 {{ mat }}" data-gallery="{{ art.mat }}">
   <div class="flex flex--col flex--center-x gap--none">
     {% comment %} the bevel: an outer line in the opposite colour, then a gap of mat colour, then the picture; the box is whole-percent sized and the picture covers it {% endcomment %}
-    <div class="{{ edge }} p--0.5 w--[{{ gv.a }}cqw] h--[{{ gv.b }}cqh]" data-bevel="1">
+    <div class="{{ edge }} p--0.5 w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
       <div class="{{ mat }} p--0.5 w--full h--full">
         <img src="{{ art.url }}" class="image image--cover image-dither block w--full h--full" alt="" />
       </div>
     </div>
-    {% if gv.label %}
-    <svg class="block w--[{{ gv.a }}cqw] {{ ink }}" viewBox="0 0 {{ gv.label.vw }} {{ gv.label.vh }}" role="img" aria-label="{{ art.title | escape }}" data-label="1">
-      {% for l in gv.label.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
+    {% if gl.label %}
+    <svg class="block w--[{{ gl.a }}cqw] {{ ink }}" viewBox="0 0 {{ gl.label.vw }} {{ gl.label.vh }}" role="img" aria-label="{{ art.title | escape }}" data-label="1">
+      {% for l in gl.label.lines %}<text x="{{ l.x }}" y="{{ l.y }}" font-size="{{ l.s }}" text-anchor="{{ l.a }}" font-style="{{ l.fs }}" font-weight="{{ l.fw }}" font-family="serif" fill="currentColor">{{ l.t | escape }}</text>{% endfor %}
     </svg>
     {% endif %}
   </div>

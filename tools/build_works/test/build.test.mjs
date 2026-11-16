@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { composeMedium, cutoffs, isPublicDomain, sizeCm, yearOf } from '../wikidata.mjs';
 import { md5Path, thumbUrl, usable } from '../commons.mjs';
 import { hexToRgb, scoreRgb, FALLBACK_PALETTE, TRMNL_CONTRAST_ARGS } from '../palette.mjs';
-import { shortCollection } from '../names.mjs';
+import { shortCollection, venueOf } from '../names.mjs';
 import { groupMovement, pickMovement } from '../movements.mjs';
 import { aspect, landscapeOf, pack, portraitOf, splitParts } from '../shards.mjs';
 
@@ -150,4 +150,18 @@ test('collection names: department prefixes are dropped, real museum names stay'
   assert.strictEqual(shortCollection('The Metropolitan Museum of Art'), 'The Metropolitan Museum of Art');
   assert.strictEqual(shortCollection('Museum of Fine Arts, Boston'), 'Museum of Fine Arts, Boston');
   assert.strictEqual(shortCollection(undefined), undefined);
+});
+
+test('where it hangs: the institution of P276 (not a room), else the collection; the host after the owner', () => {
+  const v = (collections, locations = []) => venueOf({ collections, locations });
+  assert.strictEqual(v(['Department of Paintings of the Louvre'], ['Salle des \u00c9tats, Louvre']), 'Louvre', 'a room: the collection');
+  assert.strictEqual(v(['Department of Paintings of the Louvre'], ['Room 700']), 'Louvre');
+  assert.strictEqual(v(['Amsterdam Museum', 'Rijksmuseum'], ['Nightwatch hall']), 'Rijksmuseum', 'The Night Watch');
+  assert.strictEqual(v(['Rijksmuseum'], ['Gallery of Honour']), 'Rijksmuseum');
+  assert.strictEqual(v(["Gallerie dell'Accademia"], ['Venice']), "Gallerie dell'Accademia", 'a city is not a venue');
+  assert.strictEqual(v(['Vatican Museums', 'Sistine Chapel'], ['Vatican City', 'Sistine Chapel']), 'Sistine Chapel');
+  assert.strictEqual(v(["Mus\u00e9e d'Orsay"], ['Luxembourg Museum', "Mus\u00e9e d'Orsay", 'Galerie nationale du Jeu de Paume']), "Mus\u00e9e d'Orsay", 'a place that is also a collection wins');
+  assert.strictEqual(v([], ['Sompo Museum of Art', 'private collection']), 'Sompo Museum of Art', 'no collection: the first institution');
+  assert.strictEqual(v([], []), undefined);
+  assert.strictEqual(v(['Uffizi Gallery'], ['Bedroom of Lorenzo il Magnifico of Palazzo Medici', 'Uffizi Gallery']), 'Uffizi Gallery');
 });

@@ -51,6 +51,41 @@ export async function fetchCandidates(log = () => {}) {
   return [...out.entries()];
 }
 
+// The genre tiers: works beyond the fame list that belong to a kind the settings let people pick (landscapes, cityscapes, flowers
+// and still life, nature illustration, Japanese prints, modern and abstract, posters and Art Nouveau), found by Wikidata's own
+// genre (P136), movement (P135) or class (P31); `viaCreator` adds works whose creator belongs to the movement. Each tier is
+// ranked by sitelinks and cut at `cap` after the public-domain, image and size checks, so fame still orders a tier.
+const EXTRA_ROOTS = { Q178659: 'illustration', Q429785: 'poster', Q3796486: 'botanical illustration', Q3305213: 'painting' };
+export const TIERS = [
+  { name: 'landscapes and seas', ids: ['Q191163', 'Q158607', 'Q3304751'], min: 3, cap: 700 }, // landscape art, marine art, meisho-e
+  { name: 'cityscapes', ids: ['Q1935974', 'Q166030'], min: 2, cap: 200 }, // cityscape, veduta
+  { name: 'flowers and still life', ids: ['Q170571', 'Q12303833'], min: 2, cap: 300 }, // still life, floral painting
+  { name: 'nature illustration', ids: ['Q3796486', 'Q10301381', 'Q8001341', 'Q484591', 'Q2302151', 'Q16875712', 'Q2566458'], min: 1, cap: 250 }, // botanical, scientific, wildlife, natural history, animal painting, animal art, bird-and-flower
+  { name: 'Japanese prints', ids: ['Q185905', 'Q842183', 'Q2566458'], min: 1, cap: 250 }, // ukiyo-e, shin-hanga, bird-and-flower
+  { name: 'modern and abstract', ids: ['Q128115', 'Q80113', 'Q166593', 'Q131221', 'Q191970', 'Q207445', 'Q519443', 'Q42934'], min: 2, cap: 450, viaCreator: true }, // abstract art, Expressionism, Fauvism, Futurism, Suprematism, De Stijl, Orphism, Cubism
+  { name: 'posters and Art Nouveau', ids: ['Q429785', 'Q34636'], min: 1, cap: 250, viaCreator: true }, // poster, Art Nouveau
+];
+
+/** [[qid, sitelinks, tier name], ...] of the genre tiers; an item keeps the first tier it is found in. */
+export async function fetchTierCandidates(log = () => {}) {
+  const roots = [...Object.keys(ROOT_CLASSES), ...Object.keys(EXTRA_ROOTS)].map((q) => `wd:${q}`).join(' ');
+  const out = new Map();
+  for (const t of TIERS) {
+    const values = t.ids.map((g) => `wd:${g}`).join(' ');
+    const selectors = [`?item wdt:P136|wdt:P135|wdt:P31 ?g.`];
+    if (t.viaCreator) selectors.push('?item wdt:P170 ?a. ?a wdt:P135 ?g.');
+    let n = 0;
+    for (const sel of selectors) {
+      const rows = await sparql(`SELECT DISTINCT ?item ?sl WHERE { VALUES ?g { ${values} } ${sel}
+        ?item wikibase:sitelinks ?sl. FILTER(?sl >= ${t.min}) ?item wdt:P18 ?img. VALUES ?root { ${roots} } ?item wdt:P31 ?c. ?c wdt:P279* ?root. } LIMIT 20000`);
+      n += rows.length;
+      for (const r of rows) if (!out.has(qid(val(r, 'item')))) out.set(qid(val(r, 'item')), [Number(val(r, 'sl')), t.name]);
+    }
+    log(`tier ${t.name} (${t.min}+ sitelinks): ${n}`);
+  }
+  return [...out.entries()].map(([id, [sl, tier]]) => [id, sl, tier]);
+}
+
 export function yearOf(iso) {
   const m = /^(-?)0*(\d{1,6})-/.exec(iso || '');
   return m ? Number(m[1] + m[2]) : undefined;
@@ -157,6 +192,29 @@ export async function fetchExtra(ids) {
     res.set(id, { medium: composeMedium([...new Set(o.media)].map((m) => names.get(m)).filter(Boolean)), size: sizeCm(o.h, o.w) });
   }
   return res;
+}
+
+/**
+ * Genre (P136), classes (P31), where it hangs (P276), what it depicts (P180; only the labels that match depictsRe) and the
+ * dates (P571 with precision and the earliest/latest date qualifiers) of a batch. Plain one-pattern queries, as above.
+ * Returns Map qid -> { genres, classes, depicts, locations, dates: [{ t, precision, earliest, latest }] }.
+ */
+export async function fetchTags(ids, depictsRe) {
+  const out = new Map(ids.map((id) => [id, { genres: [], classes: [], depicts: [], locations: [], dates: [] }]));
+  const V = `VALUES ?item { ${values(ids)} }`;
+  const each = (rows, fn) => rows.forEach((r) => { const o = out.get(qid(val(r, 'item'))); if (o) fn(o, r); });
+  each(await sparql(`SELECT ?item ?l WHERE { ${V} ?item wdt:P136 ?g. ?g rdfs:label ?l. FILTER(LANG(?l) = "en") }`), (o, r) => o.genres.push(val(r, 'l')));
+  each(await sparql(`SELECT ?item ?l WHERE { ${V} ?item wdt:P31 ?g. ?g rdfs:label ?l. FILTER(LANG(?l) = "en") }`), (o, r) => o.classes.push(val(r, 'l')));
+  each(await sparql(`SELECT ?item ?l WHERE { ${V} ?item wdt:P276 ?g. ?g rdfs:label ?l. FILTER(LANG(?l) = "en") }`), (o, r) => o.locations.push(val(r, 'l')));
+  each(await sparql(`SELECT ?item ?l WHERE { ${V} ?item wdt:P180 ?g. ?g rdfs:label ?l. FILTER(LANG(?l) = "en") FILTER(REGEX(?l, "${depictsRe}", "i")) }`), (o, r) => o.depicts.push(val(r, 'l')));
+  const PV = 'PREFIX psv: <http://www.wikidata.org/prop/statement/value/> PREFIX pq: <http://www.wikidata.org/prop/qualifier/> ';
+  each(await sparql(`${PV} SELECT ?item ?t ?pr ?e ?l WHERE { ${V} ?item p:P571 ?st. ?st psv:P571 ?v. ?v wikibase:timeValue ?t; wikibase:timePrecision ?pr.
+    OPTIONAL { ?st pq:P1319 ?e } OPTIONAL { ?st pq:P1326 ?l } }`), (o, r) => {
+    const d = { t: yearOf(val(r, 't')), precision: Number(val(r, 'pr')), earliest: yearOf(val(r, 'e')), latest: yearOf(val(r, 'l')) };
+    if (!o.dates.some((x) => JSON.stringify(x) === JSON.stringify(d))) o.dates.push(d);
+  });
+  for (const o of out.values()) for (const k of ['genres', 'classes', 'locations', 'depicts']) o[k] = [...new Set(o[k])];
+  return out;
 }
 
 export const PUBLIC_DOMAIN = 'Q19652'; // P6216 copyright status: public domain

@@ -17,45 +17,50 @@ custom_fields:
 - keyname: author_bio
   field_type: author_bio
   name: About This Plugin
-  description: A famous painting, print or drawing from the public domain, a new one at every refresh, filling the whole screen. About 2,000 well-known works chosen by how widely they are written about, drawn from Wikidata and Wikimedia Commons; works whose colours suit colour e-paper come up more often.<br />Faithful photographs of two-dimensional public-domain works are themselves public domain. Each work is credited on its label.
+  description: A famous painting, print or drawing from the public domain, a new one at every refresh. About 2,000 well-known works chosen by how widely they are written about, drawn from Wikidata and Wikimedia Commons. Each work is shown the way that suits your screen, filling it when that crops almost nothing, otherwise hanging whole on a white or black mat with a museum label.<br />Faithful photographs of two-dimensional public-domain works are themselves public domain.
   category: art,images
   github_url: https://github.com/ExcuseMi/trmnl-masterworks-plugin
   learn_more_url: https://www.wikidata.org
-- keyname: presentation
-  field_type: select
-  name: Presentation
-  default: gallery
-  help_text: "<b>Gallery</b>: the work hangs centred on a white or black mat with a thin line around it and a museum label (title, artist, year, material, size, collection).<br /><b>Full screen</b>: the work fills the whole screen."
-  options:
-  - Gallery: gallery
-  - Full screen: full
-  conditional_validation:
-  - when: gallery
-    hidden:
-    - fit
-- keyname: fit
-  field_type: select
-  name: Fit (Full screen)
-  default: fill
-  optional: true
-  help_text: 'Full screen only.<br /><b>Fill</b>: the work covers the whole screen, the edges are cropped. Works shaped like your screen are picked first.<br /><b>Whole work</b>: nothing is cut off; a plain white mat fills what is left.'
-  options:
-  - Fill (crop the edges): fill
-  - Whole work (plain mat): whole
 - keyname: label
+  group: Display
+  field_type: boolean
+  name: Museum label
+  default: 'true'
+  optional: true
+  help_text: "<b>On</b>: title, artist, year, material, size and collection, as on a museum wall. <b>Off</b>: only the artwork."
+- keyname: family_friendly
+  group: Selection
+  field_type: boolean
+  name: Family friendly
+  default: 'true'
+  optional: true
+  help_text: "<b>On</b> (default): leaves out works whose subject is nudity or graphic violence (nudes, bathers, Venus, beheadings, massacres, executions, martyrdoms, battles). The list comes from Wikidata's subjects and the titles, so it is careful but not perfect.<br /><b>Off</b>: all works."
+- keyname: genres
+  group: Selection
   field_type: select
-  name: Label
-  default: corner
-  help_text: "<b>Gallery</b>: the museum label on the mat, or off.<br /><b>Full screen</b>: a small corner placard, or off."
+  multiple: true
+  name: Genres
+  optional: true
+  help_text: Tick the kinds of work you want; nothing ticked gives the default mix, which shows landscapes, seas, cities, nature illustration, Japanese prints, modern and abstract art and posters more often, and flowers and still life, religious art, portraits and history painting less often. With too few works of the ticked kinds, the default mix is used for that refresh. Tick only Portraits for portraits; tick every kind but Portraits to leave them out.
   options:
-  - Show the label: corner
-  - 'Off': 'off'
+  - Landscapes and seas: landscapes
+  - Cities: cities
+  - Flowers and still life: flowers_still_life
+  - Nature illustration: nature
+  - Japanese prints: japanese_prints
+  - Modern and abstract: modern
+  - Posters and Art Nouveau: posters
+  - Religious: religious
+  - History and mythology: history_myth
+  - Everyday scenes: everyday
+  - Portraits: portraits
 - keyname: movement
+  group: Selection
   field_type: select
-  name: Movement or period
+  name: Period
   default: all
   optional: true
-  help_text: Only works of one movement. With few works in a movement the filter is ignored.
+  help_text: Only works of one movement or period. With few works in a period the filter is ignored for that refresh.
   options:
   - All: all
   - Renaissance: Renaissance

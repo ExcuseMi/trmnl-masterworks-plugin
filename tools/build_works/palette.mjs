@@ -70,6 +70,14 @@ export async function meanBrightness(path) {
   return Number(stdout);
 }
 
+export const CORNER = { width: 0.32, height: 0.18 }; // the bottom-left corner a full-screen placard sits in, as shares of the picture
+
+/** Mean brightness (0 to 1) of the bottom-left corner of a cached thumbnail: the plate there is black on a dark corner, white on a light one. */
+export async function cornerBrightness(path) {
+  const { stdout } = await run('convert', [path + '[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', '-gravity', 'SouthWest', '-crop', `${Math.round(CORNER.width * 100)}%x${Math.round(CORNER.height * 100)}%+0+0`, '+repage', '-colorspace', 'Gray', '-format', '%[fx:mean]', 'info:'], { encoding: 'utf8' });
+  return Number(stdout);
+}
+
 /** Score a cached thumbnail: the picture after TRMNL's contrast step, to the nearest ink, plus its near-black share. */
 export async function scoreFile(path, inks) {
   const { stdout } = await run('convert', [path + '[0]', '-colorspace', 'sRGB', '-background', 'white', '-alpha', 'remove', '-resize', '128x128>', ...TRMNL_CONTRAST_ARGS, '-depth', '8', 'rgb:-'], { encoding: 'buffer', maxBuffer: 4 << 20 });
