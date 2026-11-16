@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Masterworks</title>
+  <!-- ornate gilded frame: scalloped corners -->
+  <rect x="6" y="6" width="52" height="44" rx="2" fill="#f8654b"/>
+  <circle cx="6" cy="6" r="5" fill="#f8654b"/><circle cx="58" cy="6" r="5" fill="#f8654b"/>
+  <circle cx="6" cy="50" r="5" fill="#f8654b"/><circle cx="58" cy="50" r="5" fill="#f8654b"/>
+  <rect x="12" y="12" width="40" height="32" fill="#fde3dd"/>
+  <rect x="12" y="12" width="40" height="32" fill="none" stroke="#c9402a" stroke-width="1.6"/>
+  <!-- painting inside: sun over a sea -->
+  <circle cx="40" cy="22" r="4" fill="#fb9a85"/>
+  <path d="M12 36 C18 32 22 38 28 34 C34 30 38 36 44 33 C48 31 50 33 52 32 L52 44 L12 44 Z" fill="#c9402a"/>
+  <!-- museum label plate under the frame -->
+  <rect x="20" y="54" width="24" height="6" rx="1.5" fill="#c9402a"/>
+</svg>
