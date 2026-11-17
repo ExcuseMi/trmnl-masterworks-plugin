@@ -3,7 +3,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var E = window.MWEngine;
   var WOODS = ['white-oak', 'cherry', 'sapele', 'walnut'];
-  var S = { device: 'frame', color: 'white-oak', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, markup: null, look: true, shards: {} };
+  var S = { device: 'frame', color: 'walnut', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, markup: null, look: true, shards: {} };
 
   // The plugin's data shards are read from this site first (same repository, same origin), the mirrors only if that fails.
   function dataFetch(url, init) {
@@ -110,7 +110,7 @@
       var b = e.target.closest('button'); if (!b || b.disabled) return;
       S[key] = b.dataset.v;
       var isWood = WOODS.indexOf(S.color) >= 0;
-      if (S.device === 'frame' && !isWood) S.color = 'white-oak';
+      if (S.device === 'frame' && !isWood) S.color = 'walnut';
       if (S.device !== 'frame' && isWood) S.color = 'white';
       syncButtons();
       if (key === 'color') { $('frame').setAttribute('color', S.color); return; }
