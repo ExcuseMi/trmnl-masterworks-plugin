@@ -3,7 +3,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var E = window.MWEngine;
   var WOODS = ['white-oak', 'cherry', 'sapele', 'walnut'];
-  var S = { device: 'frame', color: 'white-oak', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, shards: {} };
+  var S = { device: 'frame', color: 'white-oak', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, markup: null, look: true, shards: {} };
 
   // The plugin's data shards are read from this site first (same repository, same origin), the mirrors only if that fails.
   function dataFetch(url, init) {
@@ -72,6 +72,14 @@
     return fr;
   }
 
+  function load(fr) {   // the plugin's markup in the screen document; "as on the device" adds the dither script
+    var html = S.engine.pageHtml(S.markup, { device: S.device, framework: S.fw, noBleed: S.noBleed, extra: S.look && window.MWLook ? window.MWLook.script(S.device) : '' });
+    var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    fr.setAttribute('src', url);
+    if (S.lastUrl) setTimeout(function (u) { URL.revokeObjectURL(u); }.bind(null, S.lastUrl), 4000);
+    S.lastUrl = url;
+  }
+
   // keep the shown works in memory so "Next" does not repeat; the plugin's own history (transform state) does the choosing
   async function show(keepState) {
     var my = ++S.token;
@@ -82,12 +90,9 @@
       if (!data.art) throw new Error(data.notice || 'no artwork');
       S.state = data.trmnl_state || S.state;
       var markup = await S.engine.renderView(data);
-      var html = S.engine.pageHtml(markup, { device: S.device, framework: S.fw });
-      var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      S.markup = markup;
       var fr = newFrame();
-      fr.setAttribute('src', url);
-      if (S.lastUrl) setTimeout(function (u) { URL.revokeObjectURL(u); }.bind(null, S.lastUrl), 4000);
-      S.lastUrl = url;
+      load(fr);
       var a = data.art;
       var cap = $('cap'); cap.textContent = '';
       var b = document.createElement('b'); b.textContent = a.title; cap.appendChild(b);
@@ -120,11 +125,13 @@
   ]).then(function (r) {
     var settings = window.jsyaml.load(r[0]);
     S.fw = String(settings.framework_version);
+    S.noBleed = String(settings.no_screen_padding) === 'yes';   // TRMNL then adds screen--no-bleed
     buildControls(settings);
     S.engine = E.create({ Liquid: window.liquidjs.Liquid, plugin: { templates: E.templatesOf(r[1]), full: r[2], transform: r[3] } });
     bindSeg('device', 'device'); bindSeg('color', 'color');
     syncButtons();
     $('next').addEventListener('click', function () { show(); });
+    $('look').addEventListener('change', function () { S.look = $('look').checked; if (S.markup) load($('frame')); });
     ['label', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { show(); }); });
     var go = function () { show(); };
     if (window.customElements && customElements.get('trmnl-frame')) go(); else customElements.whenDefined('trmnl-frame').then(go);

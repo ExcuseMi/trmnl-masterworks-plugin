@@ -65,7 +65,9 @@
       return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
         '<link rel="stylesheet" href="https://trmnl.com/css/' + fw + '/plugins.css" /><script type="module" src="https://trmnl.com/js/' + fw + '/plugins.js"></script>' +
         '<meta name="trmnl-framework-version" content="' + fw + '" /><meta name="trmnl-framework-pinned" content="true" /></head>' +
-        '<body class="trmnl"><div class="screen ' + dev.classes + ' screen--fonts-trmnl"><div class="view view--full">' + markup + '</div></div>' + dither + '</body></html>';
+        // the component's og window is 840x520 around an 800x480 screen: the screen fills the window (X and Frame already match theirs)
+        '<style>html,body{margin:0}' + (o.device === 'og' ? '.screen,.screen .view{width:100vw!important;height:100vh!important}' : '') + '</style>' +
+        '<body class="trmnl"><div class="screen ' + dev.classes + (o.device === 'x' ? '' : ' screen--1x screen--density-1x') + ' screen--fonts-trmnl' + (o.noBleed ? ' screen--no-bleed' : '') + '"><div class="view view--full">' + markup + '</div></div>' + dither + (o.extra || '') + '</body></html>';
     }
     return { compute: compute, renderView: renderView, pageHtml: pageHtml };
   }

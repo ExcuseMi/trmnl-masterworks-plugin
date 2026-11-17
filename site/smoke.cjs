@@ -38,6 +38,32 @@ async function artOf(page) {
   return null;
 }
 
+// the distinct colours of the drawn picture: the picture is read back from its own source on a canvas
+async function colours(page) {
+  for (let i = 0; i < 40; i++) {
+    for (const f of page.frames()) {
+      try {
+        const r = await f.evaluate(async () => {
+          const im = document.querySelector('.screen img.image-dither');
+          if (!im || !im.complete || !im.naturalWidth) return null;
+          const c = new Image(); c.crossOrigin = 'anonymous'; c.src = im.currentSrc || im.src;
+          await new Promise((ok, no) => { c.onload = ok; c.onerror = no; });
+          const cv = document.createElement('canvas'); cv.width = c.naturalWidth; cv.height = c.naturalHeight;
+          const cx = cv.getContext('2d'); cx.drawImage(c, 0, 0);
+          const d = cx.getImageData(0, 0, cv.width, cv.height).data, set = new Set();
+          for (let p = 0; p < d.length; p += 4 * 7) set.add(d[p] + ',' + d[p + 1] + ',' + d[p + 2]);
+          return { look: im.dataset.mwLook || '', n: set.size, list: [...set].slice(0, 40), w: cv.width, h: cv.height };
+        });
+        if (r && r.look) return r;
+        if (r && i > 30) return r;
+      } catch (e) { /* frame gone or picture not readable */ }
+    }
+    await page.waitForTimeout(500);
+  }
+  return null;
+}
+const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '232,230,223'];
+
 (async () => {
   const fails = [];
   const s = given ? null : await serve();
@@ -83,6 +109,23 @@ async function artOf(page) {
     if (model !== dev) fails.push(dev + ': frame model is ' + model);
     if (shots) { fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, 'wide-' + dev + '.png'), fullPage: true }); }
     seen.add(id);
+    // the view fills the device window: no padding band around it (screen--no-bleed) and no empty band inside the window
+    const box = await (async () => { for (const f of page.frames()) { try { const r = await f.evaluate(() => { const v = document.querySelector('.screen .view'); const sc = document.querySelector('.screen'); if (!v) return null; const b = v.getBoundingClientRect(), a = sc.getBoundingClientRect(); return { v: [b.left, b.top, b.width, b.height].map(Math.round), s: [a.left, a.top, a.width, a.height].map(Math.round), w: innerWidth, h: innerHeight }; }); if (r) return r; } catch (e) { /* frame gone */ } } return null; })();
+    if (!box || box.v[0] !== 0 || box.v[1] !== 0 || box.v[2] !== box.w || box.v[3] !== box.h) fails.push(dev + ': view box ' + JSON.stringify(box && box.v) + ' is not the window ' + (box && box.w + 'x' + box.h) + ' (screen ' + JSON.stringify(box && box.s) + ')');
+    // the picture is shown as on the device: X 16 greys, OG 4 greys, Frame only the six inks
+    const col = await colours(page);
+    if (!col) fails.push(dev + ': could not read the picture colours');
+    else {
+      const max = { x: 16, og: 4 }[dev];
+      if (max) {
+        const grey = col.list.every((c) => { const v = c.split(','); return v[0] === v[1] && v[1] === v[2]; });
+        if (col.n > max || !grey) fails.push(dev + ': picture has ' + col.n + ' colours (grey: ' + grey + '), want <= ' + max + ' greys');
+      } else {
+        const bad = col.list.filter((c) => !INKS.includes(c));
+        if (bad.length) fails.push(dev + ': picture has colours that are no ink, e.g. ' + bad.slice(0, 3).join(' / ') + ' (' + col.n + ' in all)');
+      }
+      console.log(dev + ' colours ' + col.n + ' ' + col.w + 'x' + col.h);
+    }
     console.log(dev + ' ok ' + id);
   }
   // Next gives a different work, five times in a row, none repeated
@@ -110,6 +153,20 @@ async function artOf(page) {
   await page.check('#genres input[value="japanese_prints"]');
   await page.waitForTimeout(500);
   if (!(await artOf(page))) fails.push('no picture with Japanese prints ticked');
+
+  // toggle: original colours give a picture that is not dithered, back to the device look dithers again
+  await page.click('#device button[data-v="x"]');
+  await page.waitForFunction(() => document.querySelector('#frame')?.getAttribute('model') === 'x', null, { timeout: 30000 });
+  await artOf(page);
+  if (!(await page.$('#look'))) { fails.push('no "as on the device" toggle'); } else {
+  await page.uncheck('#look');
+  await page.waitForTimeout(1500);
+  const orig = await colours(page);
+  if (!orig || orig.look || orig.n <= 16) fails.push('toggle: original colours not shown: ' + JSON.stringify(orig && { look: orig.look, n: orig.n }));
+  await page.check('#look');
+  const back = await colours(page);
+  if (!back || !back.look || back.n > 16) fails.push('toggle: device look did not come back');
+  }
 
   // phone width: no horizontal scroll
   await page.setViewportSize({ width: 390, height: 844 });
