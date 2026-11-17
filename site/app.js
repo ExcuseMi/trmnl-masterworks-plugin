@@ -2,7 +2,8 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var E = window.MWEngine;
-  var S = { device: 'frame', color: 'wood', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, shards: {} };
+  var WOODS = ['white-oak', 'cherry', 'sapele', 'walnut'];
+  var S = { device: 'frame', color: 'white-oak', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, shards: {} };
 
   // The plugin's data shards are read from this site first (same repository, same origin), the mirrors only if that fails.
   function dataFetch(url, init) {
@@ -55,8 +56,8 @@
   function syncButtons() {
     [].forEach.call($('device').children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === S.device)); });
     [].forEach.call($('color').children, function (b) {
-      var frameOnly = b.dataset.v === 'wood' || b.dataset.v === 'walnut';
-      b.disabled = frameOnly && S.device !== 'frame';
+      // The Frame comes in TRMNL's four woods; the X and the OG in black or white.
+      b.hidden = WOODS.indexOf(b.dataset.v) >= 0 ? S.device !== 'frame' : S.device === 'frame';
       b.setAttribute('aria-pressed', String(b.dataset.v === S.color));
     });
   }
@@ -102,7 +103,9 @@
     $(id).addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b || b.disabled) return;
       S[key] = b.dataset.v;
-      if (S.device !== 'frame' && (S.color === 'wood' || S.color === 'walnut')) S.color = 'white';
+      var isWood = WOODS.indexOf(S.color) >= 0;
+      if (S.device === 'frame' && !isWood) S.color = 'white-oak';
+      if (S.device !== 'frame' && isWood) S.color = 'white';
       syncButtons();
       if (key === 'color') { $('frame').setAttribute('color', S.color); return; }
       show();

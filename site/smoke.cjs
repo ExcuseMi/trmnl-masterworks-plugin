@@ -73,6 +73,9 @@ async function artOf(page) {
   const seen = new Set();
   for (const dev of ['frame', 'x', 'og']) {
     await page.click(`#device button[data-v="${dev}"]`);
+    // wait for the new device's frame before reading the picture (else the previous device's picture is read)
+    await page.waitForFunction((d) => document.querySelector('#frame')?.getAttribute('model') === d, dev, { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(300);
     const src = await artOf(page);
     const id = await page.$eval('#cap', (c) => c.dataset.id);
     if (!src) { fails.push(dev + ': no picture drawn in the frame'); continue; }
@@ -97,7 +100,13 @@ async function artOf(page) {
     if (!(await artOf(page))) fails.push('no picture after Next ' + i);
   }
   // walnut colour and a genre filter still draw
-  await page.click('#color button[data-v="walnut"]');
+  await page.click('#device button[data-v="frame"]');
+  await page.waitForFunction(() => document.querySelector('#frame')?.getAttribute('model') === 'frame', null, { timeout: 30000 });
+  for (const wood of ['cherry', 'sapele', 'walnut']) {
+    await page.click(`#color button[data-v="${wood}"]`);
+    const c = await page.$eval('#frame', (e) => e.getAttribute('color'));
+    if (c !== wood) fails.push('wood ' + wood + ' not applied: ' + c);
+  }
   await page.check('#genres input[value="japanese_prints"]');
   await page.waitForTimeout(500);
   if (!(await artOf(page))) fails.push('no picture with Japanese prints ticked');
