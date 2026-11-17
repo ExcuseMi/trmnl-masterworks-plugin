@@ -97,17 +97,20 @@
     </div>
 {% endcapture %}
 {% capture weather_part %}
-    <span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-info="weather" data-weather="1">{{ info.weather | escape }}</span>
+    <div class="flex flex--col flex--left gap--none" data-info="weather">
+      <span class="title {{ tcls }} {{ ink }} block text--left value--tnums" data-temp="1">{{ info.temp | escape }}</span>
+      <span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>
+    </div>
 {% endcapture %}
 {% capture agenda_part %}
     <div class="flex flex--col flex--left gap--small w--full" data-info="agenda" data-agenda="{{ info.agenda.day }}">
-      {% if info.agenda.label != blank %}<span class="label {{ lcls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-agenda-day="1">{{ info.agenda.label | escape }}</span>{% endif %}
+      {% if info.agenda.label != blank %}<span class="label {{ acls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-agenda-day="1">{{ info.agenda.label | escape }}</span>{% endif %}
       {% for ev in info.agenda.items %}
       <div class="flex flex--row flex--top gap--medium" data-event="1">
         <span class="label {{ acls }} {{ ink }} value--tnums" data-event-time="1">{{ ev.time | escape }}</span>
         <div class="flex flex--col flex--left gap--none grow">
-          <span class="label {{ acls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
-          {% if ev.loc != blank %}<span class="label {{ lcls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-loc="1">{{ ev.loc | escape }}</span>{% endif %}
+          <span class="title {{ tcls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
+          {% if ev.loc != blank %}<span class="label {{ acls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-event-loc="1">{{ ev.loc | escape }}</span>{% endif %}
         </div>
       </div>
       {% endfor %}

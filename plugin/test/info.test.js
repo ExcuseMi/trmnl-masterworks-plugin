@@ -48,17 +48,17 @@ test('forecast line: dry days, clear skies, fog; only the rest of today counts',
   assert.strictEqual(line(tomorrow, 8), 'Dry all day', 'tomorrow does not count');
 });
 
-test('weather sentence: one short sentence with the temperatures, no icons', () => {
+test('weather line: under the temperature, the coming rain or snow in words, a dry day with its range', () => {
   const w = t.weatherSentence;
-  assert.strictEqual(w('Rain by noon', '8\u00b0', '4\u00b0', '11\u00b0'), '8\u00b0, rain by noon');
-  assert.strictEqual(w('Snow tonight', '-1\u00b0', '-3\u00b0', '0\u00b0'), '-1\u00b0, snow tonight');
-  assert.strictEqual(w('Rain until noon', '8\u00b0', '', ''), '8\u00b0, rain until noon');
-  assert.strictEqual(w('Dry all day', '8\u00b0', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
-  assert.strictEqual(w('Dry tonight', '8\u00b0', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
-  assert.strictEqual(w('Sunny all day', '8\u00b0', '4\u00b0', '11\u00b0'), 'Sunny, 4\u00b0 to 11\u00b0');
-  assert.strictEqual(w('Clear tonight', '8\u00b0', '', ''), 'Clear, 8\u00b0', 'no daily range: the temperature now');
-  assert.strictEqual(w('Fog', '8\u00b0', '8\u00b0', '8\u00b0'), 'Fog, 8\u00b0');
-  assert.ok(!/[^\x20-\x7e\u00b0]/.test(w('Dry all day', '8\u00b0', '4\u00b0', '11\u00b0')), 'no icons or symbols but the degree sign');
+  assert.strictEqual(w('Rain by noon', '4\u00b0', '11\u00b0'), 'Rain by noon');
+  assert.strictEqual(w('Snow tonight', '-3\u00b0', '0\u00b0'), 'Snow tonight');
+  assert.strictEqual(w('Rain until noon', '', ''), 'Rain until noon');
+  assert.strictEqual(w('Dry all day', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Dry tonight', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Sunny all day', '4\u00b0', '11\u00b0'), 'Sunny, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Clear tonight', '', ''), 'Clear', 'no daily range: the word alone');
+  assert.strictEqual(w('Fog', '8\u00b0', '8\u00b0'), 'Fog', 'a range of one value is no range');
+  assert.ok(!/[^\x20-\x7e\u00b0]/.test(w('Dry all day', '4\u00b0', '11\u00b0')), 'no icons or symbols but the degree sign');
 });
 
 test('day: number, weekday and month in the account language and zone', () => {
@@ -97,7 +97,7 @@ test('fetchWeather: a place name is geocoded once, the forecast asked in the uni
   const asked = [];
   globalThis.fetch = async (url) => { asked.push(url); return reply(/geocoding/.test(url) ? { results: [{ latitude: 48.85, longitude: 2.35 }] } : FORECAST)(); };
   const w = await t.fetchWeather(SET, 'en-US', { zone: 'Europe/Paris', shift: 0 }, '2026-11-17T08:00', null);
-  assert.deepStrictEqual([w.text, w.loc], ['8°, rain by noon', { q: 'Paris', lat: 48.85, lon: 2.35 }]);
+  assert.deepStrictEqual([w.temp, w.text, w.loc], ['8°', 'Rain by noon', { q: 'Paris', lat: 48.85, lon: 2.35 }]);
   assert.strictEqual(asked.length, 2);
   assert.match(asked[1], /temperature_unit=fahrenheit/);
   assert.match(asked[1], /daily=temperature_2m_max,temperature_2m_min/);
@@ -150,7 +150,7 @@ test('run: date only needs no network and no location; weather without a locatio
 
 test('run: weather on, the temperature and the line are in the merge variables and the location in the state', async () => {
   const out = await runWith({ show_weather: 'true', weather_location: '48.85, 2.35' }, reply(FORECAST));
-  assert.deepStrictEqual([out.info.weather, out.info.has_weather, out.info.has_date], ['8\u00b0, rain by noon', true, false]);
+  assert.deepStrictEqual([out.info.temp, out.info.weather, out.info.has_weather, out.info.has_date], ['8\u00b0', 'Rain by noon', true, false]);
   assert.deepStrictEqual(out.trmnl_state.loc, { q: '48.85, 2.35', lat: 48.85, lon: 2.35 });
 });
 
@@ -181,30 +181,34 @@ test('run: with info on the work hangs on its mat, no placard, no label under it
 
 // where the info goes, for every shape of work: the shape table
 const SHAPES = { 'very wide panorama': 2.5, wide: 1.8, 'the screen\'s own shape': 16 / 9, '4:3': 4 / 3, square: 1, '3:4': 3 / 4, tall: 0.6, 'very tall scroll': 0.35 };
-const SCREENS = { 'Frame landscape': [2560, 1440, 1, 'big'], 'Frame portrait': [1440, 2560, 1, 'big'], X: [1872, 1404, 1872 / 800, 'normal'], OG: [800, 480, 1, 'normal'] };
+const SCREENS = { 'Frame landscape': [2560, 1440, 1, 'big', false], 'Frame portrait': [1440, 2560, 1, 'big', false], X: [1872, 1404, 1872 / 800, 'normal', true], OG: [800, 480, 1, 'normal', false], 'joan (lg, 600 x 800)': [600, 800, 1, 'normal', true] };
 const ALL = { strip: true, blocks: { date: true, weather: true, agenda: true, n: 3 }, label: true };
 const area = (g) => g.pw * g.ph;
 
 test('shape table: every shape on every screen is hung whole on its mat with the info beside or below, whichever keeps the larger picture', () => {
-  for (const [sname, [sw, sh, zoom, kind]] of Object.entries(SCREENS)) {
+  for (const [sname, [sw, sh, zoom, kind, lg]] of Object.entries(SCREENS)) {
     for (const [name, aspect] of Object.entries(SHAPES)) {
-      const art = { w: Math.round(aspect * 1000), h: 1000, kind, title: 'A title', artist: 'Artist', medium: 'Oil on canvas', collection: 'Museum' };
+      const art = { w: Math.round(aspect * 1000), h: 1000, kind, lg, title: 'A title', artist: 'Artist', medium: 'Oil on canvas', collection: 'Museum' };
       const inf = t.infoPlace(art, sw, sh, zoom, ALL);
       const where = `${name} on ${sname}`;
       assert.ok(inf, `${where}: has a place`);
       const g = inf.gallery;
       assert.ok(Math.abs(g.pw / g.ph / aspect - 1) < 0.04, `${where}: no crop (box ${g.pw} x ${g.ph} is not ${aspect.toFixed(2)})`);
-      const block = t.INFO_BLOCK_H[inf.tier] * zoom * (inf.arrange === 'stack' ? t.INFO_STACK : 1), col = t.INFO_COL_W[inf.tier] * zoom;
-      const gap = Math.round(Math.min(sw, sh) * 0.025);
+      const cw = lg ? 0.85 : 1;
+      const block = t.INFO_BLOCK_H[inf.tier] * zoom * (inf.arrange === 'stack' ? t.INFO_STACK : 1), col = Math.round(t.INFO_COL_W[inf.tier] * zoom / cw);
+      const gap = Math.round(32 * zoom);
       if (inf.place === 'below') assert.ok(g.ph + block <= sh, `${where}: the picture and the block below fit the slot`);
       else assert.ok(g.pw + col + gap <= sw + 1, `${where}: the picture and the column beside fit the slot`);
       assert.ok(g.pw <= sw && g.ph <= sh);
       // no other place that has room for its text keeps a larger picture
       const N = t.INFO_NEED[inf.tier];
       const alt = [
-        ['row', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom }), (g2) => g2.pw / zoom >= N.date + N.text + 40],
-        ['stack', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom * t.INFO_STACK }), (g2) => g2.pw / zoom >= Math.max(N.date, N.text)],
-        ['column', sw - col - gap >= 0.3 * sw ? t.galleryFor(art, sw - col - gap, sh, false, kind, zoom, sh, { pctW: sw }) : null, () => true],
+        ['row', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom }), (g2) => g2.pw / zoom * cw >= N.date + N.text + 40],
+        ['stack', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom * t.INFO_STACK }), (g2) => g2.pw / zoom * cw >= Math.max(N.date, N.text)],
+        ['column', sw - col - gap >= 0.3 * sw ? t.galleryFor(art, sw - col - gap, sh, false, kind, zoom, sh, { pctW: sw }) : null, () => {
+          const H = t.INFO_PART_H[inf.tier], colH = H.date + H.weather + H.agenda + H.label + H.rule * 4; // all on, with the label
+          return colH * zoom <= 0.95 * sh * (lg ? 0.92 : 1);
+        }],
       ];
       alt.forEach(([arr, g2, fits]) => { if (g2 && fits(g2)) assert.ok(area(g) >= area(g2) - 1, `${where}: ${inf.arrange} (${area(g)}) is not larger than ${arr} (${g2 && area(g2)})`); });
     }

@@ -150,7 +150,8 @@ RSpec.describe 'Masterworks info strip' do
   it 'shows the weather sentence and the agenda events on the Frame, in black' do
     page = screen('frame', fields_for(%w[show_date show_weather show_agenda]))
     wait(page)
-    expect(page.evaluate("document.querySelector('[data-weather]').innerText")).to match(/\A(-?\d+°, [a-z]|(Dry|Sunny|Clear|Fog), )/)
+    expect(page.evaluate("document.querySelector('[data-temp]').innerText")).to match(/\A-?\d+°\z/)
+    expect(page.evaluate("document.querySelector('[data-weather]').innerText")).to match(/\A(Rain|Drizzle|Snow|Storm|Dry|Sunny|Clear|Fog)/)
     expect(page.evaluate("[...document.querySelectorAll('[data-event-title]')].map(e => e.innerText).join('|')")).to include('Birthday').or include('Call the plumber')
     expect(page.evaluate("document.querySelector('[data-day]').innerText")).to match(/\A\d{1,2}\z/)
     inks = page.evaluate("[...new Set([...document.querySelectorAll('[data-info-block] *')].map(e => getComputedStyle(e).color))]")

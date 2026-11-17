@@ -86,7 +86,7 @@ var INFO_PART_H = { // CSS px of height the parts of the column beside the work 
 var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INFO_MIN_SLOT_W, has no info
 var INFO_MIN_SLOT_W = 380;
 var INFO_STACK = 1.7; // a block below with the date over the text is this much taller
-var INFO_GAP = 0.025; // the gap between the work and its info, as a share of the slot's shorter side
+var INFO_GAP_CSS = 32; // the gap between the work and the info beside it (gap--xlarge), CSS px
 var WEATHER_MS = 1800; // one request; the whole weather step has WEATHER_DEADLINE_MS, parallel to the data fetch (the run has 5 s)
 var WEATHER_DEADLINE_MS = 3200;
 var FAHRENHEIT_REGION = /[-_](US|LR|BS|BZ|KY|PW|FM|MH)$/i; // the account has a language, not a unit: these regions use Fahrenheit
@@ -387,10 +387,17 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH, opts) {
   var lines = 1, ph = 0, pw = 0, i;
   // the room a label needs: its share of the slot, but never less than its lines at the sizes the markup uses
   zoom = zoom || 1; // the label's text is in CSS px; the slot is in reported device px, which a zoomed screen draws larger
-  var floorPx = function (n) { return zoom * (n * 1.25 * px[0] + 1.3 * px[1] + (hasDetail ? 1.35 * px[2] : 0) + 6); };
-  if (withLabel && floorPx(1) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
+  // an lg screen (art.lg: not the Frame, short side over 500 px) lets its title, artist and detail lines take 2 lines (data-clamp-lg), so a label that wraps
+  // there needs more room; the picture's CSS width is guessed at 85 % (the zoom is one number for both axes, a device may differ)
+  var lg = !!art.lg, whoLen = String(whoLine(art)).length, detLen = hasDetail ? detailLine(art).length : 0;
+  var wrap = function (len, size, pwDev, most) { return Math.min(most, Math.max(1, Math.ceil(len * 0.5 * size / Math.max(0.85 * pwDev / zoom, 1)))); };
+  var floorPx = function (n, pwDev) {
+    var t = lg ? wrap(String(art.title).length, px[0], pwDev, 2) : n, who = lg ? wrap(whoLen, px[1], pwDev, 2) : 1, det = hasDetail ? (lg ? wrap(detLen, px[2], pwDev, 2) : 1) : 0;
+    return zoom * (t * 1.25 * px[0] + who * 1.3 * px[1] + det * 1.35 * px[2] + 6);
+  };
+  if (withLabel && floorPx(1, slotW) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
   for (i = 0; i < 3; i++) { // the title wraps by the picture's width, the picture's size leaves room for the label
-    var reserve = withLabel ? Math.max(slotH * (LABEL_SHARE + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE), floorPx(lines) + slotH * LABEL_GAP_SHARE) : 0;
+    var reserve = withLabel ? Math.max(slotH * (LABEL_SHARE + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE), floorPx(lines, pw || widthCap) + slotH * LABEL_GAP_SHARE) : 0;
     ph = Math.min(heightCap, GALLERY_USE * slotH - reserve - extra, widthCap / aspect);
     pw = ph * aspect;
     lines = Math.min(maxLines, Math.max(1, Math.ceil(String(art.title).length * 0.5 * px[0] / Math.max(pw, 1))));
@@ -506,13 +513,13 @@ function forecastLine(w, nowIso) {
 }
 
 /**
- * The one sentence of the weather: "8°, rain by noon" when rain or snow is coming, "Dry, 4° to 11°" when not. line: forecastLine's
- * words; temp the temperature now; lo, hi today's lowest and highest (without them the temperature stands in the range's place).
+ * The line under the temperature: "Rain by noon" when rain or snow is coming, "Dry, 4\u00b0 to 11\u00b0" when not. line: forecastLine's words;
+ * lo, hi today's lowest and highest (without them, or when equal, the word stands alone).
  */
-function weatherSentence(line, temp, lo, hi) {
+function weatherSentence(line, lo, hi) {
   var dry = /^(Dry|Sunny|Clear|Fog)( all day| tonight)?$/.exec(line);
-  if (dry) return dry[1] + ', ' + (lo && hi && lo !== hi ? lo + ' to ' + hi : temp);
-  return temp + ', ' + line.charAt(0).toLowerCase() + line.slice(1);
+  if (dry) return dry[1] + (lo && hi && lo !== hi ? ', ' + lo + ' to ' + hi : '');
+  return line;
 }
 
 /** Resolves to the value of p, or null after ms (and on a rejection): the weather never holds the run up and never throws. */
@@ -529,7 +536,7 @@ async function getJson(url) {
   return res.json();
 }
 
-/** { text: "8°, rain by noon", loc } or null on any failure or without a location. loc: the place found (kept in the state). */
+/** { temp: "8°", text: "Rain by noon", loc } or null on any failure or without a location. loc: the place found (kept in the state). */
 async function fetchWeather(set, locale, z, nowIso, saved) {
   if (!set.weather_location) return null;
   var loc = latLon(set.weather_location);
@@ -551,7 +558,7 @@ async function fetchWeather(set, locale, z, nowIso, saved) {
   var deg = function (v) { return typeof v === 'number' && isFinite(v) ? Math.round(v) + '\u00b0' : ''; };
   var d = j.daily || {};
   var line = forecastLine({ code: j.current.weather_code, times: h.time, codes: h.weather_code }, placeNow);
-  return { text: weatherSentence(line, deg(t), deg((d.temperature_2m_min || [])[0]), deg((d.temperature_2m_max || [])[0])), loc: loc };
+  return { temp: deg(t), text: weatherSentence(line, deg((d.temperature_2m_min || [])[0]), deg((d.temperature_2m_max || [])[0])), loc: loc };
 }
 
 // ---- the agenda: an ICS calendar link -----------------------------------------------------------------------------------
@@ -867,30 +874,42 @@ function infoPlace(art, sw, sh, zoom, set) {
   if (!set.strip) return null;
   var hc = sh / zoom, wc = sw / zoom, b = set.blocks;
   if (hc < INFO_MIN_SLOT || wc < INFO_MIN_SLOT_W) return null;
-  var tier = 's';
-  INFO_TIERS.some(function (t) { if (hc >= t[0]) { tier = t[1]; return true; } return false; });
-  var N = INFO_NEED[tier], text = b.weather || b.agenda;
-  var leftNeed = (b.date ? N.date : 0) + (text ? N.text : 0) + (b.date && text ? 40 : 0);
-  var gap = Math.round(Math.min(sw, sh) * INFO_GAP), colPx = Math.round(INFO_COL_W[tier] * zoom) + gap;
-  var groups = (b.date ? 1 : 0) + (text ? 1 : 0);
-  var cands = []; // { place, arrange, g, ok }: the places the info can go, each with its work hung whole
-  var row = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom });
-  cands.push({ place: 'below', arrange: 'row', g: row, ok: row.pw / zoom >= leftNeed });
-  if (groups > 1) { // narrow work: the date over the text, a taller block
-    var stack = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom * INFO_STACK });
-    cands.push({ place: 'below', arrange: 'stack', g: stack, ok: stack.pw / zoom >= Math.max(N.date, N.text) });
-  }
-  var H = INFO_PART_H[tier], colH = (b.date ? H.date : 0) + (b.weather ? H.weather : 0) + (b.agenda ? H.agenda : 0) + (set.label ? H.label : 0), parts = groups + (b.weather && b.agenda ? 1 : 0) + (set.label ? 1 : 0);
-  colH += H.rule * Math.max(0, parts - 1);
-  if (sw - colPx >= 0.3 * sw) cands.push({ place: 'side', arrange: 'column', g: galleryFor(art, sw - colPx, sh, false, art.kind, zoom, sh, { pctW: sw }), ok: colH * zoom <= 0.95 * sh });
-  var pool = cands.filter(function (c) { return c.ok; });
-  if (!pool.length) pool = cands.slice(0, 1); // nothing fits: the block below, its text clamped
-  var best = pool.reduce(function (m, c) { return c.g.pw * c.g.ph > m.g.pw * m.g.ph ? c : m; }); // the larger picture; a tie keeps the earlier
-  var g = best.g, labelNeed = best.arrange === 'row' ? leftNeed + N.label : N.label;
-  return {
-    place: best.place, arrange: best.arrange, tier: tier, gallery: g, colw: Math.round(100 * (colPx - gap) / sw), rule: Math.round(100 * INFO_BLOCK_H[tier] * zoom * 0.55 / sh),
-    label: !!set.label && (best.place === 'side' || g.pw / zoom >= labelNeed), who: '', detail: '',
+  var order = INFO_TIERS.map(function (t) { return t[1]; }), start = 0;
+  INFO_TIERS.some(function (t, i) { if (hc >= t[0]) { start = i; return true; } return false; });
+  // an lg screen's CSS canvas can be smaller than the reported size over zoom (a joan is 480 x 800 CSS px for 600 x 800 or 758 x 1024 reported):
+  // widths are judged at 85 % and heights at 92 % there; the gap is the Framework's gap--xlarge, about 32 CSS px
+  var cw = art.lg ? 0.85 : 1, chh = art.lg ? 0.92 : 1, gap = Math.round(INFO_GAP_CSS * zoom);
+  var text = b.weather || b.agenda, groups = (b.date ? 1 : 0) + (text ? 1 : 0);
+  var plan = function (tier, force, noLabelOk) { // the best place at one text tier, or null when nothing fits it
+    var N = INFO_NEED[tier], H = INFO_PART_H[tier], leftNeed = (b.date ? N.date : 0) + (text ? N.text : 0) + (b.date && text ? 40 : 0);
+    var colPx = Math.round(INFO_COL_W[tier] * zoom / cw) + gap, cands = []; // { place, arrange, g, ok, label }
+    var row = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom });
+    cands.push({ place: 'below', arrange: 'row', g: row, ok: row.pw / zoom * cw >= leftNeed, need: leftNeed + N.label });
+    if (groups > 1) { // narrow work: the date over the text, a taller block
+      var stack = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom * INFO_STACK });
+      cands.push({ place: 'below', arrange: 'stack', g: stack, ok: stack.pw / zoom * cw >= Math.max(N.date, N.text), need: N.label });
+    }
+    var colH = function (withLabel) { // the column's height: its parts and the hairlines between them
+      var parts = groups + (b.weather && b.agenda ? 1 : 0) + (withLabel ? 1 : 0);
+      return ((b.date ? H.date : 0) + (b.weather ? H.weather : 0) + (b.agenda ? H.agenda : 0) + (withLabel ? H.label : 0) + H.rule * Math.max(0, parts - 1)) * zoom;
+    };
+    if (sw - colPx >= 0.3 * sw) {
+      var col = galleryFor(art, sw - colPx, sh, false, art.kind, zoom, sh, { pctW: sw }), room = 0.95 * sh * chh;
+      if (colH(!!set.label) <= room) cands.push({ place: 'side', arrange: 'column', g: col, ok: true, label: !!set.label });
+      else if (set.label && noLabelOk && colH(false) <= room) cands.push({ place: 'side', arrange: 'column', g: col, ok: true, label: false }); // no room for the museum label
+    }
+    var pool = cands.filter(function (c) { return c.ok; });
+    if (!pool.length) { if (!force) return null; pool = cands.slice(0, 1); } // nothing fits even the smallest tier: the block below, its text clamped
+    var best = pool.reduce(function (m, c) { return c.g.pw * c.g.ph > m.g.pw * m.g.ph ? c : m; }); // the larger picture; a tie keeps the earlier
+    return {
+      place: best.place, arrange: best.arrange, tier: tier, gallery: best.g, colw: Math.round(100 * (colPx - gap) / sw), rule: Math.round(100 * INFO_BLOCK_H[tier] * zoom * 0.55 / sh),
+      label: !!set.label && (best.place === 'side' ? best.label : best.g.pw / zoom * cw >= best.need), who: '', detail: '',
+    };
   };
+  var i, out = null;
+  for (i = start; i < order.length && !out; i++) out = plan(order[i], false, false); // the text size drops a tier until the info fits with the museum label
+  for (i = start; i < order.length && !out; i++) out = plan(order[i], i === order.length - 1, true); // else the museum label may be left out
+  return out;
 }
 
 function artOf(work, shard, set, scr) {
@@ -898,7 +917,7 @@ function artOf(work, shard, set, scr) {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
     collection: work.c === undefined ? '' : shard.col[work.c], movement: work.m === undefined ? '' : shard.mov[work.m],
     genre: genreOfWork(shard, work), medium: work.e === undefined || !shard.med ? '' : shard.med[work.e], size: work.z || null,
-    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
+    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', lg: !scr.frame && Math.min(scr.w, scr.h) > 500, zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
   };
   var geo = {}, v;
   for (v in VIEWS) {
@@ -926,7 +945,7 @@ async function infoOf(set, local, wxP, agP, state) {
   blocks.n = (blocks.date ? 1 : 0) + (blocks.weather ? 1 : 0) + (blocks.agenda ? 1 : 0);
   var info = blocks.n ? {
     has_date: blocks.date, day: local.day, weekday: local.weekday, month: local.month,
-    has_weather: blocks.weather, weather: wx ? wx.text : '', has_agenda: blocks.agenda, agenda: ag,
+    has_weather: blocks.weather, temp: wx ? wx.temp : '', weather: wx ? wx.text : '', has_agenda: blocks.agenda, agenda: ag,
   } : null;
   return { info: info, layout: Object.assign({}, set, { strip: blocks.n > 0, blocks: blocks }) };
 }
