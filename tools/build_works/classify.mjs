@@ -41,6 +41,8 @@ export const REVIEWED_FLAGS = {
   Q19883512: 'nudity', // Hope II (Klimt)
   Q17001535: 'nudity', // Death and Life (Klimt)
 };
+// A series flagged as a whole: Goya's Disasters of War (corpses, mutilation, executions) is graphic by its subject, not by a tag.
+export const SERIES_FLAGS = { Q1200522: 'violence' };
 // Last Judgments show the damned, naked, in hell
 const TITLE_JUDGMENT = /\b(last judg(e)?ment|jüngste gericht|jugement dernier|giudizio universale|juicio final)\b/i;
 
@@ -55,8 +57,9 @@ const NOT_THE_GODDESS = /dimples of venus|venus effect|venus flytrap|transit of 
 const VIOLENCE_SUBJECT = /\b(behead\w*|decapitat\w*|massacres?|execution\w*|executioner|martyr\w*|murder\w*|assassinat\w*|slaughter\w*|tortur\w*|flaying|infanticide|battles?|warfare|holofernes|devour\w*)\b/i;
 
 /** Reasons a work is not family friendly: [] when none. genre: the work's genre (a depicted "Venus" in a landscape is a planet). */
-export function unfriendlyReasons({ id = '', title = '', genres = [], depicts = [], genre = '' }) {
+export function unfriendlyReasons({ id = '', title = '', genres = [], depicts = [], genre = '', series }) {
   const out = [];
+  if (series && SERIES_FLAGS[series]) out.push(SERIES_FLAGS[series]);
   if (REVIEWED_FLAGS[id]) out.push(REVIEWED_FLAGS[id]);
   const subjects = depicts.filter((d) => !NOT_THE_GODDESS.test(d));
   // "Venus" alone is the goddess or the planet (a night sky): a landscape means the planet; any other label with Venus is the goddess

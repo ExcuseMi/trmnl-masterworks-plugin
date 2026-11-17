@@ -155,7 +155,7 @@ for (const p of picked) {
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), yearLabel: yearInfo(tags[p.id].dates).label,
     genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
-    reasons: unfriendlyReasons({ id: p.id, title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)) }),
+    reasons: unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)) }),
     locations: tags[p.id].locations, collections: p.d.coll,
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });

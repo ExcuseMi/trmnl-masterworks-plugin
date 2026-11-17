@@ -42,6 +42,12 @@ test('genres of the tiers: poster, Japanese print, nature illustration, modern a
   assert.notStrictEqual(genreOf({ title: 'View of Arles, Flowering Orchards' }), 'still life', 'flowering is not a flower piece');
 });
 
+test('a flagged series flags all its members: The Disasters of War', () => {
+  assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!', series: 'Q1200522' }), ['violence']);
+  assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!' }), [], 'no series, no tag: nothing to flag by');
+  assert.deepStrictEqual(unfriendlyReasons({ title: 'Los Caprichos', series: 'Q1163663' }), []);
+});
+
 test('a series fixes the genre of its members', () => {
   assert.strictEqual(genreOf({ title: 'Hamamatsu', classes: ['woodcut print'], series: 'Q243248' }), 'japanese print');
   assert.strictEqual(genreOf({ title: 'Wild Turkey', classes: ['engraving'], series: 'Q377817' }), 'nature');
