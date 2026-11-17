@@ -4,7 +4,7 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh. Made f
 
 ## What it shows
 
-5,010 public-domain works, about 4,560 of them with Family friendly on: paintings, prints, drawings, posters and nature illustrations.
+5,000+ public-domain works: paintings, prints, drawings, posters and nature illustrations.
 
 | Genre | Works | Genre | Works |
 |---|---|---|---|
