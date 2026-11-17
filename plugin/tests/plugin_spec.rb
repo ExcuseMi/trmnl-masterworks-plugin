@@ -21,7 +21,7 @@ RSpec.describe 'Masterworks' do
   # the same document for every part of an orientation and every mirror (the transform fetches one part at random)
   def shard_mocks(landscape, portrait)
     MIRRORS.each_with_object({}) do |base, m|
-      (0..5).each do |k|
+      (0..7).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
         m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
       end
@@ -314,7 +314,7 @@ RSpec.describe 'Masterworks' do
   describe 'when the data cannot be loaded' do
     let(:mocks) do
       MIRRORS.each_with_object({}) do |base, m|
-        (0..5).each do |k|
+        (0..7).each do |k|
           m["#{base}/landscape-#{k}.json"] = { status: 500 }
           m["#{base}/portrait-#{k}.json"] = { status: 500 }
         end

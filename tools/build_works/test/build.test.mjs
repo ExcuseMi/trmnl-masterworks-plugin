@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { composeMedium, cutoffs, isPublicDomain, sizeCm, yearOf } from '../wikidata.mjs';
-import { md5Path, thumbUrl, usable } from '../commons.mjs';
+import { MIN_LONG_SIDE_PRINT, md5Path, thumbUrl, usable } from '../commons.mjs';
 import { hexToRgb, scoreRgb, FALLBACK_PALETTE, TRMNL_CONTRAST_ARGS } from '../palette.mjs';
 import { normalizeMedium } from '../media.mjs';
 import { shortCollection, venueOf } from '../names.mjs';
@@ -60,6 +60,12 @@ test('TIFF thumbnails use the lossy JPEG leaf; the same rule as the plugin', () 
 
 test('thumb URL: apostrophe and parentheses in rawurlencode form', () => {
   assert.match(thumbUrl("Tiziano's Venere (1538).jpg", 120), /\/Tiziano%27s_Venere_%281538%29\.jpg\/120px-Tiziano%27s_Venere_%281538%29\.jpg$/);
+});
+
+test('usable: a Japanese print of a famous series may have 1200 px, anything else 1500', () => {
+  assert.ok(usable({ bitmap: true, w: 800, h: 1200 }, MIN_LONG_SIDE_PRINT));
+  assert.ok(!usable({ bitmap: true, w: 800, h: 1199 }, MIN_LONG_SIDE_PRINT));
+  assert.ok(!usable({ bitmap: true, w: 800, h: 1200 }), 'the default stays 1500');
 });
 
 test('usable: bitmaps with a long side of 1500 px or more', () => {

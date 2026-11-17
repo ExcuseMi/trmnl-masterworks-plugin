@@ -5,8 +5,9 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 
 const t = require(process.env.TRANSFORM || path.join(__dirname, '..', 'src', 'transform.js'));
-const realFetch = globalThis.fetch;
-test.afterEach(() => { globalThis.fetch = realFetch; });
+const noNetwork = async (url) => { throw new Error(`test touched the network: ${url}`); }; // a test without its own fetch mock fails here, not on whatever the live data is
+globalThis.fetch = noNetwork;
+test.afterEach(() => { globalThis.fetch = noNetwork; });
 
 // a shard of n works, landscape unless a work says otherwise; i = Q1.., sitelinks and score as given
 function shard(works) {
@@ -645,6 +646,7 @@ test('zoomed screens: the label\'s share of a slot is judged in CSS px (generic_
   assert.ok(zoomed.ph < plain.ph, `zoomed ${zoomed.ph} < plain ${plain.ph}`);
   assert.ok(zoomed.ph + 2.4 * (1.25 * 20 + 1.3 * 16 + 1.35 * 16) <= 540 * 0.93 + 8, 'the zoomed label fits under the picture');
   assert.strictEqual(t.galleryFor(art, 480, 288, true, 'normal', 2.4).label, undefined, 'a quadrant of a zoomed screen too small for a label');
+  globalThis.fetch = answer(shard([{}])); // never the network: the live data has other part counts than this checkout
   const art2 = (await t.run(input({ device: { width: 1920, height: 1080, orientation: 'landscape' } }))).art;
   assert.strictEqual(art2.zoom, 2.4);
   assert.strictEqual((await t.run(input({ device: { width: 2560, height: 1440, orientation: 'landscape' } }))).art.zoom, 1);

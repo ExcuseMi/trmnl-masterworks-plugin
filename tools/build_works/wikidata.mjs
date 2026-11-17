@@ -57,14 +57,33 @@ export async function fetchCandidates(log = () => {}) {
 // ranked by sitelinks and cut at `cap` after the public-domain, image and size checks, so fame still orders a tier.
 const EXTRA_ROOTS = { Q178659: 'illustration', Q429785: 'poster', Q3796486: 'botanical illustration', Q3305213: 'painting' };
 export const TIERS = [
-  { name: 'landscapes and seas', ids: ['Q191163', 'Q158607', 'Q3304751'], min: 3, cap: 700 }, // landscape art, marine art, meisho-e
-  { name: 'cityscapes', ids: ['Q1935974', 'Q166030'], min: 2, cap: 200 }, // cityscape, veduta
+  { name: 'landscapes', ids: ['Q191163', 'Q3304751'], min: 3, cap: 500 }, // landscape art, meisho-e
+  { name: 'seas', ids: ['Q158607'], min: 0, cap: 320 }, // marine art
+  { name: 'cityscapes', ids: ['Q1935974', 'Q166030'], min: 1, cap: 350 }, // cityscape, veduta
   { name: 'flowers and still life', ids: ['Q170571', 'Q12303833'], min: 2, cap: 300 }, // still life, floral painting
-  { name: 'nature illustration', ids: ['Q3796486', 'Q10301381', 'Q8001341', 'Q484591', 'Q2302151', 'Q16875712', 'Q2566458'], min: 1, cap: 250 }, // botanical, scientific, wildlife, natural history, animal painting, animal art, bird-and-flower
-  { name: 'Japanese prints', ids: ['Q185905', 'Q842183', 'Q2566458'], min: 1, cap: 250 }, // ukiyo-e, shin-hanga, bird-and-flower
-  { name: 'modern and abstract', ids: ['Q128115', 'Q80113', 'Q166593', 'Q131221', 'Q191970', 'Q207445', 'Q519443', 'Q42934'], min: 2, cap: 450, viaCreator: true }, // abstract art, Expressionism, Fauvism, Futurism, Suprematism, De Stijl, Orphism, Cubism
-  { name: 'posters and Art Nouveau', ids: ['Q429785', 'Q34636'], min: 1, cap: 250, viaCreator: true }, // poster, Art Nouveau
+  { name: 'nature illustration', ids: ['Q3796486', 'Q10301381', 'Q8001341', 'Q484591', 'Q2302151', 'Q16875712', 'Q2566458'], min: 1, cap: 450 }, // botanical, scientific, wildlife, natural history, animal painting, animal art, bird-and-flower
+  { name: 'Japanese prints', ids: ['Q185905', 'Q842183', 'Q2566458'], min: 0, cap: 120 }, // ukiyo-e, shin-hanga, bird-and-flower
+  { name: 'modern and abstract', ids: ['Q128115', 'Q80113', 'Q166593', 'Q131221', 'Q191970', 'Q207445', 'Q519443', 'Q42934'], min: 1, cap: 600, viaCreator: true }, // abstract art, Expressionism, Fauvism, Futurism, Suprematism, De Stijl, Orphism, Cubism
+  { name: 'posters and Art Nouveau', ids: ['Q429785', 'Q34636'], min: 1, cap: 450, viaCreator: true }, // poster, Art Nouveau
 ];
+
+// Series: a work that is part of a famous series (P179) is taken by the series' fame, not its own sitelinks: the 119 prints of
+// One Hundred Famous Views of Edo are each as famous as the series. Series with at least SERIES_MIN_SITELINKS sitelinks are swept
+// automatically; CURATED_SERIES are ones Wikidata links by P361 or whose item has few sitelinks, with the fame they are given.
+export const SERIES_MIN_SITELINKS = 8;
+export const SERIES_CAP = 40; // works taken per series (the best known first), so one series does not fill a genre
+export const CURATED_SERIES = {
+  Q377817: { name: 'The Birds of America', fame: 27, cap: 110 },
+  Q499643: { name: 'The Slav Epic', fame: 20, cap: 20 },
+  Q60228610: { name: 'A Tour of the Waterfalls of the Provinces', fame: 12, cap: 12 },
+  Q18822557: { name: 'Thirty-six Views of the Eiffel Tower', fame: 10, cap: 36 },
+  Q243248: { name: 'The Fifty-three Stations of the Tokaido', fame: 25, cap: 70 },
+  Q165190: { name: 'One Hundred Famous Views of Edo', fame: 18, cap: 125 },
+  Q227494: { name: 'Thirty-six Views of Mount Fuji', fame: 44, cap: 50 },
+  Q2525862: { name: 'Thirty-six Views of Mount Fuji (second item)', fame: 14, cap: 40 },
+  Q6724086: { name: 'Famous Views of the 60-odd Provinces', fame: 10, cap: 70 },
+};
+
 
 /** [[qid, sitelinks, tier name], ...] of the genre tiers; an item keeps the first tier it is found in. */
 export async function fetchTierCandidates(log = () => {}) {
@@ -84,6 +103,26 @@ export async function fetchTierCandidates(log = () => {}) {
     log(`tier ${t.name} (${t.min}+ sitelinks): ${n}`);
   }
   return [...out.entries()].map(([id, [sl, tier]]) => [id, sl, tier]);
+}
+
+/**
+ * [[qid, ownSitelinks, seriesId, seriesFame], ...]: the 2D works with an image that are part of a famous series. Fame is the
+ * series' sitelinks (or the curated number); a work in several series keeps the highest.
+ */
+export async function fetchSeries(log = () => {}) {
+  const roots = [...Object.keys(ROOT_CLASSES), ...Object.keys(EXTRA_ROOTS)].map((q) => `wd:${q}`).join(' ');
+  const out = new Map();
+  const add = (id, own, series, fame) => { const o = out.get(id); if (!o || fame > o[3]) out.set(id, [id, own, series, fame]); };
+  const rows = await sparql(`SELECT DISTINCT ?item ?sl ?series ?ssl WHERE { ?item wdt:P179 ?series. ?series wikibase:sitelinks ?ssl. FILTER(?ssl >= ${SERIES_MIN_SITELINKS})
+    ?item wikibase:sitelinks ?sl. ?item wdt:P18 ?img. VALUES ?root { ${roots} } ?item wdt:P31 ?c. ?c wdt:P279* ?root. } LIMIT 50000`);
+  for (const r of rows) add(qid(val(r, 'item')), Number(val(r, 'sl')), qid(val(r, 'series')), Number(val(r, 'ssl')));
+  log(`series swept by P179 (${SERIES_MIN_SITELINKS}+ sitelinks): ${rows.length} rows`);
+  const ids = Object.keys(CURATED_SERIES).map((q) => `wd:${q}`).join(' ');
+  const rows2 = await sparql(`SELECT DISTINCT ?item ?sl ?series WHERE { VALUES ?series { ${ids} } ?item wdt:P179|wdt:P361 ?series. ?item wikibase:sitelinks ?sl. ?item wdt:P18 ?img.
+    VALUES ?root { ${roots} } ?item wdt:P31 ?c. ?c wdt:P279* ?root. } LIMIT 50000`);
+  for (const r of rows2) add(qid(val(r, 'item')), Number(val(r, 'sl')), qid(val(r, 'series')), CURATED_SERIES[qid(val(r, 'series'))].fame);
+  log(`curated series: ${rows2.length} rows`);
+  return [...out.values()];
 }
 
 export function yearOf(iso) {

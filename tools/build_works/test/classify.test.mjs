@@ -42,6 +42,15 @@ test('genres of the tiers: poster, Japanese print, nature illustration, modern a
   assert.notStrictEqual(genreOf({ title: 'View of Arles, Flowering Orchards' }), 'still life', 'flowering is not a flower piece');
 });
 
+test('a series fixes the genre of its members', () => {
+  assert.strictEqual(genreOf({ title: 'Hamamatsu', classes: ['woodcut print'], series: 'Q243248' }), 'japanese print');
+  assert.strictEqual(genreOf({ title: 'Wild Turkey', classes: ['engraving'], series: 'Q377817' }), 'nature');
+  assert.strictEqual(genreOf({ title: 'Waterloo Bridge, London, at Dusk', classes: ['painting'], series: 'Q3795196' }), 'cityscape');
+  assert.strictEqual(genreOf({ title: 'The Water Lily Pond', classes: ['painting'], series: 'Q1189907' }), 'landscape');
+  assert.notStrictEqual(genreOf({ title: 'A woodcut', classes: ['woodcut print'] }), 'japanese print', 'a western woodcut without a series is not');
+  assert.strictEqual(genreOf({ title: 'Unknown series', classes: ['painting'], series: 'Q999' }), 'other');
+});
+
 test('family friendly: nudity and graphic violence from Wikidata subjects and from titles in several languages', () => {
   assert.deepStrictEqual(reasons('The Birth of Venus', { depicts: ['Venus', 'nudity'] }), ['nudity']);
   assert.deepStrictEqual(reasons('Les Grandes Baigneuses'), ['nudity']);

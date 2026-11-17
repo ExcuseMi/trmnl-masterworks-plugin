@@ -34,5 +34,17 @@
   },
   "re:/data/portrait-5\\.json": {
     "json_file": "tests/fixtures/one-portrait.json"
+  },
+  "re:/data/landscape-6\\.json": {
+    "json_file": "tests/fixtures/one-landscape.json"
+  },
+  "re:/data/landscape-7\\.json": {
+    "json_file": "tests/fixtures/one-landscape.json"
+  },
+  "re:/data/portrait-6\\.json": {
+    "json_file": "tests/fixtures/one-portrait.json"
+  },
+  "re:/data/portrait-7\\.json": {
+    "json_file": "tests/fixtures/one-portrait.json"
   }
 }

@@ -5,12 +5,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, isPublicDomain, TIERS } from './wikidata.mjs';
-import { fetchImageInfo, usable } from './commons.mjs';
+import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, fetchSeries, isPublicDomain, TIERS, CURATED_SERIES, SERIES_CAP } from './wikidata.mjs';
+import { MIN_LONG_SIDE_PRINT, fetchImageInfo, usable } from './commons.mjs';
 import { DARK_MAT_BELOW, PALETTE_ID, cornerBrightness, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
-import { DEPICTS_RE, genreOf, is2dArtwork, unfriendlyReasons } from './classify.mjs';
+import { DEPICTS_RE, SERIES_GENRE, genreOf, is2dArtwork, unfriendlyReasons } from './classify.mjs';
 import { latestYear, yearInfo } from './dates.mjs';
 import { venueOf } from './names.mjs';
 import { normalizeMedium } from './media.mjs';
@@ -39,6 +39,7 @@ const writeCache = (n, v) => writeFileSync(cachePath(n), JSON.stringify(v));
 const thumbPath = (file) => join(cacheDir, 'thumbs', createHash('md5').update(file).digest('hex') + '.img');
 /** What genreOf needs for a work: Wikidata's labels, the work's own movements and its creators' movements. */
 const genreInput = (p, title, year) => ({
+  series: (seriesOf.get(p.id) || [])[0],
   title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, classes: tags[p.id].classes,
   movements: p.d.mov, creatorMovements: p.d.creators.flatMap((c) => c.mov), year,
 });
@@ -58,11 +59,34 @@ if (!tierCand) {
   tierCand = await fetchTierCandidates(log);
   writeCache('tier.json', tierCand);
 }
+// only the best known of each tier are looked at further: a tier is cut at its cap after the checks drop some (OVERSHOOT_TIER)
+const OVERSHOOT_TIER = 2.2;
+{
+  const kept = [], per = {};
+  for (const row of [...tierCand].sort((a, b) => b[1] - a[1])) {
+    const t = TIERS.find((x) => x.name === row[2]);
+    per[row[2]] = (per[row[2]] || 0) + 1;
+    if (!t || per[row[2]] <= Math.ceil(t.cap * OVERSHOOT_TIER)) kept.push(row);
+  }
+  tierCand = kept;
+}
 const mainIds = new Set(mainTop.map(([id]) => id));
+// series: members of famous series are taken by the series' fame; they count against their series' cap, not a genre tier's
+let seriesRows = readCache('series.json');
+if (!seriesRows) {
+  seriesRows = await fetchSeries(log);
+  writeCache('series.json', seriesRows);
+}
+const seriesFame = new Map(seriesRows.map(([id, , , fame]) => [id, fame]));
+const seriesOf = new Map(); // id -> [series, fame] of the most famous series the work is part of
+for (const [id, , series, fame] of seriesRows) { const o = seriesOf.get(id); if (!o || fame > o[1]) seriesOf.set(id, [series, fame]); }
 const tierOf = new Map(tierCand.map(([id, , t]) => [id, t]));
+for (const [id, , series] of seriesRows) tierOf.set(id, `series:${series}`);
 const tierCap = Object.fromEntries(TIERS.map((t) => [t.name, t.cap]));
+const capOf = (name) => (name.startsWith('series:') ? (CURATED_SERIES[name.slice(7)] || {}).cap || SERIES_CAP : tierCap[name]);
 const tierCount = {};
-const tierTop = tierCand.filter(([id]) => !mainIds.has(id)).sort((a, b) => b[1] - a[1]).map(([id, sl]) => [id, sl]);
+const tierTop = [...tierCand.map(([id, sl]) => [id, sl]), ...seriesRows.map(([id, sl]) => [id, sl])]
+  .filter(([id], i, a) => !mainIds.has(id) && a.findIndex(([x]) => x === id) === i).sort((a, b) => b[1] - a[1]);
 const top = [...mainTop, ...tierTop];
 log(`candidates ${cand.length}, asking details for the top ${mainTop.length} (sitelinks down to ${mainTop.at(-1)[1]}) and ${tierTop.length} of the genre tier`);
 
@@ -114,8 +138,11 @@ let mainCount = 0;
 for (const p of picked) {
   const isMain = mainIds.has(p.id);
   if (isMain && mainCount >= LIMIT) continue; // the fame list is cut at LIMIT; each genre tier has its own list, cut at its cap
-  if (!isMain && (tierCount[tierOf.get(p.id)] || 0) >= tierCap[tierOf.get(p.id)]) continue;
-  const file = p.d.files.slice(0, 3).find((n) => usable(infoCache[n]));
+  if (!isMain && (tierCount[tierOf.get(p.id)] || 0) >= capOf(tierOf.get(p.id))) continue;
+  // a woodblock print of a Japanese series may be 1200 px on its long side (that is what Commons holds), every other work 1500
+  const jpSeries = SERIES_GENRE[(seriesOf.get(p.id) || [])[0]] === 'japanese print';
+  const minSide = jpSeries ? MIN_LONG_SIDE_PRINT : undefined;
+  const file = p.d.files.slice(0, 3).find((n) => usable(infoCache[n], minSide));
   if (!file) { stats.commons++; continue; }
   const info = infoCache[file];
   if (seenFile.has(info.file)) { stats.dupe++; continue; }
@@ -133,7 +160,11 @@ for (const p of picked) {
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
 }
-log(`works ${works.length} (fame list ${mainCount}, tiers ${JSON.stringify(tierCount)})`, stats);
+// a member of a famous series is as famous as the series (its own sitelinks when higher)
+let boosted = 0;
+for (const w of works) { const f = seriesFame.get(w.id); if (f && f > w.sl) { w.sl = f; boosted++; } }
+const seriesWorks = Object.entries(tierCount).filter(([k]) => k.startsWith('series:')).reduce((n, [, v]) => n + v, 0);
+log(`works ${works.length} (fame list ${mainCount}, genre tiers ${JSON.stringify(Object.fromEntries(Object.entries(tierCount).filter(([k]) => !k.startsWith('series:'))))}, series members ${seriesWorks}, fame taken from a series ${boosted})`, stats);
 
 // build check: the famous five
 const missing = Object.entries(MUST_HAVE).filter(([id]) => !works.some((w) => w.id === id));

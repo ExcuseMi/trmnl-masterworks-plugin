@@ -4,6 +4,7 @@ import { politeFetch } from './http.mjs';
 
 const API = 'https://commons.wikimedia.org/w/api.php';
 export const MIN_LONG_SIDE = 1500;
+export const MIN_LONG_SIDE_PRINT = 1200; // Japanese prints in a famous series: Commons holds the Edo views at 800 x 1200; shown in a gallery they are never larger than that
 export const THUMB_STEPS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840]; // the only widths Commons serves
 const BITMAP_MIME = new Set(['image/jpeg', 'image/png', 'image/tiff', 'image/webp']);
 
@@ -58,6 +59,6 @@ export async function fetchImageInfo(names) {
 }
 
 /** Keep a file only when it is a bitmap with a long side of at least MIN_LONG_SIDE. */
-export function usable(info) {
-  return !!info && info.bitmap && Math.max(info.w, info.h) >= MIN_LONG_SIDE;
+export function usable(info, minLongSide = MIN_LONG_SIDE) {
+  return !!info && info.bitmap && Math.max(info.w, info.h) >= minLongSide;
 }

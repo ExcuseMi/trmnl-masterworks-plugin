@@ -68,6 +68,16 @@ export function unfriendlyReasons({ id = '', title = '', genres = [], depicts = 
   return out;
 }
 
+// A series fixes the genre of its members: the Edo and Tokaido prints are Japanese prints, the plates of The Birds of America are
+// nature illustration, Monet's series are landscapes and cityscapes (their titles say little: "Waterloo Bridge, London, at Dusk").
+export const SERIES_GENRE = {
+  Q165190: 'japanese print', Q243248: 'japanese print', Q227494: 'japanese print', Q2525862: 'japanese print', Q6724086: 'japanese print',
+  Q60228610: 'japanese print', Q340790: 'japanese print', Q2944321: 'japanese print', Q3235562: 'japanese print',
+  Q377817: 'nature', Q1423459: 'nature',
+  Q1189907: 'landscape', Q557000: 'landscape', Q733458: 'landscape', Q3494409: 'landscape', Q7087213: 'landscape', Q2335084: 'landscape',
+  Q637414: 'cityscape', Q468623: 'cityscape', Q3795196: 'cityscape', Q5074352: 'cityscape', Q49985736: 'cityscape', Q18822557: 'cityscape',
+};
+
 const RE_POSTER = /\bposters?\b/i, RE_ART_NOUVEAU = /art nouveau|jugendstil|secession|modernisme|liberty style/i;
 const RE_JAPANESE = /ukiyo-?e|shin-?hanga|kach[o\u014d]-?e|woodblock print|nishiki-?e|meisho|bird-and-flower painting|sosaku-?hanga/i;
 const RE_NATURE = /botanical|scientific illustration|natural history|wildlife art|animal (painting|art)|ornitholog|zoolog|herbal|flora\b|bird illustration/i;
@@ -79,7 +89,8 @@ const RE_MODERN_BY_CREATOR = /cubis|abstract art|abstract|fauv|de stijl|supremat
  * creator's when that is plainly modern: Expressionism counts for a creator only from 1905 on, Van Gogh is listed under it),
  * then portrait, still life, sea, city, landscape, religious, mythology, history, everyday.
  */
-export function genreOf({ title = '', genres = [], depicts = [], classes = [], movements = [], creatorMovements = [], year }) {
+export function genreOf({ title = '', genres = [], depicts = [], classes = [], movements = [], creatorMovements = [], year, series }) {
+  if (series && SERIES_GENRE[series]) return SERIES_GENRE[series];
   const g = genres.join(' | '), d = depicts.join(' | '), k = classes.join(' | '), m = movements.join(' | '), cm = creatorMovements.join(' | ');
   if (RE_POSTER.test(k + ' | ' + g) || RE_ART_NOUVEAU.test(m)) return 'poster';
   if (RE_JAPANESE.test(g + ' | ' + k + ' | ' + m)) return 'japanese print';

@@ -4,17 +4,17 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh. Made f
 
 ## What it shows
 
-3,838 public-domain works, about 3,430 of them with Family friendly on: paintings, prints, drawings, posters and nature illustrations.
+5,120 public-domain works, about 4,660 of them with Family friendly on: paintings, prints, drawings, posters and nature illustrations.
 
 | Genre | Works | Genre | Works |
 |---|---|---|---|
-| Portraits | 566 | Everyday scenes | 247 |
-| Religious | 548 | Flowers and still life | 241 |
-| Landscapes | 535 | Cities | 219 |
-| Other | 294 | Nature illustration | 191 |
-| Modern and abstract | 277 | Mythology | 154 |
-| Posters and Art Nouveau | 260 | Japanese prints | 113 |
-| Seas | 104 | History | 89 |
+| Landscapes | 620 | Everyday scenes | 273 |
+| Portraits | 594 | Flowers and still life | 245 |
+| Religious | 589 | Mythology | 168 |
+| Cities | 421 | Posters and Art Nouveau | 295 |
+| Other | 420 | Nature illustration | 301 |
+| Modern and abstract | 400 | Japanese prints | 331 |
+| Seas | 364 | History | 99 |
 
 ## How a work is picked
 
@@ -62,6 +62,7 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 | Sources | Wikidata (works, fame, genre, subjects, dates, where they hang) and Wikimedia Commons (the images), found through QLever with query.wikidata.org as the fallback. No hosting of our own |
 | Files | `data/landscape-N.json` and `data/portrait-N.json`, parts of about 100 kB; a run fetches one part, chosen at random. `data/works.json` is the whole set |
 | Mirrors | The same files are asked from all of these at once (`DATA_BASES`), and the newest valid answer wins (HTML, an error status or a wrong shape is ignored): `raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data/`, `cdn.jsdelivr.net/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/`, `excusemi.github.io/trmnl-masterworks-plugin/data/` (GitHub Pages), `cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data/`. With none answering, the last work is shown again, else a short message |
+| Series | A work that is part of a famous series (Wikidata `part of the series`, or a short curated list) is as famous as the series: Edo, Tokaido and Fuji prints, Birds of America, Monet's Water Lilies and Haystacks and Rouen Cathedral. The series fixes the genre of its members (`SERIES_GENRE`). A series print needs 1200 px on its long side (800 x 1200 is what Commons holds), any other work 1500 px |
 | Public domain | The creator died at least 70 full years before the build year AND the work is at least 96 years old (EU and US rules; both cut-offs are computed from the build date, 1955 and 1930 in 2026). A date uses the latest year it allows. Wikidata's own public-domain statement never lifts the date rule |
 | Images | A bitmap on Commons with a long side of at least 1500 px; thumbnails at 500, 960, 1280 and 1920 px |
 | Updates | A monthly GitHub Action (`.github/workflows/build-data.yml`) rebuilds and commits the data |
