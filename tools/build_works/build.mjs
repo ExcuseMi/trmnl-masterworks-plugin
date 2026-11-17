@@ -7,7 +7,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, fetchSeries, isPublicDomain, TIERS, CURATED_SERIES, SERIES_CAP, SERIES_INFO } from './wikidata.mjs';
 import { dedupe, titleKey } from './dedupe.mjs';
-import { MIN_LONG_SIDE_PRINT, fetchImageInfo, usable } from './commons.mjs';
+import { PNG_STEPS as PNG_STEPS_TRY } from './commons.mjs';
+import { MIN_LONG_SIDE_PRINT, fetchImageInfo, isPng, pngStepFor, preferNonPng, thumbBytes, usable } from './commons.mjs';
 import { DARK_MAT_BELOW, PALETTE_ID, cornerBrightness, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
@@ -139,7 +140,8 @@ let mainCount = 0;
 // a woodblock print of a Japanese series may be 1200 px on its long side (that is what Commons holds), every other work 1500
 const imageOf = (p) => {
   const jpSeries = SERIES_GENRE[(seriesOf.get(p.id) || [])[0]] === 'japanese print';
-  return p.d.files.slice(0, 3).find((n) => usable(infoCache[n], jpSeries ? MIN_LONG_SIDE_PRINT : undefined, n));
+  const ok = p.d.files.slice(0, 3).filter((n) => usable(infoCache[n], jpSeries ? MIN_LONG_SIDE_PRINT : undefined, n));
+  return preferNonPng(ok); // a JPEG, TIFF or WebP file is far lighter than a PNG of the same picture (see commons.mjs)
 };
 const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
 const artistOf = (p) => p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
@@ -235,6 +237,19 @@ for (const w of works) {
   final.push({ ...w, score: Math.round(s.error * 1000) / 1000, dark: Math.round(s.dark * 100) / 100, dm: bright < DARK_MAT_BELOW, dc: (await cornerBrightness(thumbPath(w.file))) < DARK_MAT_BELOW });
 }
 log(`scored ${final.length}, dropped without a thumbnail: ${works.length - final.length}`);
+// a work whose only usable file is a PNG asks for a small thumbnail step: measure the byte size of its thumbnails (cached) and keep the widest within the budget
+const pngBytes = readCache('png-bytes.json', {});
+const pngWorks = final.filter((w) => isPng(w.file));
+for (const w of pngWorks) {
+  for (const step of PNG_STEPS_TRY) {
+    const key = `${w.file}|${step}`;
+    if (step <= w.w && pngBytes[key] === undefined) pngBytes[key] = (await thumbBytes(w.file, step)) ?? null;
+  }
+  writeCache('png-bytes.json', pngBytes);
+  const bySteps = Object.fromEntries(PNG_STEPS_TRY.map((st) => [st, pngBytes[`${w.file}|${st}`] ?? undefined]));
+  w.pngStep = pngStepFor(bySteps, w.w);
+}
+log(`PNG works: ${pngWorks.length}; steps ${JSON.stringify(pngWorks.reduce((m, w) => ((m[w.pngStep] = (m[w.pngStep] || 0) + 1), m), {}))}`);
 // build check: a work lost here is lost for a reason worth a look (the 16 TIFF files once were, silently); more than 1 % stops the build
 const lost = works.length - final.length;
 const lostMust = Object.keys(MUST_HAVE).filter((id) => !final.some((w) => w.id === id));

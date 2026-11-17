@@ -33,7 +33,7 @@ custom_fields:
   name: Show the date
   default: 'false'
   optional: true
-  help_text: "The day number, weekday and month in your account's language, set beside or below the artwork as part of the museum label, in the room the work leaves (the work is never cropped for it and always hangs on its mat). The date, weather and agenda each have a toggle; any combination works."
+  help_text: "The day number, weekday and month in your account's language, in one calm strip under the artwork (the work is never cropped for it and hangs on its mat; the museum label moves into the strip). The date, weather and agenda each have a toggle; any combination works."
 - keyname: show_weather
   group: Info
   field_type: boolean

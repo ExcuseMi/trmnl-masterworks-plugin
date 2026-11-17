@@ -71,3 +71,33 @@ export function usable(info, minLongSide = MIN_LONG_SIDE, name = '') {
   const r = info.w / info.h;
   return r <= MAX_ASPECT && r >= 1 / MAX_ASPECT;
 }
+
+// PNG files. Commons serves a PNG thumbnail as a PNG: 1.3 MB at 960 px and 2.4 MB at 1280 px (median of 10 measured, 2026-11-17, worst
+// 9 MB at 1920). The renderer captured Gainsborough's Cornard Wood (a PNG) before it had loaded: the picture was cut off at 70 %. A JPEG
+// thumbnail of the same width is 10 times lighter, so a JPEG, TIFF or WebP file is preferred; a work with a PNG only asks for the widest
+// step whose thumbnail is within PNG_BYTE_BUDGET (measured at build time), and the transform never asks for more.
+export const PNG_BYTE_BUDGET = 1000000; // a picture the renderer fetches while it captures: about 1 MB loads in a second or two on the renderer's line
+export const PNG_STEPS = [960, 500, 250]; // the steps tried, widest first
+export const isPng = (name) => /\.png$/i.test(name);
+
+/** Of the usable files of a work (best first), the first that is not a PNG, else the first. */
+export function preferNonPng(files) {
+  return files.find((f) => !isPng(f)) || files[0];
+}
+
+/** The widest of PNG_STEPS whose measured size (bytes by step) fits the budget; the narrowest when none does. */
+export function pngStepFor(bytesByStep, fileWidth, budget = PNG_BYTE_BUDGET) {
+  const steps = PNG_STEPS.filter((s) => s <= fileWidth);
+  const use = steps.length ? steps : [PNG_STEPS[PNG_STEPS.length - 1]];
+  return use.find((s) => bytesByStep[s] !== undefined && bytesByStep[s] <= budget) ?? use[use.length - 1];
+}
+
+/** Bytes of a thumbnail (downloaded; cached by the caller), or undefined when it cannot be had. */
+export async function thumbBytes(name, width) {
+  try {
+    const res = await politeFetch(thumbUrl(name, width), {}, { pauseMs: 800 });
+    return (await res.arrayBuffer()).byteLength;
+  } catch (e) {
+    return undefined;
+  }
+}

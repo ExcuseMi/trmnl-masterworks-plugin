@@ -651,3 +651,19 @@ test('zoomed screens: the label\'s share of a slot is judged in CSS px (generic_
   assert.strictEqual(art2.zoom, 2.4);
   assert.strictEqual((await t.run(input({ device: { width: 2560, height: 1440, orientation: 'landscape' } }))).art.zoom, 1);
 });
+
+test('a PNG-only work asks for its small thumbnail step, never a wider one (Cornard Wood loaded half-drawn: its 1920 px PNG is 5 MB)', async () => {
+  const sizes = async (extra) => {
+    globalThis.fetch = answer(shard([{ w: 3336, h: 2648, f: 'Cornard Wood.png', ...extra }]));
+    const out = await t.run(input({ device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' } }));
+    const widths = out.art.srcset.split(', ').map((x) => Number(x.split(' ')[1].replace('w', '')));
+    return { url: out.art.url, width: out.art.width, max: Math.max(...widths) };
+  };
+  const plain = await sizes({});
+  assert.ok(plain.max >= 1280, 'a normal work offers the wide steps');
+  const png = await sizes({ r: 960 });
+  assert.ok(png.width <= 960 && png.max <= 960, `the width ${png.width}, srcset up to ${png.max}`);
+  assert.match(png.url, /\/960px-/);
+  const tiny = await sizes({ r: 250 });
+  assert.ok(tiny.width <= 250 && tiny.max <= 250, 'the step the build chose, however small');
+});

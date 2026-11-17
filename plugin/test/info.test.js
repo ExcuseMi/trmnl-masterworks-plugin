@@ -179,63 +179,64 @@ test('run: with info on the work hangs on its mat, no placard, no label under it
   assert.strictEqual(off.info, null);
 });
 
-// where the info goes, for every shape of work: the shape table
+// where the info goes: one strip under the work, for every shape of work and every screen
 const SHAPES = { 'very wide panorama': 2.5, wide: 1.8, 'the screen\'s own shape': 16 / 9, '4:3': 4 / 3, square: 1, '3:4': 3 / 4, tall: 0.6, 'very tall scroll': 0.35 };
 const SCREENS = { 'Frame landscape': [2560, 1440, 1, 'big', false], 'Frame portrait': [1440, 2560, 1, 'big', false], X: [1872, 1404, 1872 / 800, 'normal', true], OG: [800, 480, 1, 'normal', false], 'joan (lg, 600 x 800)': [600, 800, 1, 'normal', true] };
-const ALL = { strip: true, blocks: { date: true, weather: true, agenda: true, n: 3 }, label: true };
-const area = (g) => g.pw * g.ph;
+const ALL = { strip: true, blocks: { date: true, weather: true, agenda: false, events: 0, n: 2 }, label: true };
 
-test('shape table: every shape on every screen is hung whole on its mat with the info beside or below, whichever keeps the larger picture', () => {
+test('shape table: every shape on every screen hangs whole on its mat with one strip under it, centred, inside the margins', () => {
   for (const [sname, [sw, sh, zoom, kind, lg]] of Object.entries(SCREENS)) {
     for (const [name, aspect] of Object.entries(SHAPES)) {
       const art = { w: Math.round(aspect * 1000), h: 1000, kind, lg, title: 'A title', artist: 'Artist', medium: 'Oil on canvas', collection: 'Museum' };
       const inf = t.infoPlace(art, sw, sh, zoom, ALL);
       const where = `${name} on ${sname}`;
-      assert.ok(inf, `${where}: has a place`);
-      const g = inf.gallery;
+      assert.ok(inf, `${where}: has a strip`);
+      assert.strictEqual(inf.place, 'below', `${where}: the strip is under the work, never beside it`);
+      const g = inf.gallery, z = t.INFO_SIZES[inf.tier];
       assert.ok(Math.abs(g.pw / g.ph / aspect - 1) < 0.04, `${where}: no crop (box ${g.pw} x ${g.ph} is not ${aspect.toFixed(2)})`);
-      const cw = lg ? 0.85 : 1;
-      const block = t.INFO_BLOCK_H[inf.tier] * zoom * (inf.arrange === 'stack' ? t.INFO_STACK : 1), col = Math.round(t.INFO_COL_W[inf.tier] * zoom / cw);
-      const gap = Math.round(32 * zoom);
-      if (inf.place === 'below') assert.ok(g.ph + block <= sh, `${where}: the picture and the block below fit the slot`);
-      else assert.ok(g.pw + col + gap <= sw + 1, `${where}: the picture and the column beside fit the slot`);
-      assert.ok(g.pw <= sw && g.ph <= sh);
-      // no other place that has room for its text keeps a larger picture
-      const N = t.INFO_NEED[inf.tier];
-      const alt = [
-        ['row', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom }), (g2) => g2.pw / zoom * cw >= N.date + N.text + 40],
-        ['stack', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom * t.INFO_STACK }), (g2) => g2.pw / zoom * cw >= Math.max(N.date, N.text)],
-        ['column', sw - col - gap >= 0.3 * sw ? t.galleryFor(art, sw - col - gap, sh, false, kind, zoom, sh, { pctW: sw }) : null, () => {
-          const H = t.INFO_PART_H[inf.tier], colH = H.date + H.weather + H.agenda + H.label + H.rule * 4; // all on, with the label
-          return colH * zoom <= 0.95 * sh * (lg ? 0.92 : 1);
-        }],
-      ];
-      alt.forEach(([arr, g2, fits]) => { if (g2 && fits(g2)) assert.ok(area(g) >= area(g2) - 1, `${where}: ${inf.arrange} (${area(g)}) is not larger than ${arr} (${g2 && area(g2)})`); });
+      assert.ok(g.ph + (z.h + z.gap) * zoom <= sh * 0.93 + 0.012 * sh, `${where}: the work and the strip fit the slot with a margin`);
+      assert.ok(g.pw <= sw - 2 * z.m * zoom + 0.012 * sw, `${where}: inside the side margins`);
+      const onEdges = Math.abs(inf.stripw - g.a) <= 1, onMargins = Math.abs(inf.stripw - Math.round(100 * (sw - 2 * z.m * zoom) / sw)) <= 1;
+      assert.ok(onEdges || onMargins, `${where}: the strip stands on the work's edges or on the margins`);
+      if (g.pw < t.INFO_NARROW * sw) assert.ok(onMargins, `${where}: a narrow work: the groups stand on the margins`);
     }
   }
-  const at = (aspect) => t.infoPlace({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a' }, 2560, 1440, 1, ALL).place;
-  assert.deepStrictEqual([2.5, 1.8, 16 / 9, 4 / 3, 1, 0.75, 0.6, 0.35].map(at), ['below', 'side', 'side', 'side', 'side', 'side', 'side', 'side'], 'the Frame landscape: only a panorama is wide enough for the block below to keep the larger picture');
-  const portrait = (aspect) => t.infoPlace({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a' }, 1440, 2560, 1, ALL);
-  assert.strictEqual(portrait(1.8).place, 'below', 'a portrait Frame: the block below, the date over the text (too narrow for one row)');
-  assert.strictEqual(portrait(1.8).arrange, 'stack');
-  assert.strictEqual(portrait(0.35).place, 'side', 'a very tall scroll on a portrait Frame: beside');
+  const frame = t.infoPlace({ w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' }, 2560, 1440, 1, ALL);
+  assert.strictEqual(frame.tier, 'f');
+  assert.ok(frame.gallery.ph <= 1152 && frame.gallery.ph >= 1000, `the Frame's work is up to about 1150 px high: ${frame.gallery.ph}`);
+  assert.strictEqual(t.infoPlace({ w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' }, 1440, 2560, 1, ALL).tier, 'g', 'a portrait Frame');
 });
 
-test('info place: a work that would fill the screen goes on the mat, scaled down for the info; nothing is cropped', () => {
+test('info place: a work that would fill the screen goes on the mat, scaled down for the strip; nothing is cropped', () => {
   const art = { w: 1600, h: 900, kind: 'big', title: 't', artist: 'a' };
   const bare = t.galleryFor(art, 2560, 1440, false, 'big', 1);
   const inf = t.infoPlace(art, 2560, 1440, 1, ALL);
-  assert.ok(area(inf.gallery) < area(bare), 'smaller than without info');
+  assert.ok(inf.gallery.pw * inf.gallery.ph <= bare.pw * bare.ph, 'no larger than without info');
   assert.ok(Math.abs(inf.gallery.pw / inf.gallery.ph / (16 / 9) - 1) < 0.04, 'the whole work');
   assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, { ...ALL, strip: false }), null);
 });
 
-test('info place: a slot too small has no info; the museum label joins when there is room, else it is left out', () => {
+test('info place: a slot too small has no strip; the museum label goes when there is no room, the date and weather stay', () => {
   assert.strictEqual(t.infoPlace({ w: 3, h: 2, kind: 'normal', title: 't' }, 400, 240, 1, ALL), null, 'an OG quadrant');
   assert.strictEqual(t.infoPlace({ w: 3, h: 2, kind: 'normal', title: 't' }, 200, 400, 1, ALL), null, 'too narrow');
   const art = { w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' };
   assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, ALL).label, true);
   assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, { ...ALL, label: false }).label, false, 'label off');
-  const narrow = t.infoPlace({ w: 1, h: 1, kind: 'normal', title: 't', artist: 'a' }, 800, 480, 1, ALL);
-  assert.ok(narrow.place === 'side' || narrow.label === false, 'no label across a narrow block below');
+  const small = t.infoPlace({ w: 1, h: 1, kind: 'normal', title: 't', artist: 'a' }, 480, 800, 1, { ...ALL, blocks: { date: true, weather: true, agenda: true, events: 1, n: 3 } });
+  assert.ok(small, 'even the smallest screen gets its strip');
+});
+
+test('info place: the groups keep their places when one is off (the strip does not depend on which are on)', () => {
+  const art = { w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' };
+  const a = t.infoPlace(art, 2560, 1440, 1, { ...ALL, blocks: { date: true, weather: true, agenda: false, events: 0, n: 2 } });
+  const b = t.infoPlace(art, 2560, 1440, 1, { ...ALL, blocks: { date: false, weather: true, agenda: false, events: 0, n: 1 } });
+  assert.deepStrictEqual([a.lw, a.mw, a.stripw, a.tier], [b.lw, b.mw, b.stripw, b.tier], 'the left slot keeps its width: the weather stays in the middle');
+});
+
+test('agenda: tomorrow\'s events say so in the time (weekday short), no heading, no venue shown; weather and agenda: the next single event', async () => {
+  const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART;TZID=Europe/Brussels:20261118T083000', 'DTEND;TZID=Europe/Brussels:20261118T090000', 'SUMMARY:Early', 'LOCATION:Room 1', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
+  const a = await t.fetchAgenda('https://calendar.example.org/x.ics', 'en', { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T19:00:00+01:00'), { iso: '2026-11-17T19:00', hour: 19 });
+  assert.strictEqual(a.day, 'tomorrow');
+  assert.strictEqual(a.items[0].time, 'Wed 8:30 AM');
 });

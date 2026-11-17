@@ -62,47 +62,39 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   # the boxes of the parts of the strip, left to right
-  # the boxes of the picture (bevel) and of the info block, and of every text part inside the block
+  # the boxes of the picture (bevel) and of the strip
   def box(page, selector)
     page.evaluate("(() => { const e = document.querySelector('#{selector}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")
   end
-
-  def overlap?(a, b) = a[0] < b[2] - 1 && b[0] < a[2] - 1 && a[1] < b[3] - 1 && b[1] < a[3] - 1
 
   # nothing is cut: a text part whose lines are clamped must have all of its text visible (these texts are short)
   def cut_parts(page)
     page.evaluate("[...document.querySelectorAll('[data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
   end
 
+  # the picture and the strip are one group under each other, centred, inside the layout, the work whole
   def expect_composed(page, where)
-    lay = box(page, '.layout')
-    pic = box(page, '[data-bevel]')
-    blk = box(page, '[data-info-block]')
-    expect(blk).not_to be_nil, "#{where}: an info block"
-    expect(overlap?(pic, blk)).to be(false), "#{where}: the info block overlaps the picture #{pic} #{blk}"
+    lay = box(page, '[data-block="primary"]')
+    pic = box(page, '[data-block="primary"] [data-bevel]')
+    blk = box(page, '[data-block="primary"] [data-info-block]')
+    expect(blk).not_to be_nil, "#{where}: a strip"
+    expect(blk[1]).to be >= pic[3] - 1, "#{where}: the strip is under the picture #{pic} #{blk}"
     [pic, blk].each do |b|
       expect(b[0]).to be >= lay[0] - 1
       expect(b[1]).to be >= lay[1] - 1
       expect(b[2]).to be <= lay[2] + 1
       expect(b[3]).to be <= lay[3] + 1
     end
-    kind = page.evaluate("document.querySelector('[data-info-block]').dataset.infoBlock")
-    if kind == 'below'
-      expect(blk[0]).to be_within(3).of(pic[0]), "#{where}: the block's left edge is the picture's"
-      expect(blk[2]).to be_within(3).of(pic[2]), "#{where}: the block's right edge is the picture's"
-      expect(blk[1]).to be >= pic[3] - 1
-    else
-      expect(blk[3]).to be_within(3).of(pic[3]), "#{where}: the block ends on the picture's bottom edge"
-      expect(blk[0]).to be >= pic[2] - 1
-    end
+    expect(pic[0] - lay[0]).to be_within(4).of(lay[2] - pic[2]), "#{where}: the picture is centred"
+    expect(blk[0] - lay[0]).to be_within(4).of(lay[2] - blk[2]), "#{where}: the strip is centred"
+    expect(blk[0]).to be <= pic[0] + 4, "#{where}: the strip is at least as wide as the picture's edges"
     cut = cut_parts(page)
     expect(cut).to eq([]), "#{where}: text is cut: #{cut}"
-    kind
   end
 
   %w[frame og_png].each do |device|
     COMBOS.each do |name, keys|
-      it "#{name} on #{device}: only the parts that are on, composed with the picture, nothing overlapping or cut off" do
+      it "#{name} on #{device}: only the parts that are on, composed under the picture, nothing overlapping or cut off" do
         page = screen(device, fields_for(keys), mocks: shards('one-landscape', 'one-tall').merge(services))
         wait(page)
         expect(page).to have_css('[data-info-block]')
@@ -114,13 +106,13 @@ RSpec.describe 'Masterworks info strip' do
           end
         end
         expect_composed(page, "#{name} on #{device}")
-        # fixed order: date, weather, agenda
-        order = page.evaluate("[...document.querySelectorAll('[data-info-block] [data-info]')].map(e => e.dataset.info)")
-        expect(order).to eq(%w[date weather agenda] & order)
+        # the groups stand left to right: date, then weather or agenda, then the label
+        order = page.evaluate("[...document.querySelectorAll('[data-block=\"primary\"] [data-info-block] [data-info]')].map(e => [e.dataset.info, e.getBoundingClientRect().left])")
+        expect(order.map(&:last)).to eq(order.map(&:last).sort)
       end
     end
 
-    it "nothing on: no info block, the museum label under the picture, as before (#{device})" do
+    it "nothing on: no strip, the museum label under the picture, as before (#{device})" do
       page = screen(device, {})
       wait(page)
       expect(page).to have_no_css('[data-info-block]')
@@ -147,22 +139,42 @@ RSpec.describe 'Masterworks info strip' do
     end
   end
 
-  it 'shows the weather sentence and the agenda events on the Frame, in black' do
+  it 'shows the temperature over the forecast, the agenda time over its text, in black' do
     page = screen('frame', fields_for(%w[show_date show_weather show_agenda]))
     wait(page)
     expect(page.evaluate("document.querySelector('[data-temp]').innerText")).to match(/\A-?\d+°\z/)
     expect(page.evaluate("document.querySelector('[data-weather]').innerText")).to match(/\A(Rain|Drizzle|Snow|Storm|Dry|Sunny|Clear|Fog)/)
-    expect(page.evaluate("[...document.querySelectorAll('[data-event-title]')].map(e => e.innerText).join('|')")).to include('Birthday').or include('Call the plumber')
+    expect(page.evaluate("document.querySelectorAll('[data-event]').length")).to eq(1), 'weather and agenda: the weather, then the next single event'
+    expect(page.evaluate("document.querySelector('[data-event-title]').innerText")).to include('Birthday').or include('Call the plumber')
     expect(page.evaluate("document.querySelector('[data-day]').innerText")).to match(/\A\d{1,2}\z/)
+    expect(page).to have_no_text('Tomorrow'), 'no heading'
     inks = page.evaluate("[...new Set([...document.querySelectorAll('[data-info-block] *')].map(e => getComputedStyle(e).color))]")
     expect(inks - ['rgb(0, 0, 0)', 'rgb(255, 255, 255)']).to eq([]), 'the info text is black (or the mat ink), never a colour'
   end
 
-  # the shape table in the browser: every shape of work on every screen, the info beside or below, the work whole
+  it 'the agenda alone shows up to two events in the middle slot, time over text' do
+    page = screen('frame', fields_for(%w[show_agenda]))
+    wait(page)
+    expect(page.evaluate("document.querySelectorAll('[data-event]').length")).to eq(2)
+    expect(page).to have_no_css('[data-info="weather"]')
+  end
+
+  it 'keeps the groups in their places when one is switched off: the weather does not move' do
+    both = screen('frame', fields_for(%w[show_date show_weather]))
+    wait(both)
+    alone = screen('frame', fields_for(%w[show_weather]))
+    wait(alone)
+    x = ->(page) { page.evaluate("document.querySelector('[data-block=\"primary\"] [data-info=\"weather\"]').getBoundingClientRect().left") }
+    expect(x.call(alone)).to be_within(2).of(x.call(both))
+    right = ->(page) { page.evaluate("document.querySelector('[data-block=\"primary\"] [data-label]').getBoundingClientRect().right") }
+    expect(right.call(alone)).to be_within(2).of(right.call(both))
+  end
+
+  # the shape table in the browser: every shape of work on every screen, one strip under the work, the work whole
   SHAPES = { 'very wide panorama' => 2.5, 'wide' => 1.8, "the screen's own shape" => 16.0 / 9, '4:3' => 4.0 / 3, 'square' => 1.0, '3:4' => 0.75, 'tall' => 0.6, 'very tall scroll' => 0.35 }.freeze
 
-  def shape_shards(aspect)
-    doc = fixture('one-landscape')
+  def shape_shards(aspect, fixture_name = 'one-landscape')
+    doc = fixture(fixture_name)
     doc['w'][0]['w'] = (aspect * 1000).round
     doc['w'][0]['h'] = 1000
     MIRRORS_INFO.each_with_object({}) do |base, m|
@@ -175,31 +187,35 @@ RSpec.describe 'Masterworks info strip' do
 
   [['frame', 'landscape'], ['frame', 'portrait'], ['v2', 'landscape'], ['og_png', 'landscape']].each do |device, orientation|
     SHAPES.each do |name, aspect|
-      it "#{name} on #{device} #{orientation}: the info block and the picture do not overlap, the work is whole, nothing is cut" do
-        page = screen(device, fields_for(COMBOS['date, weather and agenda']), orientation:, mocks: shape_shards(aspect).merge(services))
+      it "#{name} on #{device} #{orientation}: the strip and the picture do not overlap, the work is whole, nothing is cut" do
+        page = screen(device, fields_for(COMBOS['date and weather']), orientation:, mocks: shape_shards(aspect).merge(services))
         wait(page)
         expect(page).to have_css('[data-gallery]'), 'on the mat, never a placard over the art'
         expect(page).to have_no_css('[data-placard]')
         expect_composed(page, "#{name} on #{device} #{orientation}")
-        pic = box(page, '[data-bevel]')
+        pic = box(page, '[data-block="primary"] [data-bevel]')
         expect(((pic[2] - pic[0]).to_f / (pic[3] - pic[1]) / aspect) - 1).to be_within(0.05).of(0), "the picture has the work's shape (no crop): #{pic}"
       end
     end
   end
 
-  it 'puts the info in the room the work leaves: a wide work leaves room below, a tall one beside, on the Frame' do
-    wide = screen('frame', fields_for(%w[show_date]), mocks: shape_shards(2.5).merge(services))
-    wait(wide)
-    expect(wide).to have_css('[data-info-block="below"]')
-    tall = screen('frame', fields_for(%w[show_date]), mocks: shape_shards(0.6).merge(services))
-    wait(tall)
-    expect(tall).to have_css('[data-info-block="side"]')
+  it 'takes the Frame path on the frame model and not on the X or the OG' do
+    shapes = shape_shards(1.5)
+    frame = screen('frame', fields_for(%w[show_date]), mocks: shapes.merge(services))
+    wait(frame)
+    expect(frame).to have_css('[data-gallery][data-frame="1"]')
+    mat = frame.evaluate("getComputedStyle(document.querySelector('[data-gallery][data-block=\"primary\"]')).backgroundColor")
+    %w[v2 og_png].each do |device|
+      page = screen(device, fields_for(%w[show_date]), mocks: shapes.merge(services))
+      wait(page)
+      expect(page).to have_no_css('[data-frame]')
+    end
   end
 
   it 'draws the info in white text on a black mat when the work hangs on black' do
     page = screen('frame', fields_for(%w[show_date]), mocks: shards('one-dark-landscape', 'one-portrait'))
     wait(page)
-    expect(page.evaluate("getComputedStyle(document.querySelector('[data-gallery]')).backgroundColor")).to eq('rgb(0, 0, 0)')
-    expect(page.evaluate("getComputedStyle(document.querySelector('[data-day]')).color")).to eq('rgb(255, 255, 255)')
+    expect(page.evaluate("getComputedStyle(document.querySelector('[data-gallery][data-block=\"primary\"]')).backgroundColor")).to eq('rgb(0, 0, 0)')
+    expect(page.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"] [data-day]')).color")).to eq('rgb(255, 255, 255)')
   end
 end

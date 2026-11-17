@@ -60,3 +60,8 @@ test('no gallery photos and no sliver shapes in the data', () => {
 test('reviewed family-friendly flags are in the data', () => {
   for (const id of ['Q17491284', 'Q2438357']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
 });
+
+test('every work is not a PNG, or says the thumbnail step to ask for (a PNG thumbnail is a PNG, many MB: Cornard Wood loaded half-drawn)', () => {
+  const bad = works.filter((w) => /\.png$/i.test(w.f) && !(w.r >= 250 && w.r <= 960)).map((w) => `${w.i} ${w.f}`);
+  assert.deepStrictEqual(bad, []);
+});

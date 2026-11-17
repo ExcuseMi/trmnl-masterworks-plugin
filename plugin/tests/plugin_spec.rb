@@ -71,7 +71,7 @@ RSpec.describe 'Masterworks' do
           end
         end
 
-        it 'puts a light work on a pure white mat and a dark work on a pure black one, bevel in the opposite colour (gallery views)' do
+        it 'puts a light work on a pure white mat and a dark work on a pure black one, no outline around the picture (gallery views)' do
           { light => ['rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'white'], dark => ['rgb(0, 0, 0)', 'rgb(255, 255, 255)', 'black'] }.each do |m, (mat, edge, name)|
             page = screen(view, device, mocks: m)
             wait(page)
@@ -79,7 +79,9 @@ RSpec.describe 'Masterworks' do
 
             expect(page).to have_css("[data-gallery=\"#{name}\"]")
             expect(page.evaluate("getComputedStyle(document.querySelector('[data-gallery]')).backgroundColor")).to eq(mat)
-            expect(page.evaluate("getComputedStyle(document.querySelector('[data-bevel]')).backgroundColor")).to eq(edge)
+            expect(page.evaluate("getComputedStyle(document.querySelector('[data-bevel]')).backgroundColor")).to eq(mat), 'no outline: the picture box is the mat'
+            expect(page.evaluate("getComputedStyle(document.querySelector('[data-bevel]')).borderTopWidth")).to eq('0px')
+            expect(page.evaluate("document.querySelector('[data-bevel]').className")).not_to match(/border/)
           end
         end
 

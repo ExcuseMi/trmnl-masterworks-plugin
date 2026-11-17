@@ -147,8 +147,7 @@ test('fetchAgenda: a calendar is read, shown with the user\'s time format; tomor
   assert.strictEqual(a.label, '');
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => DAYCAL });
   const b = await t.fetchAgenda(ICSURL, 'de', { zone: Z, shift: 0 }, nowAt('2026-11-17T19:00'), local('2026-11-17T19:00'));
-  assert.strictEqual(b.label, 'Morgen', 'tomorrow in the account language');
-  assert.strictEqual(b.items[0].time, '08:30', 'de: 24-hour');
+  assert.strictEqual(b.items[0].time, 'Mi 08:30', 'tomorrow in the account language: the weekday short, de: 24-hour');
 });
 
 test('fetchAgenda: the byte cap (stream and text), a failed or refused fetch, not a calendar: null', async () => {

@@ -56,12 +56,20 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 
 ## The info (date, weather, agenda)
 
-Three toggles, each off by default; any combination lays out only what is on and has something to show (nothing relevant, nothing shown: no filler). The info goes where the work leaves room, in one of two places: a column beside it (a tall work on a wide screen, like a wall label) or a block below it, whichever keeps the larger picture. The work is never cropped to make room and always hangs on its mat (no placard over it); the museum label joins the info as one block aligned to the picture's edge, in the label's type and ink, with hairlines between the parts and no boxes or icons. Order: the date (the day number is the large anchor, weekday and month in the account language and zone), the weather as one sentence (`8°, rain by noon`, `Dry, 4° to 11°`; Open-Meteo, no key, English), the agenda (next two events of today, tomorrow's labelled from 18:00 or when none is left; all-day events as "All day"; times in the account language's clock).
+Three toggles, each off by default; any combination lays out only what is on and has something to show (nothing relevant, nothing shown). With any of them on the work hangs on its mat, scaled so it and one strip fit (never cropped, never a placard over it), centred, with equal outer margins; the strip runs under it on one baseline, no hairlines, no headings, three text sizes (the day number, a medium size, a small size).
+
+| Group | Content |
+|---|---|
+| Left | The day number, then weekday over month (account language and zone, `trmnl.user`) |
+| Middle | The weather: temperature over a short forecast (Open-Meteo, no key, English). The agenda replaces it: up to two events, time over text (tomorrow's carry the weekday: "Wed 9:00 AM"; all-day events "All day"; the account language's clock); with both on, the weather and the next single event |
+| Right | The museum label: title over "ARTIST . year . museum" (the technique is left out when the info is on) |
+
+The groups stand on the work's edges (when it is at least 55 % of the slot wide and all groups fit there), else on the slot's margins. A group that is off leaves its place empty: nothing re-centres. The museum label goes first when the strip is too narrow, then the text size drops a tier.
 
 | Rule | Detail |
 |---|---|
-| Place | `infoPlace` hangs the work for each place (`galleryFor`) and takes the larger picture; a block below needs the work wide enough for its parts (one row, else the date over the text), a column needs the screen's room. A slot lower than 300 CSS px has no info |
-| Text size | Four tiers named by the slot's height (`INFO_TIERS`); the column and block sizes per tier are `INFO_COL_W`, `INFO_BLOCK_H`, `INFO_PART_H`; never text below the label's size |
+| The Frame has its own path | `trmnl.device.model == "frame"` (or the 2560 x 1440 it reports) takes tier `f` (landscape) or `g` (portrait): Framework sizes by name (day number `value--xxxlarge`, medium `value--large`, small `label--xxlarge`), no outline around the work (the mat alone frames it), a 60 px margin. Every other screen keeps the breakpoint tiers (`INFO_TIERS`); `tests/golden_spec.rb` holds their renders |
+| Text sizes | Tiers xl, l, m, s are named by the slot's height in CSS px; `INFO_SIZES` has the strip height, gap, margin and the widths of the groups per tier. A slot lower than 300 CSS px has no info |
 | No location from TRMNL | `trmnl.user` has a language, a time zone and an offset, no coordinates: the weather location is a setting, looked up once and kept in the state |
 | Weather and calendar are best effort | One request each, run while the data is fetched, a 3.2 s deadline; a failure leaves that part out and never shows an error |
 | Calendar size | At most 2 MB is read (a calendar with years of history may be larger: no agenda). Recurring events are expanded for today and tomorrow only: DAILY, WEEKLY, MONTHLY, YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (also 1MO, -1FR), BYMONTHDAY, BYMONTH; EXDATE, RECURRENCE-ID and STATUS:CANCELLED are honoured. Outlook's Windows time zone names are mapped for the common zones |

@@ -236,3 +236,17 @@ test('yearInfo: a decade is the decade (1885 at decade precision is 1880s), ever
   }
   for (const bad of ['1885s', '-470s', '-14undefined century', 'undefined', '']) assert.ok(!YEAR_LABEL_RE.test(bad), bad);
 });
+
+test('png: a JPEG, TIFF or WebP file is preferred over a PNG; the step of a PNG-only work is the widest within the byte budget', async () => {
+  const { preferNonPng, pngStepFor, isPng, PNG_BYTE_BUDGET } = await import('../commons.mjs');
+  assert.strictEqual(preferNonPng(['A.png', 'B.jpg']), 'B.jpg');
+  assert.strictEqual(preferNonPng(['A.png', 'B.PNG', 'C.tif']), 'C.tif');
+  assert.strictEqual(preferNonPng(['A.png', 'B.png']), 'A.png', 'a PNG only: the first');
+  assert.ok(isPng('x.PNG') && !isPng('x.png.jpg'));
+  assert.strictEqual(pngStepFor({ 960: 900000, 500: 300000, 250: 90000 }, 3000), 960, 'within the budget at 960');
+  assert.strictEqual(pngStepFor({ 960: 2300000, 500: 700000, 250: 90000 }, 3000), 500, 'too heavy at 960');
+  assert.strictEqual(pngStepFor({ 960: 2300000, 500: 1500000, 250: 400000 }, 3000), 250);
+  assert.strictEqual(pngStepFor({ 960: 2300000, 500: 1500000, 250: 1200000 }, 3000), 250, 'the narrowest when none fits');
+  assert.strictEqual(pngStepFor({ 960: 2300000, 500: 300000 }, 600), 500, 'never wider than the file');
+  assert.strictEqual(PNG_BYTE_BUDGET, 1000000);
+});

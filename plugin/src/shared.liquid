@@ -1,4 +1,4 @@
-{% comment %} Masterworks. No title bar. The "work" template draws one work; "main" draws the primary and, when there is one, a hidden backup (see main). Each work is drawn per view as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with a thin bevel line and a museum label (title, ARTIST and year, technique and where it hangs); full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp) with the text colour on every element. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
+{% comment %} Masterworks. No title bar. The "work" template draws one work; "main" draws the primary and, when there is one, a hidden backup (see main). Each work is drawn per view as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with no outline and a museum label (title, ARTIST and year, technique and where it hangs); full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp) with the text colour on every element. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
 {% template work %}
 {% assign gv = geo[vname] %}
 {% comment %} THE ONE PLACE that sizes text by screen. Known TRMNL bug: the Frame (2560 px, screen--frame) carries screen--md, not screen--lg, so lg: prefixes never apply to it and its Framework text is OG-sized on a 2560 px canvas. Until TRMNL fixes the class, a Frame (trmnl.device.model, or art.kind from the reported size) gets the largest Framework sizes; the X is lg and uses lg: prefixes. When the class is fixed, replace this branch with lg: prefixes and delete it. {% endcomment %}
@@ -31,7 +31,7 @@
   </div>
 </div>
 {% else %}
-{% comment %} mat, ink and bevel are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
+{% comment %} mat and ink are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
 {% assign gl = gv.gallery %}
 {% if art.mat == "black" %}
   {% assign mat = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
@@ -39,28 +39,20 @@
   {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
 {% capture bevel %}
-    {% comment %} the bevel: an outer line in the opposite colour, then a gap of mat colour, then the picture; the box is whole-percent sized and the picture covers it {% endcomment %}
-    <div class="{{ edge }} p--0.5 w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
-      <div class="{{ mat }} p--0.5 w--full h--full">
-        <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
-      </div>
+    {% comment %} the picture in a whole-percent sized box on the mat: no outline, the mat alone frames the work (owner 2026-11-17); the picture covers its box {% endcomment %}
+    <div class="{{ mat }} w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
+      <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
     </div>
 {% endcapture %}
-<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}">
-  {% if inf and inf.place == "side" %}
-  {% comment %} the info beside the work, like a wall label: one block aligned to the picture's bottom edge {% endcomment %}
-  <div class="flex flex--row flex--bottom gap--xlarge" data-info-place="side">
+<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}"{% if art.kind == "big" or trmnl.device.model == "frame" %} data-frame="1"{% endif %}>
+  {% assign frame = false %}{% if art.kind == "big" or trmnl.device.model == "frame" %}{% assign frame = true %}{% endif %}
+  {% if inf %}
+  {% comment %} the info is one strip under the work: the work and the strip are one group, centred on the mat; the strip's cap line is a fixed gap under the work {% endcomment %}
+  <div class="flex flex--col flex--center-x gap--none w--full" data-info-place="below">
     {{ bevel }}
-    <div class="flex flex--col flex--left gap--medium w--[{{ inf.colw }}cqw]" data-info-block="side">
-      {% render "info", inf:inf, info:info, art:art, ink:ink, edge:edge, side:true %}
-    </div>
-  </div>
-  {% elsif inf %}
-  {% comment %} the info below the work: one block as wide as the picture, so its edges are the picture's edges {% endcomment %}
-  <div class="flex flex--col flex--center-x flex--center-y gap--none" data-info-place="below">
-    {{ bevel }}
-    <div class="flex flex--col w--[{{ gl.a }}cqw] {{ lpad }}" data-info-block="below">
-      {% render "info", inf:inf, info:info, art:art, ink:ink, edge:edge, side:false %}
+    <div class="w--full h--[{{ inf.gap }}px]"></div>
+    <div class="flex flex--row flex--bottom w--[{{ inf.stripw }}cqw]" data-info-block="below">
+      {% render "info", inf:inf, info:info, art:art, ink:ink, frame:frame %}
     </div>
   </div>
   {% else %}
@@ -80,82 +72,51 @@
 {% endtemplate %}
 
 {% template info %}
-{% comment %} The info as part of the museum label: the same type, the same ink, no boxes, no icons. In a fixed order: the date (the day number is the one large anchor), the weather as one sentence, the agenda, then the museum label. Hairlines only between parts. Sizes are one of four tiers named by the transform from the slot's height in CSS px (the Frame is drawn 1:1, so its tier is the largest). {% endcomment %}
+{% comment %} The info strip: one row on one baseline, three groups in fixed positions (the date at the left, the weather or the agenda in the middle, the museum label at the right), no hairlines, no headings. Three sizes only: the day number, a medium one (weekday and month, temperature, event text, label title) and a small one (forecast, event time, artist line). The Frame (tier f, g) gets Framework sizes by name; the other screens by the tier the transform names from the slot's height in CSS px. Every text span carries its colour class. {% endcomment %}
+{% assign tbase = "title" %}
 {% case inf.tier %}
-{% when "xl" %}{% assign ncls = "value--tera" %}{% if side %}{% assign ncls = "value--giga" %}{% endif %}{% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign lcls = "label--large" %}
-{% when "l" %}{% assign ncls = "value--giga" %}{% if side %}{% assign ncls = "value--mega" %}{% endif %}{% assign tcls = "title--xlarge" %}{% assign acls = "label--large" %}{% assign lcls = "label--base" %}
-{% when "m" %}{% assign ncls = "value--xxlarge" %}{% if side %}{% assign ncls = "value--xlarge" %}{% endif %}{% assign tcls = "title--base" %}{% assign acls = "label--base" %}{% assign lcls = "label--small" %}
-{% else %}{% assign ncls = "value--large" %}{% assign tcls = "title--small" %}{% assign acls = "label--small" %}{% assign lcls = "label--small" %}
+{% when "f" %}{% assign tbase = "value" %}{% assign ncls = "value--xxxlarge" %}{% assign mcls = "value--large" %}{% assign scls = "label--xxlarge" %}
+{% when "g" %}{% assign tbase = "value" %}{% assign ncls = "value--xxlarge" %}{% assign mcls = "value--base" %}{% assign scls = "label--xlarge" %}
+{% when "xl" %}{% assign ncls = "value--xxlarge" %}{% assign mcls = "title--xxlarge" %}{% assign scls = "label--xlarge" %}
+{% when "l" %}{% assign ncls = "value--xlarge" %}{% assign mcls = "title--xlarge" %}{% assign scls = "label--large" %}
+{% when "m" %}{% assign ncls = "value--large" %}{% assign mcls = "title--base" %}{% assign scls = "label--base" %}
+{% else %}{% assign ncls = "value--base" %}{% assign mcls = "title--small" %}{% assign scls = "label--small" %}
 {% endcase %}
-{% capture date_part %}
-    <div class="flex flex--row flex--center-y gap--large" data-info="date">
-      <span class="value {{ ncls }} {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
-      <div class="flex flex--col flex--left gap--none">
-        <span class="title {{ tcls }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
-        <span class="title {{ tcls }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
-      </div>
+<div class="flex flex--row flex--bottom w--[{{ inf.lw }}cqw] shrink--0" data-slot="left">
+  {% if info.has_date %}
+  <div class="flex flex--row flex--bottom gap--medium" data-info="date">
+    <span class="value {{ ncls }} {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
+    <div class="flex flex--col flex--left gap--none">
+      <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
+      <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
     </div>
-{% endcapture %}
-{% capture weather_part %}
-    <div class="flex flex--col flex--left gap--none" data-info="weather">
-      <span class="title {{ tcls }} {{ ink }} block text--left value--tnums" data-temp="1">{{ info.temp | escape }}</span>
-      <span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>
-    </div>
-{% endcapture %}
-{% capture agenda_part %}
-    <div class="flex flex--col flex--left gap--small w--full" data-info="agenda" data-agenda="{{ info.agenda.day }}">
-      {% if info.agenda.label != blank %}<span class="label {{ acls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-agenda-day="1">{{ info.agenda.label | escape }}</span>{% endif %}
-      {% for ev in info.agenda.items %}
-      <div class="flex flex--row flex--top gap--medium" data-event="1">
-        <span class="label {{ acls }} {{ ink }} value--tnums" data-event-time="1">{{ ev.time | escape }}</span>
-        <div class="flex flex--col flex--left gap--none grow">
-          <span class="title {{ tcls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
-          {% if ev.loc != blank %}<span class="label {{ acls }} {{ ink }} text--left" data-clamp="1" data-clamp-lg="2" data-event-loc="1">{{ ev.loc | escape }}</span>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-{% endcapture %}
-{% if side or inf.arrange == "stack" %}{% assign talign = "text--left" %}{% assign lalign = "left" %}{% else %}{% assign talign = "text--right" %}{% assign lalign = "right" %}{% endif %}
-{% capture label_part %}
-    <div class="flex flex--col flex--{{ lalign }} gap--none {% if side or inf.arrange == "stack" %}w--full{% else %}grow{% endif %}" data-label="1">
-      <span class="title {{ tcls }} {{ ink }} block w--full {{ talign }}" data-clamp="2" data-clamp-lg="2">{{ art.title | escape }}</span>
-      <span class="label {{ acls }} {{ ink }} block w--full {{ talign }}" data-clamp="1" data-clamp-lg="2">{{ inf.who | escape }}</span>
-      {% if inf.detail != blank %}<span class="label {{ lcls }} {{ ink }} block w--full {{ talign }}" data-clamp="1" data-clamp-lg="2">{{ inf.detail | escape }}</span>{% endif %}
-    </div>
-{% endcapture %}
-{% if side %}
-{% comment %} a column: the parts one under the other, hairlines between them, the museum label last (the block ends on the picture's bottom edge) {% endcomment %}
-{% if info.has_date %}{{ date_part }}{% endif %}
-{% if info.has_date and info.has_weather %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{% endif %}
-{% if info.has_weather %}{{ weather_part }}{% endif %}
-{% if info.has_agenda %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ agenda_part }}{% endif %}
-{% if inf.label %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ label_part }}{% endif %}
-{% elsif inf.arrange == "stack" %}
-{% comment %} a narrow work: the date over the text, the museum label under them at the right edge {% endcomment %}
-<div class="flex flex--col flex--left gap--medium w--full">
-  {% if info.has_date %}{{ date_part }}{% endif %}
-  {% if info.has_date and info.has_weather or info.has_date and info.has_agenda %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{% endif %}
-  {% if info.has_weather %}{{ weather_part }}{% endif %}
-  {% if info.has_agenda %}{{ agenda_part }}{% endif %}
-  {% if inf.label %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ label_part }}{% endif %}
-</div>
-{% else %}
-{% comment %} a row under the picture: the date anchor, a hairline, the weather sentence over the agenda, the museum label at the right edge {% endcomment %}
-<div class="flex flex--row flex--bottom flex--between gap--large w--full">
-  <div class="flex flex--row flex--center-y gap--xlarge">
-    {% if info.has_date %}{{ date_part }}{% endif %}
-    {% if info.has_date and info.has_weather or info.has_date and info.has_agenda %}<div class="w--[1px] h--[{{ inf.rule }}cqh] {{ edge }}" data-rule="1"></div>{% endif %}
-    {% if info.has_weather or info.has_agenda %}
-    <div class="flex flex--col flex--left gap--medium">
-      {% if info.has_weather %}{{ weather_part }}{% endif %}
-      {% if info.has_agenda %}{{ agenda_part }}{% endif %}
-    </div>
-    {% endif %}
   </div>
-  {% if inf.label %}{{ label_part }}{% endif %}
+  {% endif %}
+</div>
+{% if inf.midcols > 0 %}
+<div class="flex flex--row flex--bottom gap--large" data-slot="middle">
+  {% if info.has_weather %}
+  <div class="flex flex--col flex--left gap--none w--[{{ inf.mw }}cqw]" data-info="weather">
+    <span class="{{ tbase }} {{ mcls }} {{ ink }} block text--left value--tnums" data-temp="1">{{ info.temp | escape }}</span>
+    <span class="label {{ scls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>
+  </div>
+  {% endif %}
+  {% if info.has_agenda %}
+  {% for ev in info.agenda.items %}
+  <div class="flex flex--col flex--left gap--none w--[{{ inf.mw }}cqw]" data-info="agenda" data-event="1" data-agenda="{{ info.agenda.day }}">
+    <span class="label {{ scls }} {{ ink }} block text--left value--tnums" data-clamp="1" data-clamp-lg="2" data-event-time="1">{{ ev.time | escape }}</span>
+    <span class="{{ tbase }} {{ mcls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
+  </div>
+  {% endfor %}
+  {% endif %}
 </div>
 {% endif %}
+<div class="flex flex--col flex--right gap--none grow" data-slot="right">
+  {% if inf.label %}
+  <span class="{{ tbase }} {{ mcls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2" data-label="1">{{ art.title | escape }}</span>
+  <span class="label {{ scls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ inf.who | escape }}</span>
+  {% endif %}
+</div>
 {% endtemplate %}
 
 {% template main %}
