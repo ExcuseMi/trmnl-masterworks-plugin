@@ -7,10 +7,10 @@
 {% else %}
   {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}{% assign ppad = "px--3 py--2" %}
 {% endif %}
-{% assign st = gv.strip %}
+{% assign inf = gv.info %}
 {% if gv.mode == "full" %}
-<div class="layout {% if st %}layout--col gap--none{% else %}layout--center{% endif %} p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
-  <div class="relative w--full {% if st %}h--[{{ st.band }}cqh]{% else %}h--full{% endif %} bg--white">
+<div class="layout layout--center p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
+  <div class="relative w--full h--full bg--white">
     <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
     {% assign pl = gv.plate %}
     {% if pl %}
@@ -29,7 +29,6 @@
     </div>
     {% endif %}
   </div>
-  {% if st %}{% render "strip", st:st, info:info, art:art, mat:"bg--white dark:bg--black", edge:"bg--black dark:bg--white", ink:"text--black dark:text--white" %}{% endif %}
 </div>
 {% else %}
 {% comment %} mat, ink and bevel are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
@@ -39,14 +38,34 @@
 {% else %}
   {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
-<div class="layout layout--col {% unless st %}layout--center{% endunless %} gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}">
-  <div class="flex flex--col flex--center-x {% if st %}flex--center-y w--full h--[{{ st.band }}cqh]{% endif %} gap--none">
+{% capture bevel %}
     {% comment %} the bevel: an outer line in the opposite colour, then a gap of mat colour, then the picture; the box is whole-percent sized and the picture covers it {% endcomment %}
     <div class="{{ edge }} p--0.5 w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
       <div class="{{ mat }} p--0.5 w--full h--full">
         <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
       </div>
     </div>
+{% endcapture %}
+<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}">
+  {% if inf and inf.place == "side" %}
+  {% comment %} the info beside the work, like a wall label: one block aligned to the picture's bottom edge {% endcomment %}
+  <div class="flex flex--row flex--bottom gap--xlarge" data-info-place="side">
+    {{ bevel }}
+    <div class="flex flex--col flex--left gap--medium w--[{{ inf.colw }}cqw]" data-info-block="side">
+      {% render "info", inf:inf, info:info, art:art, ink:ink, edge:edge, side:true %}
+    </div>
+  </div>
+  {% elsif inf %}
+  {% comment %} the info below the work: one block as wide as the picture, so its edges are the picture's edges {% endcomment %}
+  <div class="flex flex--col flex--center-x flex--center-y gap--none" data-info-place="below">
+    {{ bevel }}
+    <div class="flex flex--col w--[{{ gl.a }}cqw] {{ lpad }}" data-info-block="below">
+      {% render "info", inf:inf, info:info, art:art, ink:ink, edge:edge, side:false %}
+    </div>
+  </div>
+  {% else %}
+  <div class="flex flex--col flex--center-x gap--none">
+    {{ bevel }}
     {% if gl.label %}
     <div class="flex flex--col flex--right gap--none w--[{{ gl.a }}cqw] {{ lpad }}" data-label="1">
       <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}" data-clamp-lg="2">{{ art.title | escape }}</span>
@@ -55,85 +74,85 @@
     </div>
     {% endif %}
   </div>
-  {% if st %}{% render "strip", st:st, info:info, art:art, mat:mat, edge:edge, ink:ink %}{% endif %}
+  {% endif %}
 </div>
 {% endif %}
 {% endtemplate %}
 
-{% template strip %}
-{% comment %} The info strip: the day, the weather and the museum label on the picture's mat (white under a work that fills the view). Sizes come from the tier the transform names by the strip's height in CSS px (the Frame is drawn 1:1, so its tier is the largest); every text span carries its colour class, and the rules are 2 px lines in the opposite colour. {% endcomment %}
-{% case st.tier %}
-{% when "xl" %}{% assign ncls = "value--tera" %}{% assign dcls = "value--xlarge" %}{% assign wcls = "value--xxlarge" %}{% assign fcls = "title--xxlarge" %}{% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign lcls = "label--large" %}{% assign pad = "px--12" %}
-{% when "l" %}{% assign ncls = "value--mega" %}{% assign dcls = "value--large" %}{% assign wcls = "value--xlarge" %}{% assign fcls = "title--xlarge" %}{% assign tcls = "title--xlarge" %}{% assign acls = "label--large" %}{% assign lcls = "label--base" %}{% assign pad = "px--8" %}
-{% when "m" %}{% assign ncls = "value--xxlarge" %}{% assign dcls = "value--base" %}{% assign wcls = "value--large" %}{% assign fcls = "title--small" %}{% assign tcls = "title--small" %}{% assign acls = "label--small" %}{% assign lcls = "label--small" %}{% assign pad = "px--6" %}
-{% else %}{% assign ncls = "value--large" %}{% assign dcls = "value--small" %}{% assign wcls = "value--base" %}{% assign fcls = "label--small" %}{% assign tcls = "title--small" %}{% assign acls = "label--small" %}{% assign lcls = "label--small" %}{% assign pad = "px--4" %}
+{% template info %}
+{% comment %} The info as part of the museum label: the same type, the same ink, no boxes, no icons. In a fixed order: the date (the day number is the one large anchor), the weather as one sentence, the agenda, then the museum label. Hairlines only between parts. Sizes are one of four tiers named by the transform from the slot's height in CSS px (the Frame is drawn 1:1, so its tier is the largest). {% endcomment %}
+{% case inf.tier %}
+{% when "xl" %}{% assign ncls = "value--tera" %}{% if side %}{% assign ncls = "value--giga" %}{% endif %}{% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign lcls = "label--large" %}
+{% when "l" %}{% assign ncls = "value--giga" %}{% if side %}{% assign ncls = "value--mega" %}{% endif %}{% assign tcls = "title--xlarge" %}{% assign acls = "label--large" %}{% assign lcls = "label--base" %}
+{% when "m" %}{% assign ncls = "value--xxlarge" %}{% if side %}{% assign ncls = "value--xlarge" %}{% endif %}{% assign tcls = "title--base" %}{% assign acls = "label--base" %}{% assign lcls = "label--small" %}
+{% else %}{% assign ncls = "value--large" %}{% assign tcls = "title--small" %}{% assign acls = "label--small" %}{% assign lcls = "label--small" %}
 {% endcase %}
 {% capture date_part %}
     <div class="flex flex--row flex--center-y gap--large" data-info="date">
       <span class="value {{ ncls }} {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
       <div class="flex flex--col flex--left gap--none">
-        <span class="value {{ dcls }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
-        <span class="value {{ dcls }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
+        <span class="title {{ tcls }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
+        <span class="title {{ tcls }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
       </div>
     </div>
 {% endcapture %}
 {% capture weather_part %}
-    <div class="flex flex--col flex--left gap--none" data-info="weather">
-      <span class="value {% if st.single and st.tier == "xl" %}{{ ncls }}{% else %}{{ wcls }}{% endif %} {{ ink }} value--tnums" data-temp="1">{{ info.temp | escape }}</span>
-      <span class="{% if st.single and st.tier == "xl" %}value {{ dcls }}{% else %}title {{ fcls }}{% endif %} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-forecast="1">{{ info.forecast | escape }}</span>
-    </div>
+    <span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-info="weather" data-weather="1">{{ info.weather | escape }}</span>
 {% endcapture %}
 {% capture agenda_part %}
-    <div class="flex flex--col flex--left gap--small w--[{{ st.agenda_w }}cqw]" data-info="agenda" data-agenda="{{ info.agenda.day }}">
+    <div class="flex flex--col flex--left gap--small w--full" data-info="agenda" data-agenda="{{ info.agenda.day }}">
       {% if info.agenda.label != blank %}<span class="label {{ lcls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-agenda-day="1">{{ info.agenda.label | escape }}</span>{% endif %}
       {% for ev in info.agenda.items %}
       <div class="flex flex--row flex--top gap--medium" data-event="1">
         <span class="label {{ acls }} {{ ink }} value--tnums" data-event-time="1">{{ ev.time | escape }}</span>
         <div class="flex flex--col flex--left gap--none grow">
-          <span class="title {{ fcls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
+          <span class="label {{ acls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
           {% if ev.loc != blank %}<span class="label {{ lcls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-loc="1">{{ ev.loc | escape }}</span>{% endif %}
         </div>
       </div>
-      {% else %}
-      <span class="label {{ acls }} {{ ink }}" data-clamp="1" data-clamp-lg="2" data-event-none="1">Nothing planned</span>
       {% endfor %}
     </div>
 {% endcapture %}
+{% if side or inf.arrange == "stack" %}{% assign talign = "text--left" %}{% assign lalign = "left" %}{% else %}{% assign talign = "text--right" %}{% assign lalign = "right" %}{% endif %}
 {% capture label_part %}
-    <div class="flex flex--col flex--right gap--none w--[{{ st.label_w }}cqw]" data-label="1">
-      <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="2" data-clamp-lg="2">{{ art.title | escape }}</span>
-      <span class="label {{ acls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ st.who | escape }}</span>
-      {% if st.detail != blank %}<span class="label {{ lcls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ st.detail | escape }}</span>{% endif %}
+    <div class="flex flex--col flex--{{ lalign }} gap--none {% if side or inf.arrange == "stack" %}w--full{% else %}grow{% endif %}" data-label="1">
+      <span class="title {{ tcls }} {{ ink }} block w--full {{ talign }}" data-clamp="2" data-clamp-lg="2">{{ art.title | escape }}</span>
+      <span class="label {{ acls }} {{ ink }} block w--full {{ talign }}" data-clamp="1" data-clamp-lg="2">{{ inf.who | escape }}</span>
+      {% if inf.detail != blank %}<span class="label {{ lcls }} {{ ink }} block w--full {{ talign }}" data-clamp="1" data-clamp-lg="2">{{ inf.detail | escape }}</span>{% endif %}
     </div>
 {% endcapture %}
-{% assign rule_v = '<div class="w--[2px] h--[' | append: st.rule | append: 'cqh] ' | append: edge | append: '" data-rule="1"></div>' %}
-<div class="flex flex--col w--full h--[{{ st.pct }}cqh] gap--none {{ mat }}" data-strip="{{ st.rows }}">
-  <div class="w--full h--[2px] {{ edge }}" data-rule="1"></div>
-  {% if st.rows == 2 %}
-  <div class="flex flex--col w--full grow {{ pad }} flex--center-y gap--medium">
-    <div class="flex flex--row flex--center-y gap--xlarge">
-      {% if info.has_date %}{{ date_part }}{% endif %}
-      {% if info.has_date and info.has_weather %}{{ rule_v }}{% endif %}
-      {% if info.has_weather %}{{ weather_part }}{% endif %}
-    </div>
-    <div class="flex flex--row flex--center-y flex--between w--full gap--large">
-      {% if info.has_agenda %}{{ agenda_part }}{% endif %}
-      {% if st.label %}{{ label_part }}{% endif %}
-    </div>
-  </div>
-  {% else %}
-  <div class="flex flex--row flex--center-y flex--between w--full grow gap--large {{ pad }}">
-    <div class="flex flex--row flex--center-y gap--xlarge">
-      {% if info.has_date %}{{ date_part }}{% endif %}
-      {% if info.has_date and info.has_weather %}{{ rule_v }}{% endif %}
-      {% if info.has_weather %}{{ weather_part }}{% endif %}
-      {% if info.has_agenda and info.has_date or info.has_agenda and info.has_weather %}{{ rule_v }}{% endif %}
-      {% if info.has_agenda %}{{ agenda_part }}{% endif %}
-    </div>
-    {% if st.label %}{{ label_part }}{% endif %}
-  </div>
-  {% endif %}
+{% if side %}
+{% comment %} a column: the parts one under the other, hairlines between them, the museum label last (the block ends on the picture's bottom edge) {% endcomment %}
+{% if info.has_date %}{{ date_part }}{% endif %}
+{% if info.has_date and info.has_weather %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{% endif %}
+{% if info.has_weather %}{{ weather_part }}{% endif %}
+{% if info.has_agenda %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ agenda_part }}{% endif %}
+{% if inf.label %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ label_part }}{% endif %}
+{% elsif inf.arrange == "stack" %}
+{% comment %} a narrow work: the date over the text, the museum label under them at the right edge {% endcomment %}
+<div class="flex flex--col flex--left gap--medium w--full">
+  {% if info.has_date %}{{ date_part }}{% endif %}
+  {% if info.has_date and info.has_weather or info.has_date and info.has_agenda %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{% endif %}
+  {% if info.has_weather %}{{ weather_part }}{% endif %}
+  {% if info.has_agenda %}{{ agenda_part }}{% endif %}
+  {% if inf.label %}<div class="w--full h--[1px] {{ edge }}" data-rule="1"></div>{{ label_part }}{% endif %}
 </div>
+{% else %}
+{% comment %} a row under the picture: the date anchor, a hairline, the weather sentence over the agenda, the museum label at the right edge {% endcomment %}
+<div class="flex flex--row flex--bottom flex--between gap--large w--full">
+  <div class="flex flex--row flex--center-y gap--xlarge">
+    {% if info.has_date %}{{ date_part }}{% endif %}
+    {% if info.has_date and info.has_weather or info.has_date and info.has_agenda %}<div class="w--[1px] h--[{{ inf.rule }}cqh] {{ edge }}" data-rule="1"></div>{% endif %}
+    {% if info.has_weather or info.has_agenda %}
+    <div class="flex flex--col flex--left gap--medium">
+      {% if info.has_weather %}{{ weather_part }}{% endif %}
+      {% if info.has_agenda %}{{ agenda_part }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% if inf.label %}{{ label_part }}{% endif %}
+</div>
+{% endif %}
 {% endtemplate %}
 
 {% template main %}

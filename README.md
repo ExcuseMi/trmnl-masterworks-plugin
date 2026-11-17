@@ -50,16 +50,18 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 | Selection | Family friendly | On | Leaves out works whose subject is nudity or graphic violence |
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |
 | Selection | Period | All | Ten movements, such as Renaissance, Baroque, Impressionism |
-| Info strip | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the strip appears when any has something to show |
-| Info strip | Weather location, Temperature unit | Empty, Auto | A place name or `lat, lon` (TRMNL does not share a location); Auto is Fahrenheit for a US account language |
-| Info strip | Calendar (ICS link) | Empty | A private ICS address; a secret: never shown, logged or put in the output |
+| Info | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the info appears when any part has something to show |
+| Info | Weather location, Temperature unit | Empty, Auto | A place name or `lat, lon` (TRMNL does not share a location); Auto is Fahrenheit for a US account language |
+| Info | Calendar (ICS link) | Empty | A private ICS address; a secret: never shown, logged or put in the output |
 
-## The info strip
+## The info (date, weather, agenda)
 
-A calm strip at the bottom of a view (about 27 % of a landscape screen, 14 % of a portrait one; none in a slot too small for it). The work is picked and hung for the band above it, and the museum label moves into the strip (dropped when the parts leave no room). Only the parts that are on and have content are laid out: day number with weekday and month (account language and time zone, `trmnl.user`), temperature with one forecast line (Open-Meteo, no key, English), the next two events of today (tomorrow's from 18:00 or when none is left; all-day events as "All day"; times in the account language's clock). Text sizes are one of four tiers named by the strip's height (`STRIP_TIERS`), and `STRIP_NEED` says how wide each part is at each tier: parts that do not fit one row go to two, then the label is dropped.
+Three toggles, each off by default; any combination lays out only what is on and has something to show (nothing relevant, nothing shown: no filler). The info goes where the work leaves room, in one of two places: a column beside it (a tall work on a wide screen, like a wall label) or a block below it, whichever keeps the larger picture. The work is never cropped to make room and always hangs on its mat (no placard over it); the museum label joins the info as one block aligned to the picture's edge, in the label's type and ink, with hairlines between the parts and no boxes or icons. Order: the date (the day number is the large anchor, weekday and month in the account language and zone), the weather as one sentence (`8°, rain by noon`, `Dry, 4° to 11°`; Open-Meteo, no key, English), the agenda (next two events of today, tomorrow's labelled from 18:00 or when none is left; all-day events as "All day"; times in the account language's clock).
 
-| Limit | Detail |
+| Rule | Detail |
 |---|---|
+| Place | `infoPlace` hangs the work for each place (`galleryFor`) and takes the larger picture; a block below needs the work wide enough for its parts (one row, else the date over the text), a column needs the screen's room. A slot lower than 300 CSS px has no info |
+| Text size | Four tiers named by the slot's height (`INFO_TIERS`); the column and block sizes per tier are `INFO_COL_W`, `INFO_BLOCK_H`, `INFO_PART_H`; never text below the label's size |
 | No location from TRMNL | `trmnl.user` has a language, a time zone and an offset, no coordinates: the weather location is a setting, looked up once and kept in the state |
 | Weather and calendar are best effort | One request each, run while the data is fetched, a 3.2 s deadline; a failure leaves that part out and never shows an error |
 | Calendar size | At most 2 MB is read (a calendar with years of history may be larger: no agenda). Recurring events are expanded for today and tomorrow only: DAILY, WEEKLY, MONTHLY, YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (also 1MO, -1FR), BYMONTHDAY, BYMONTH; EXDATE, RECURRENCE-ID and STATUS:CANCELLED are honoured. Outlook's Windows time zone names are mapped for the common zones |

@@ -48,6 +48,19 @@ test('forecast line: dry days, clear skies, fog; only the rest of today counts',
   assert.strictEqual(line(tomorrow, 8), 'Dry all day', 'tomorrow does not count');
 });
 
+test('weather sentence: one short sentence with the temperatures, no icons', () => {
+  const w = t.weatherSentence;
+  assert.strictEqual(w('Rain by noon', '8\u00b0', '4\u00b0', '11\u00b0'), '8\u00b0, rain by noon');
+  assert.strictEqual(w('Snow tonight', '-1\u00b0', '-3\u00b0', '0\u00b0'), '-1\u00b0, snow tonight');
+  assert.strictEqual(w('Rain until noon', '8\u00b0', '', ''), '8\u00b0, rain until noon');
+  assert.strictEqual(w('Dry all day', '8\u00b0', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Dry tonight', '8\u00b0', '4\u00b0', '11\u00b0'), 'Dry, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Sunny all day', '8\u00b0', '4\u00b0', '11\u00b0'), 'Sunny, 4\u00b0 to 11\u00b0');
+  assert.strictEqual(w('Clear tonight', '8\u00b0', '', ''), 'Clear, 8\u00b0', 'no daily range: the temperature now');
+  assert.strictEqual(w('Fog', '8\u00b0', '8\u00b0', '8\u00b0'), 'Fog, 8\u00b0');
+  assert.ok(!/[^\x20-\x7e\u00b0]/.test(w('Dry all day', '8\u00b0', '4\u00b0', '11\u00b0')), 'no icons or symbols but the degree sign');
+});
+
 test('day: number, weekday and month in the account language and zone', () => {
   const now = Date.UTC(2026, 10, 5, 23, 30); // 5 Nov 23:30 UTC = 6 Nov in Brussels
   assert.deepStrictEqual(t.dayInfo(now, 'en', { zone: 'UTC', shift: 0 }), { day: '5', weekday: 'Thursday', month: 'November', hour: 23, iso: '2026-11-05T23:30' });
@@ -76,7 +89,7 @@ test('location: "lat,lon" is used as given, anything else is a place name', () =
   assert.strictEqual(t.latLon('95, 2'), null);
 });
 
-const FORECAST = { current: { time: '2026-11-17T08:00', temperature_2m: 7.6, weather_code: 3 }, hourly: { time: day(Array(24).fill(0)), weather_code: Array.from({ length: 24 }, (_, h) => (h === 11 ? 61 : 3)) } };
+const FORECAST = { daily: { temperature_2m_max: [11.2], temperature_2m_min: [4.4] }, current: { time: '2026-11-17T08:00', temperature_2m: 7.6, weather_code: 3 }, hourly: { time: day(Array(24).fill(0)), weather_code: Array.from({ length: 24 }, (_, h) => (h === 11 ? 61 : 3)) } };
 const reply = (j) => async () => ({ ok: true, status: 200, json: async () => j });
 const SET = { weather_location: 'Paris', temperature_unit: 'auto' };
 
@@ -84,9 +97,11 @@ test('fetchWeather: a place name is geocoded once, the forecast asked in the uni
   const asked = [];
   globalThis.fetch = async (url) => { asked.push(url); return reply(/geocoding/.test(url) ? { results: [{ latitude: 48.85, longitude: 2.35 }] } : FORECAST)(); };
   const w = await t.fetchWeather(SET, 'en-US', { zone: 'Europe/Paris', shift: 0 }, '2026-11-17T08:00', null);
-  assert.deepStrictEqual([w.temp, w.line, w.loc], ['8°', 'Rain by noon', { q: 'Paris', lat: 48.85, lon: 2.35 }]);
+  assert.deepStrictEqual([w.text, w.loc], ['8°, rain by noon', { q: 'Paris', lat: 48.85, lon: 2.35 }]);
   assert.strictEqual(asked.length, 2);
   assert.match(asked[1], /temperature_unit=fahrenheit/);
+  assert.match(asked[1], /daily=temperature_2m_max,temperature_2m_min/);
+  assert.match(asked[1], /daily=temperature_2m_max,temperature_2m_min/);
   assert.match(asked[1], /latitude=48.85&longitude=2.35/);
   assert.match(asked[1], /timezone=Europe%2FParis/);
   asked.length = 0;
@@ -116,7 +131,7 @@ const runWith = async (fields, wxFetch) => {
 test('run: all three parts off: no info and no strip (the label stays under the picture)', async () => {
   const out = await runWith({}, reply(FORECAST));
   assert.strictEqual(out.info, null);
-  assert.strictEqual(out.geo.full.strip, null);
+  assert.strictEqual(out.geo.full.info, null);
 });
 
 test('run: date only needs no network and no location; weather without a location shows the date only', async () => {
@@ -125,7 +140,7 @@ test('run: date only needs no network and no location; weather without a locatio
   assert.strictEqual(asked, 0);
   assert.ok(out.info.day && out.info.weekday && out.info.month);
   assert.strictEqual(out.info.has_weather, false);
-  assert.ok(out.geo.full.strip, 'the strip is there');
+  assert.ok(out.geo.full.info, 'the info has a place');
   const nowhere = await runWith({ show_weather: 'true' }, async () => { asked++; return reply(FORECAST)(); });
   assert.strictEqual(asked, 0, 'no location: no request');
   assert.strictEqual(nowhere.info, null, 'weather on with no location and no other part: no strip');
@@ -135,7 +150,7 @@ test('run: date only needs no network and no location; weather without a locatio
 
 test('run: weather on, the temperature and the line are in the merge variables and the location in the state', async () => {
   const out = await runWith({ show_weather: 'true', weather_location: '48.85, 2.35' }, reply(FORECAST));
-  assert.deepStrictEqual([out.info.temp, out.info.forecast, out.info.has_weather, out.info.has_date], ['8\u00b0', 'Rain by noon', true, false]);
+  assert.deepStrictEqual([out.info.weather, out.info.has_weather, out.info.has_date], ['8\u00b0, rain by noon', true, false]);
   assert.deepStrictEqual(out.trmnl_state.loc, { q: '48.85, 2.35', lat: 48.85, lon: 2.35 });
 });
 
@@ -150,28 +165,73 @@ test('run: a weather request that fails, is refused or hangs never breaks the sc
   }
 });
 
-test('run: with the strip, the work is picked and fitted for the band above it, the label moves into the strip', async () => {
+test('run: with info on the work hangs on its mat, no placard, no label under it: the label joins the info', async () => {
   const out = await runWith({ show_date: 'true' }, reply(FORECAST));
-  const st = out.geo.full.strip;
-  assert.strictEqual(st.pct + st.band, 100);
-  assert.ok(st.pct >= 25 && st.pct <= 30, `the Frame landscape strip is about a quarter: ${st.pct}`);
-  assert.strictEqual(st.who.length > 0, true, 'the label text is in the strip');
+  const inf = out.geo.full.info;
+  assert.ok(inf, 'the info has a place');
+  assert.ok(['below', 'side'].includes(inf.place));
+  assert.strictEqual(out.geo.full.mode, 'gallery');
   assert.strictEqual(out.geo.full.plate, null);
-  assert.ok(!out.geo.full.gallery || !out.geo.full.gallery.label, 'no label under the picture');
-  // the band is wider than the screen: a 16:9 work that filled the screen no longer does
-  const band = t.stripFor({ o: 'landscape' }, 2560, 1440, 1, { strip: true, blocks: { date: true, n: 1 }, label: true });
-  assert.ok(2560 / (1440 * band.band / 100) > 16 / 9);
+  assert.ok(!out.geo.full.gallery.label, 'no label under the picture');
+  assert.ok(inf.label && inf.who.length > 0, 'the label text is in the info block');
+  const off = await runWith({}, reply(FORECAST));
+  assert.strictEqual(off.geo.full.info, null);
+  assert.strictEqual(off.info, null);
 });
 
-test('stripFor: scales by view; a slot with no room has no strip', () => {
-  const D = { date: true, weather: false, agenda: false, n: 1 };
-  const s = (o, w, h, z, set = {}) => t.stripFor({ o }, w, h, z, { strip: true, blocks: D, label: true, ...set });
-  assert.strictEqual(s('landscape', 2560, 1440, 1, { strip: false }), null);
-  assert.strictEqual(s('landscape', 2560, 1440, 1).tier, 'xl');
-  assert.strictEqual(s('landscape', 800, 480, 1).tier, 'm');
-  assert.ok(s('portrait', 1440, 2560, 1).pct < s('landscape', 2560, 1440, 1).pct, 'portrait: a lower share');
-  assert.strictEqual(s('landscape', 400, 240, 1).pct, 38, 'a small quadrant gets the minimum height');
-  assert.strictEqual(s('landscape', 200, 100, 1), null, 'too small');
-  assert.strictEqual(s('landscape', 400, 480, 1).label, false, 'a narrow slot: no room for the label');
-  assert.strictEqual(s('landscape', 2560, 1440, 1, { label: false }).label, false);
+// where the info goes, for every shape of work: the shape table
+const SHAPES = { 'very wide panorama': 2.5, wide: 1.8, 'the screen\'s own shape': 16 / 9, '4:3': 4 / 3, square: 1, '3:4': 3 / 4, tall: 0.6, 'very tall scroll': 0.35 };
+const SCREENS = { 'Frame landscape': [2560, 1440, 1, 'big'], 'Frame portrait': [1440, 2560, 1, 'big'], X: [1872, 1404, 1872 / 800, 'normal'], OG: [800, 480, 1, 'normal'] };
+const ALL = { strip: true, blocks: { date: true, weather: true, agenda: true, n: 3 }, label: true };
+const area = (g) => g.pw * g.ph;
+
+test('shape table: every shape on every screen is hung whole on its mat with the info beside or below, whichever keeps the larger picture', () => {
+  for (const [sname, [sw, sh, zoom, kind]] of Object.entries(SCREENS)) {
+    for (const [name, aspect] of Object.entries(SHAPES)) {
+      const art = { w: Math.round(aspect * 1000), h: 1000, kind, title: 'A title', artist: 'Artist', medium: 'Oil on canvas', collection: 'Museum' };
+      const inf = t.infoPlace(art, sw, sh, zoom, ALL);
+      const where = `${name} on ${sname}`;
+      assert.ok(inf, `${where}: has a place`);
+      const g = inf.gallery;
+      assert.ok(Math.abs(g.pw / g.ph / aspect - 1) < 0.04, `${where}: no crop (box ${g.pw} x ${g.ph} is not ${aspect.toFixed(2)})`);
+      const block = t.INFO_BLOCK_H[inf.tier] * zoom * (inf.arrange === 'stack' ? t.INFO_STACK : 1), col = t.INFO_COL_W[inf.tier] * zoom;
+      const gap = Math.round(Math.min(sw, sh) * 0.025);
+      if (inf.place === 'below') assert.ok(g.ph + block <= sh, `${where}: the picture and the block below fit the slot`);
+      else assert.ok(g.pw + col + gap <= sw + 1, `${where}: the picture and the column beside fit the slot`);
+      assert.ok(g.pw <= sw && g.ph <= sh);
+      // no other place that has room for its text keeps a larger picture
+      const N = t.INFO_NEED[inf.tier];
+      const alt = [
+        ['row', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom }), (g2) => g2.pw / zoom >= N.date + N.text + 40],
+        ['stack', t.galleryFor(art, sw, sh, false, kind, zoom, sh, { reserve: t.INFO_BLOCK_H[inf.tier] * zoom * t.INFO_STACK }), (g2) => g2.pw / zoom >= Math.max(N.date, N.text)],
+        ['column', sw - col - gap >= 0.3 * sw ? t.galleryFor(art, sw - col - gap, sh, false, kind, zoom, sh, { pctW: sw }) : null, () => true],
+      ];
+      alt.forEach(([arr, g2, fits]) => { if (g2 && fits(g2)) assert.ok(area(g) >= area(g2) - 1, `${where}: ${inf.arrange} (${area(g)}) is not larger than ${arr} (${g2 && area(g2)})`); });
+    }
+  }
+  const at = (aspect) => t.infoPlace({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a' }, 2560, 1440, 1, ALL).place;
+  assert.deepStrictEqual([2.5, 1.8, 16 / 9, 4 / 3, 1, 0.75, 0.6, 0.35].map(at), ['below', 'side', 'side', 'side', 'side', 'side', 'side', 'side'], 'the Frame landscape: only a panorama is wide enough for the block below to keep the larger picture');
+  const portrait = (aspect) => t.infoPlace({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a' }, 1440, 2560, 1, ALL);
+  assert.strictEqual(portrait(1.8).place, 'below', 'a portrait Frame: the block below, the date over the text (too narrow for one row)');
+  assert.strictEqual(portrait(1.8).arrange, 'stack');
+  assert.strictEqual(portrait(0.35).place, 'side', 'a very tall scroll on a portrait Frame: beside');
+});
+
+test('info place: a work that would fill the screen goes on the mat, scaled down for the info; nothing is cropped', () => {
+  const art = { w: 1600, h: 900, kind: 'big', title: 't', artist: 'a' };
+  const bare = t.galleryFor(art, 2560, 1440, false, 'big', 1);
+  const inf = t.infoPlace(art, 2560, 1440, 1, ALL);
+  assert.ok(area(inf.gallery) < area(bare), 'smaller than without info');
+  assert.ok(Math.abs(inf.gallery.pw / inf.gallery.ph / (16 / 9) - 1) < 0.04, 'the whole work');
+  assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, { ...ALL, strip: false }), null);
+});
+
+test('info place: a slot too small has no info; the museum label joins when there is room, else it is left out', () => {
+  assert.strictEqual(t.infoPlace({ w: 3, h: 2, kind: 'normal', title: 't' }, 400, 240, 1, ALL), null, 'an OG quadrant');
+  assert.strictEqual(t.infoPlace({ w: 3, h: 2, kind: 'normal', title: 't' }, 200, 400, 1, ALL), null, 'too narrow');
+  const art = { w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' };
+  assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, ALL).label, true);
+  assert.strictEqual(t.infoPlace(art, 2560, 1440, 1, { ...ALL, label: false }).label, false, 'label off');
+  const narrow = t.infoPlace({ w: 1, h: 1, kind: 'normal', title: 't', artist: 'a' }, 800, 480, 1, ALL);
+  assert.ok(narrow.place === 'side' || narrow.label === false, 'no label across a narrow block below');
 });

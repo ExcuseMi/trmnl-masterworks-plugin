@@ -199,7 +199,7 @@ test('run: the agenda toggle without a link fetches nothing and shows nothing; w
   const text = cal(['UID:z', `DTSTART:${new Date(Date.now() + 36e5).toISOString().replace(/[-:]|\.\d+/g, '')}`, 'SUMMARY:Soon']);
   const some = await runWith({ show_agenda: 'true', ics_url: ICSURL }, async () => ({ ok: true, status: 200, text: async () => text }));
   assert.ok(some.out.info.has_agenda);
-  assert.ok(some.out.geo.full.strip);
+  assert.ok(some.out.geo.full.info);
 });
 
 test('run: the calendar link is never in the merge variables, the state or an error', async () => {

@@ -69,13 +69,24 @@ var LABEL_GAP_SHARE = 0.018;
 var LABEL_PX = { big: [40, 26, 21], normal: [20, 16, 16] }; // title, artist and detail sizes the markup uses (the floor of the room a label needs, and to guess how many lines a title takes)
 var LABEL_MAX_SHARE = 0.4; // a label that would need more of a slot's height than this is left out (a playdate quadrant)
 var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
-// The info strip (setting info): a calm strip at the bottom of a view with the day, and the weather. It takes STRIP_SHARE of the slot's height
-// (never less than STRIP_MIN_CSS CSS px: a slot too small for that has no strip); the work is picked and fitted for the band above it.
-var STRIP_SHARE = { landscape: 0.27, portrait: 0.14 };
-var STRIP_MIN_CSS = 90; // CSS px: below this a strip has no room
-var STRIP_MAX_SHARE = 0.4;
-var STRIP_TIERS = [[280, 'xl'], [180, 'l'], [120, 'm'], [0, 's']]; // strip height in CSS px -> the text size tier the markup uses
-var STRIP_TIER_WIDTH = 0.2; // the strip's text tier follows min(strip height, this share of the slot's width)
+// The info (date, weather, agenda) goes where the work leaves room, in exactly two places: in a column beside the work (a tall work on a
+// wide screen) or in a block below it (a wide work), whichever keeps the larger picture; the work is never cropped to make room and
+// always hangs on its mat. Text sizes are four tiers named by the slot's height in CSS px; the column and the block have a fixed
+// size per tier (never text smaller than the label's), a slot too small for the smallest has no info.
+var INFO_TIERS = [[900, 'xl'], [560, 'l'], [340, 'm'], [0, 's']];
+var INFO_BLOCK_H = { xl: 400, l: 250, m: 165, s: 115 }; // CSS px the block below the work takes, gap included
+var INFO_COL_W = { xl: 640, l: 430, m: 300, s: 215 }; // CSS px the column beside the work takes
+var INFO_NEED = { // CSS px of width the parts of the block below need: the date, the weather and agenda text, the museum label
+  xl: { date: 760, text: 620, label: 600 }, l: { date: 500, text: 420, label: 400 }, m: { date: 300, text: 270, label: 260 }, s: { date: 210, text: 200, label: 200 },
+};
+var INFO_PART_H = { // CSS px of height the parts of the column beside the work take (date, weather, agenda, museum label, a hairline with its gaps)
+  xl: { date: 240, weather: 50, agenda: 200, label: 150, rule: 26 }, l: { date: 190, weather: 40, agenda: 150, label: 110, rule: 22 },
+  m: { date: 110, weather: 30, agenda: 105, label: 80, rule: 18 }, s: { date: 70, weather: 24, agenda: 85, label: 64, rule: 14 },
+};
+var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INFO_MIN_SLOT_W, has no info
+var INFO_MIN_SLOT_W = 380;
+var INFO_STACK = 1.7; // a block below with the date over the text is this much taller
+var INFO_GAP = 0.025; // the gap between the work and its info, as a share of the slot's shorter side
 var WEATHER_MS = 1800; // one request; the whole weather step has WEATHER_DEADLINE_MS, parallel to the data fetch (the run has 5 s)
 var WEATHER_DEADLINE_MS = 3200;
 var FAHRENHEIT_REGION = /[-_](US|LR|BS|BZ|KY|PW|FM|MH)$/i; // the account has a language, not a unit: these regions use Fahrenheit
@@ -365,8 +376,10 @@ function plateFor(art, slotW, slotH, kind) {
  * nearest the work's shape is taken and the picture covers its box, so an error of a fraction of a percent is cropped,
  * never a gap), and what the label needs. withLabel false: the picture alone, centred.
  */
-function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH) {
-  pctH = pctH || slotH; // the percent classes are of the whole slot; with an info strip the picture's room (slotH) is the band above it
+function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH, opts) {
+  opts = opts || {};
+  pctH = pctH || slotH; // the percent classes are of the whole slot; with info the picture's room (slotW, slotH) is part of it
+  var pctW = opts.pctW || slotW, extra = opts.reserve || 0; // extra: px the info block below takes
   var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
   var widthCap = (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE) * slotW;
   var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
@@ -378,20 +391,20 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH) {
   if (withLabel && floorPx(1) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
   for (i = 0; i < 3; i++) { // the title wraps by the picture's width, the picture's size leaves room for the label
     var reserve = withLabel ? Math.max(slotH * (LABEL_SHARE + (lines - 1) * LABEL_LINE_SHARE + LABEL_GAP_SHARE), floorPx(lines) + slotH * LABEL_GAP_SHARE) : 0;
-    ph = Math.min(heightCap, GALLERY_USE * slotH - reserve, widthCap / aspect);
+    ph = Math.min(heightCap, GALLERY_USE * slotH - reserve - extra, widthCap / aspect);
     pw = ph * aspect;
     lines = Math.min(maxLines, Math.max(1, Math.ceil(String(art.title).length * 0.5 * px[0] / Math.max(pw, 1))));
   }
-  var ideal = 100 * pw / slotW, best = null, da, db;
+  var ideal = 100 * pw / pctW, best = null, da, db;
   for (da = -1; da <= 1; da++) {
     for (db = -1; db <= 1; db++) {
       var A = Math.floor(ideal) + da, B = Math.floor(100 * (pw / aspect) / pctH) + db;
       if (A < 1 || B < 1 || A > 100 || B > 100) continue;
-      var err = Math.abs((A * slotW) / (B * pctH) / aspect - 1) + 0.002 * (Math.abs(A - ideal) + Math.abs(B - 100 * (pw / aspect) / pctH));
+      var err = Math.abs((A * pctW) / (B * pctH) / aspect - 1) + 0.002 * (Math.abs(A - ideal) + Math.abs(B - 100 * (pw / aspect) / pctH));
       if (!best || err < best.err) best = { a: A, b: B, err: err };
     }
   }
-  var out = { a: best.a, b: best.b, pw: Math.round(best.a * slotW / 100), ph: Math.round(best.b * pctH / 100) };
+  var out = { a: best.a, b: best.b, pw: Math.round(best.a * pctW / 100), ph: Math.round(best.b * pctH / 100) };
   if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: hasDetail ? detailLine(art) : '' };
   return out;
 }
@@ -492,6 +505,16 @@ function forecastLine(w, nowIso) {
   return hour >= 17 || hour < 6 ? 'Dry tonight' : 'Dry all day';
 }
 
+/**
+ * The one sentence of the weather: "8°, rain by noon" when rain or snow is coming, "Dry, 4° to 11°" when not. line: forecastLine's
+ * words; temp the temperature now; lo, hi today's lowest and highest (without them the temperature stands in the range's place).
+ */
+function weatherSentence(line, temp, lo, hi) {
+  var dry = /^(Dry|Sunny|Clear|Fog)( all day| tonight)?$/.exec(line);
+  if (dry) return dry[1] + ', ' + (lo && hi && lo !== hi ? lo + ' to ' + hi : temp);
+  return temp + ', ' + line.charAt(0).toLowerCase() + line.slice(1);
+}
+
 /** Resolves to the value of p, or null after ms (and on a rejection): the weather never holds the run up and never throws. */
 function withDeadline(p, ms) {
   return new Promise(function (resolve) {
@@ -506,7 +529,7 @@ async function getJson(url) {
   return res.json();
 }
 
-/** { temp: "8°", line, loc } or null on any failure or without a location. loc: the place found (kept in the state). */
+/** { text: "8°, rain by noon", loc } or null on any failure or without a location. loc: the place found (kept in the state). */
 async function fetchWeather(set, locale, z, nowIso, saved) {
   if (!set.weather_location) return null;
   var loc = latLon(set.weather_location);
@@ -519,13 +542,16 @@ async function fetchWeather(set, locale, z, nowIso, saved) {
     loc = { q: set.weather_location, lat: Number(r.latitude), lon: Number(r.longitude) };
   }
   var j = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
-    '&current=temperature_2m,weather_code&hourly=weather_code&forecast_days=2&timezone=' + encodeURIComponent(z.zone === 'UTC' && z.shift ? 'auto' : z.zone) +
+    '&current=temperature_2m,weather_code&hourly=weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=2&timezone=' + encodeURIComponent(z.zone === 'UTC' && z.shift ? 'auto' : z.zone) +
     '&temperature_unit=' + unitOf(set, locale));
   var t = j && j.current && j.current.temperature_2m, h = j && j.hourly;
   if (typeof t !== 'number' || !isFinite(t) || !h || !Array.isArray(h.time) || !Array.isArray(h.weather_code)) return null;
   // the forecast's own clock is the place's: the hours are compared with the place's now (current.time), not the account's
   var placeNow = j.current.time && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(j.current.time) ? j.current.time : nowIso;
-  return { temp: Math.round(t) + '\u00b0', line: forecastLine({ code: j.current.weather_code, times: h.time, codes: h.weather_code }, placeNow), loc: loc };
+  var deg = function (v) { return typeof v === 'number' && isFinite(v) ? Math.round(v) + '\u00b0' : ''; };
+  var d = j.daily || {};
+  var line = forecastLine({ code: j.current.weather_code, times: h.time, codes: h.weather_code }, placeNow);
+  return { text: weatherSentence(line, deg(t), deg((d.temperature_2m_min || [])[0]), deg((d.temperature_2m_max || [])[0])), loc: loc };
 }
 
 // ---- the agenda: an ICS calendar link -----------------------------------------------------------------------------------
@@ -822,6 +848,7 @@ async function fetchAgenda(url, locale, userZ, nowMs, local) {
   var h24 = /h2[34]/.test(new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle || ''); // the account language's own clock: 9:00 AM or 09:00
   var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', timeZone: userZ.zone });
   var a = pickAgenda(text, userZ, nowMs, local, function (ms) { return tf.format(new Date(ms)); });
+  if (!a.items.length) return null; // nothing relevant, nothing shown
   var label = '';
   if (a.day === 'tomorrow') {
     try { label = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(1, 'day'); } catch (e) { label = 'tomorrow'; }
@@ -830,47 +857,39 @@ async function fetchAgenda(url, locale, userZ, nowMs, local) {
   return { day: a.day, label: label, items: a.items };
 }
 
-// CSS px of width each part of the strip needs at each text tier (a measured guess, see the renders): the strip drops the museum label
-// when the parts and the label do not fit one row, and goes to two rows when the parts alone do not.
-var STRIP_NEED = {
-  xl: { date: 760, weather: 440, agenda: 600, label: 580 }, l: { date: 500, weather: 290, agenda: 480, label: 380 },
-  m: { date: 300, weather: 220, agenda: 300, label: 250 }, s: { date: 210, weather: 170, agenda: 220, label: 190 },
-};
-
 /**
- * The strip of one view slot, or null when there is none: { pct, band, tier, rows, rule, label, detail, label_w, agenda_w }.
- * set.strip says whether a part is on and has content, set.blocks which ({ date, weather, agenda, n }). A slot too small for the
- * minimum strip height has none; a work-only slot is not a strip's business.
+ * Where the info of one view slot goes, or null (none on, or no room): { place: "below" | "side", tier, gallery, label, colw, rule }.
+ * set.strip says whether a part is on and has content, set.blocks which ({ date, weather, agenda, n }). The work is hung for each place
+ * (galleryFor, never cropped) and the place that keeps the larger picture wins; a block below needs the work wide enough for the
+ * parts, else the column beside it. The museum label joins the info when there is room, else it is left out.
  */
-function stripFor(scr, sw, sh, zoom, set) {
+function infoPlace(art, sw, sh, zoom, set) {
   if (!set.strip) return null;
   var hc = sh / zoom, wc = sw / zoom, b = set.blocks;
-  var share = Math.max(STRIP_SHARE[scr.o], STRIP_MIN_CSS / hc);
-  if (share > STRIP_MAX_SHARE) return null;
-  var tierOf = function (h, w) { var tc = Math.min(h, w * STRIP_TIER_WIDTH), t = 's'; STRIP_TIERS.some(function (x) { if (tc >= x[0]) { t = x[1]; return true; } return false; }); return t; };
-  var pct = Math.round(share * 100), tier = tierOf(hc * pct / 100, wc), rows = 1, label = !!set.label;
-  var order = ['xl', 'l', 'm', 's'], need = function (t, withLabel) {
-    var n = STRIP_NEED[t];
-    return (b.date ? n.date : 0) + (b.weather ? n.weather : 0) + (b.agenda ? n.agenda : 0) + (withLabel ? n.label : 0);
-  };
-  var fitted = false, i;
-  for (i = order.indexOf(tier); i < order.length && !fitted; i++) { // one row, at the tier or the next smaller
-    if (label && need(order[i], true) <= wc * 0.97) { tier = order[i]; fitted = true; }
-    else if (need(order[i], false) <= wc * 0.97) { tier = order[i]; label = false; fitted = true; }
+  if (hc < INFO_MIN_SLOT || wc < INFO_MIN_SLOT_W) return null;
+  var tier = 's';
+  INFO_TIERS.some(function (t) { if (hc >= t[0]) { tier = t[1]; return true; } return false; });
+  var N = INFO_NEED[tier], text = b.weather || b.agenda;
+  var leftNeed = (b.date ? N.date : 0) + (text ? N.text : 0) + (b.date && text ? 40 : 0);
+  var gap = Math.round(Math.min(sw, sh) * INFO_GAP), colPx = Math.round(INFO_COL_W[tier] * zoom) + gap;
+  var groups = (b.date ? 1 : 0) + (text ? 1 : 0);
+  var cands = []; // { place, arrange, g, ok }: the places the info can go, each with its work hung whole
+  var row = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom });
+  cands.push({ place: 'below', arrange: 'row', g: row, ok: row.pw / zoom >= leftNeed });
+  if (groups > 1) { // narrow work: the date over the text, a taller block
+    var stack = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: INFO_BLOCK_H[tier] * zoom * INFO_STACK });
+    cands.push({ place: 'below', arrange: 'stack', g: stack, ok: stack.pw / zoom >= Math.max(N.date, N.text) });
   }
-  if (!fitted) { // two rows: the date and the weather, then the agenda and the label
-    rows = 2;
-    share = Math.min(0.5, share * 1.6);
-    pct = Math.round(share * 100);
-    if (hc * pct / 100 / 2 < STRIP_MIN_CSS / 2) return null;
-    tier = tierOf(hc * pct / 100 / 2, wc);
-    var n2 = STRIP_NEED[tier];
-    label = !!set.label && (b.agenda ? n2.agenda : 0) + n2.label <= wc * 0.97;
-  }
-  var n = STRIP_NEED[tier];
+  var H = INFO_PART_H[tier], colH = (b.date ? H.date : 0) + (b.weather ? H.weather : 0) + (b.agenda ? H.agenda : 0) + (set.label ? H.label : 0), parts = groups + (b.weather && b.agenda ? 1 : 0) + (set.label ? 1 : 0);
+  colH += H.rule * Math.max(0, parts - 1);
+  if (sw - colPx >= 0.3 * sw) cands.push({ place: 'side', arrange: 'column', g: galleryFor(art, sw - colPx, sh, false, art.kind, zoom, sh, { pctW: sw }), ok: colH * zoom <= 0.95 * sh });
+  var pool = cands.filter(function (c) { return c.ok; });
+  if (!pool.length) pool = cands.slice(0, 1); // nothing fits: the block below, its text clamped
+  var best = pool.reduce(function (m, c) { return c.g.pw * c.g.ph > m.g.pw * m.g.ph ? c : m; }); // the larger picture; a tie keeps the earlier
+  var g = best.g, labelNeed = best.arrange === 'row' ? leftNeed + N.label : N.label;
   return {
-    pct: pct, band: 100 - pct, tier: tier, rows: rows, rule: Math.round(pct * (rows === 2 ? 0.25 : 0.5)), label: label, detail: hc * pct / 100 / rows >= 120,
-    label_w: Math.min(45, Math.floor(100 * n.label / wc)), agenda_w: Math.min(60, Math.floor(100 * n.agenda / wc)), single: b.n === 1,
+    place: best.place, arrange: best.arrange, tier: tier, gallery: g, colw: Math.round(100 * (colPx - gap) / sw), rule: Math.round(100 * INFO_BLOCK_H[tier] * zoom * 0.55 / sh),
+    label: !!set.label && (best.place === 'side' || g.pw / zoom >= labelNeed), who: '', detail: '',
   };
 }
 
@@ -884,20 +903,16 @@ function artOf(work, shard, set, scr) {
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
-    // with an info strip the picture has the band above it (and the museum label moves into the strip)
-    var st = stripFor(scr, sw, sh, art.zoom, set), bh = st ? Math.round(sh * st.band / 100) : sh;
-    if (st) {
-      st.who = st.label ? whoLine(art) : '';
-      st.detail = st.label && st.detail ? detailLine(art) : '';
-    }
-    if (modeFor(art, sw, bh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, bh, st ? false : set.label, art.kind, art.zoom, st ? sh : undefined), plate: null };
-    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: !st && set.label ? plateFor(art, sw, sh, art.kind) : null };
-    geo[v].strip = st;
+    var inf = infoPlace(art, sw, sh, art.zoom, set);
+    if (inf) { // info on: the work always hangs on its mat (no placard over the art), the info beside it or below
+      if (inf.label) { inf.who = whoLine(art); inf.detail = detailLine(art); }
+      geo[v] = { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
+    } else if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null };
+    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null, info: null };
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
-  var fullH = geo.full.strip ? scr.h * geo.full.strip.band / 100 : scr.h;
   art.width = geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
-    thumbWidth(work.w, work.h, scr.w, fullH, 'fill');
+    thumbWidth(work.w, work.h, scr.w, scr.h, 'fill');
   art.url = thumbUrl(work.f, art.width);
   art.srcset = srcsetOf(work.f, work.w);
   return { art: art, geo: geo };
@@ -911,7 +926,7 @@ async function infoOf(set, local, wxP, agP, state) {
   blocks.n = (blocks.date ? 1 : 0) + (blocks.weather ? 1 : 0) + (blocks.agenda ? 1 : 0);
   var info = blocks.n ? {
     has_date: blocks.date, day: local.day, weekday: local.weekday, month: local.month,
-    has_weather: blocks.weather, temp: wx ? wx.temp : '', forecast: wx ? wx.line : '', has_agenda: blocks.agenda, agenda: ag,
+    has_weather: blocks.weather, weather: wx ? wx.text : '', has_agenda: blocks.agenda, agenda: ag,
   } : null;
   return { info: info, layout: Object.assign({}, set, { strip: blocks.n > 0, blocks: blocks }) };
 }
@@ -939,9 +954,7 @@ async function run(input) {
   }
   var made1 = await infoOf(set, local, wxP, agP, state), info = made1.info;
   set = made1.layout; // the settings and what the strip has (also in the merge variables: no link in it, see icsUrl)
-  // the work is picked for the shape of its room: with a strip, the band above it
-  var zoom0 = scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), st0 = stripFor(scr, scr.w, scr.h, zoom0, set);
-  var pickAspect = scr.w / (st0 ? scr.h * st0.band / 100 : scr.h);
+  var pickAspect = scr.w / scr.h;
   var chosen = pick(shard, {
     k: ASPECT_K, aspect: pickAspect, movement: set.movement, genres: set.genres, family: set.family_friendly,
   }, state.h, Math.random);
@@ -960,6 +973,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, stripFor: stripFor, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_BLOCK_H: INFO_BLOCK_H, INFO_COL_W: INFO_COL_W, INFO_NEED: INFO_NEED, INFO_STACK: INFO_STACK, INFO_PART_H: INFO_PART_H, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }
