@@ -27,7 +27,8 @@ const FRESH = args.includes('--fresh');
 const BUILD_YEAR = new Date().getUTCFullYear();
 // the work list must hold these (the gap report's five): the build stops, and writes nothing, when one is missing
 // Wikidata labels with a known error; the fix belongs on Wikidata, this keeps the data set right until then
-const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa' };
+// Wikidata labels that are wrong or vandalized (Q311243 read "Wanderer above the Sea younes non non non ..." on 2026-11-17).
+const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa', Q311243: 'Wanderer above the Sea of Fog' };
 const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens', Q714802: 'Along the River During the Qingming Festival' };
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
 
