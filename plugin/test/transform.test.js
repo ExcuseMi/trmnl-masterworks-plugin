@@ -667,3 +667,25 @@ test('a PNG-only work asks for its small thumbnail step, never a wider one (Corn
   const tiny = await sizes({ r: 250 });
   assert.ok(tiny.width <= 250 && tiny.max <= 250, 'the step the build chose, however small');
 });
+
+test('art carries everything the markup needs (a comment inside the art literal once swallowed half of it: no kind, size or zoom, a full-bleed render)', async () => {
+  globalThis.fetch = answer(shard([{ w: 3000, h: 2000 }]));
+  const out = await t.run(input({ device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' } }));
+  for (const k of ['id', 'title', 'artist', 'mat', 'corner', 'kind', 'lg', 'zoom', 'w', 'h', 'width', 'url', 'srcset', 'line']) assert.notStrictEqual(out.art[k], undefined, k);
+  assert.strictEqual(out.art.kind, 'big');
+  assert.ok(out.geo.full.gallery || out.geo.full.mode === 'full');
+});
+
+test('keyline: a fine line around the work on its mat only when the work carries the flag for that mat (lw white, lb black); none by default', async () => {
+  const line = async (extra) => {
+    globalThis.fetch = answer(shard([{ w: 3000, h: 2000, ...extra }]));
+    return (await t.run(input({}))).art.line;
+  };
+  assert.strictEqual(await line({}), false, 'no key: no line');
+  assert.strictEqual(await line({ lw: 1 }), true, 'a white mat with lw');
+  assert.strictEqual(await line({ lb: 1 }), false, 'a white mat with only lb: none');
+  assert.strictEqual(await line({ n: 1 }), false, 'a black mat without lb');
+  assert.strictEqual(await line({ n: 1, lw: 1 }), false, 'a black mat with only lw: none');
+  assert.strictEqual(await line({ n: 1, lb: 1 }), true, 'a black mat with lb');
+  assert.strictEqual(await line({ lw: 0 }), false);
+});

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# With fill on (the default) more works fill the screen, and a placard over them overflowed the playdate's tiny slots (base check 2026-11-17).
 # A label that wraps on a small lg screen (TRMNL reviews 2026-11-17 let the artist and detail lines take 2 lines there) must
 # not push the work out of its slot: the base check found the portrait half_horizontal and quadrant views of joan_6,
 # joan_6_pro, joan_13 and onyx_boox_go_10_3_lumi overflowing (and tcl_nxtpaper_14 in half_horizontal). The label is long
@@ -30,7 +31,7 @@ RSpec.describe 'Masterworks label and info never overflow a small screen' do
   end
   let(:all_on) { { 'show_date' => 'true', 'show_weather' => 'true', 'weather_location' => 'Paris' } }
 
-  %w[joan_6 joan_6_pro joan_13 onyx_boox_go_10_3_lumi tcl_nxtpaper_14].each do |device|
+  %w[joan_6 joan_6_pro joan_13 onyx_boox_go_10_3_lumi tcl_nxtpaper_14 playdate].each do |device|
     %w[half_horizontal quadrant full].each do |view|
       [['the label only', {}], ['the label only, fill off', { 'fill' => 'false' }], ['the info on', :info], ['the info on, fill off', :info_off]].each do |what, fields|
         it "#{view} on #{device} portrait, #{what}: nothing overflows" do

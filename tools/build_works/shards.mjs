@@ -20,6 +20,8 @@ export function pack(works, meta) {
     if (x.genre) o.g = GENRES.indexOf(x.genre);
     if (x.reasons && x.reasons.length) o.u = 1; // not family friendly (nudity or violence)
     if (x.pngStep) o.r = x.pngStep; // a PNG file only: the widest thumbnail step to ask for (Commons serves a PNG thumbnail as a PNG, many MB)
+    if (x.lineWhite) o.lw = 1; // the curator's keyline flags (not built yet): a fine line around the work on a white (lw) or black (lb) mat
+    if (x.lineBlack) o.lb = 1;
     if (x.dc) o.q = 1; // the bottom-left corner is dark: a full-screen placard there is black
     if (x.dm) o.n = 1; // 1: the work hangs on a black mat (a dark work), no key: a white one
     const e = idx(med, x.medium);

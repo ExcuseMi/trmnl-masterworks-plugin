@@ -308,4 +308,46 @@ RSpec.describe 'Masterworks info strip' do
       end
     end
   end
+
+  # the curator's keyline: lw (white mat) / lb (black mat); none by default, never on a work that fills the screen
+  describe 'keyline' do
+    def keyed(fixture_name, extra)
+      doc = fixture(fixture_name)
+      doc['w'][0].merge!(extra)
+      MIRRORS_INFO.each_with_object({}) do |base, m|
+        (0..7).each do |k|
+          m["#{base}/landscape-#{k}.json"] = { json: doc }
+          m["#{base}/portrait-#{k}.json"] = { json: doc }
+        end
+      end
+    end
+
+    it 'is drawn only when the work carries the flag for its mat (lw on white, lb on black); none without' do
+      [['frame', 'one-landscape', 'lw', 'lb'], ['og_png', 'one-landscape', 'lw', 'lb'], ['frame', 'one-dark-landscape', 'lb', 'lw']].each do |device, fixture_name, right, wrong|
+        none = screen(device, {}, mocks: keyed(fixture_name, {}))
+        wait(none)
+        expect(none).to have_css('[data-gallery]')
+        expect(none).to have_no_css('[data-keyline]'), "#{device} #{fixture_name}: no key, no line"
+        wrong_key = screen(device, {}, mocks: keyed(fixture_name, { wrong => 1 }))
+        wait(wrong_key)
+        expect(wrong_key).to have_no_css('[data-keyline]'), "#{device} #{fixture_name}: the flag of the other mat does nothing"
+        with = screen(device, {}, mocks: keyed(fixture_name, { right => 1 }))
+        wait(with)
+        expect(with).to have_css('[data-bevel][data-keyline]')
+        expect(with.evaluate("document.querySelectorAll('[data-block=\"primary\"] [data-keyline-edge]').length")).to eq(4)
+        edge = with.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"] [data-keyline-edge]')).backgroundColor")
+        expect(edge).to eq(fixture_name.include?('dark') ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)'), 'the line is the mat\'s opposite'
+      end
+    end
+
+    it 'is never drawn around a work that fills the screen, and not with the info on and the work filling its band' do
+      full = screen('frame', { 'fill' => 'true' }, mocks: keyed('one-wide-landscape', { 'lw' => 1, 'lb' => 1 }))
+      wait(full)
+      expect(full).to have_css('[data-mode="full"]')
+      expect(full).to have_no_css('[data-keyline]')
+      band = screen('frame', fields_for(%w[show_date]).merge('fill' => 'true'), mocks: keyed('one-wide-landscape', { 'lw' => 1, 'lb' => 1, 'w' => 2200, 'h' => 1000 }))
+      wait(band)
+      expect(band).to have_no_css('[data-keyline]')
+    end
+  end
 end

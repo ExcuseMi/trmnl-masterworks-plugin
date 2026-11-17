@@ -40,6 +40,8 @@ The plugin decides per work and per view; the one setting is Fill the screen.
 | A fill would crop at most 15 % of the work (`FILL_CROP_MAX`; fill off: less than 5 %, `AUTO_CROP_MAX`) | Full screen, with a small placard in the picture's bottom-left corner: a solid plate, black on a dark corner and white on a light one, a thin solid edge, a margin to the picture's edges |
 | Otherwise | The whole work in a gallery: a pure white or black mat (by the work's brightness), no outline, the label right-aligned under the picture |
 
+No outline is drawn around a work on its mat. A work may carry a curator's keyline flag in the data: `lw` = 1 draws a fine line on a white mat, `lb` = 1 on a black one (none by default, never around a work that fills the screen).
+
 A work takes up to 80 % of the dimension that is not its limit; a panorama may take up to 92 % of the width, a tall work up to 88 % of the height, always with room for the label. The label has three lines: title, ARTIST and year, then technique and where the work hangs (the museum, not a room), for example `Oil on canvas · Rijksmuseum`. The build names the technique from Wikidata's materials (Oil on canvas, Oil on panel, Tempera on panel, Fresco, Watercolour, Gouache, Woodblock print, Etching, Engraving, Lithograph, Colour lithograph, Drawing, Pastel, Mixed media...); a material it cannot name is left out and the line shows only the place. Size stays in the data, not on the label.
 
 ## Settings

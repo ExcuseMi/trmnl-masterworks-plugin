@@ -52,10 +52,18 @@
 {% else %}
 {% comment %} mat and ink are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
 {% assign gl = gv.gallery %}
+{% comment %} the keyline (only when the work carries the curator's flag for its mat): four 1 px lines in the mat's opposite colour on the picture's edge; Framework's border classes draw one horizontal and one vertical side only {% endcomment %}
+{% if art.mat == "black" %}{% assign keyline = "bg--white dark:bg--black" %}{% else %}{% assign keyline = "bg--black dark:bg--white" %}{% endif %}
 {% capture bevel %}
     {% comment %} the picture in a whole-percent sized box on the mat: no outline, the mat alone frames the work (owner 2026-11-17); the picture covers its box {% endcomment %}
-    <div class="{{ mat }} w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">
+    <div class="relative {{ mat }} w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1"{% if art.line %} data-keyline="1"{% endif %}>
       <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ gl.a }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
+      {% if art.line %}
+      <div class="absolute top--0 left--0 z--2 w--full h--[1px] {{ keyline }}" data-keyline-edge="1"></div>
+      <div class="absolute bottom--0 left--0 z--2 w--full h--[1px] {{ keyline }}" data-keyline-edge="1"></div>
+      <div class="absolute top--0 left--0 z--2 w--[1px] h--full {{ keyline }}" data-keyline-edge="1"></div>
+      <div class="absolute top--0 right--0 z--2 w--[1px] h--full {{ keyline }}" data-keyline-edge="1"></div>
+      {% endif %}
     </div>
 {% endcapture %}
 <div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-gallery="{{ art.mat }}" data-block="{{ block }}"{% if art.kind == "big" or trmnl.device.model == "frame" %} data-frame="1"{% endif %}>

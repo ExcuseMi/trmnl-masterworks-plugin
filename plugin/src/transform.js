@@ -40,6 +40,7 @@ var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
 var AUTO_CROP_MAX = 0.05; // fill off: full screen when filling the view would crop less than this share of the work's area, else the gallery
+var PLATE_MIN_W = 200, PLATE_MIN_H = 150; // CSS px: a slot smaller than this has no placard over a work that fills it (the base check found the placard overflowing a playdate quadrant)
 var FILL_CROP_MAX = 0.15; // fill on (the default, setting fill): the work fills its area edge to edge when that crops at most this share of it; with info on the area is the band above the strip
 var ASPECT_K = 2; // shape factor exp(-ASPECT_K x |ln(work aspect / screen aspect)|): works shaped like the screen come up more often
 // the genre choices of the settings and the genres (the data's own names) each one lets through
@@ -920,7 +921,7 @@ function artOf(work, shard, set, scr) {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
     collection: work.c === undefined ? '' : shard.col[work.c], movement: work.m === undefined ? '' : shard.mov[work.m],
     genre: genreOfWork(shard, work), medium: work.e === undefined || !shard.med ? '' : shard.med[work.e], size: work.z || null,
-    mat: work.n ? 'black' : 'white', corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', lg: !scr.frame && Math.min(scr.w, scr.h) > 500, zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
+    mat: work.n ? 'black' : 'white', line: work.n ? work.lb === 1 : work.lw === 1, /* a fine keyline around the work on its mat only when the curator's flag for that mat (lw white, lb black) is 1 */ corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', lg: !scr.frame && Math.min(scr.w, scr.h) > 500, zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
   };
   var geo = {}, v;
   for (v in VIEWS) {
@@ -930,7 +931,7 @@ function artOf(work, shard, set, scr) {
       if (inf.label) { inf.who = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : ''); inf.detail = ''; } // the technique is left out when info is on
       geo[v] = inf.fill ? { mode: 'full', fit: 'cover', gallery: null, plate: null, info: inf } : { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
     } else if (modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null };
-    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null, info: null };
+    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label && sw / art.zoom >= PLATE_MIN_W && sh / art.zoom >= PLATE_MIN_H ? plateFor(art, sw, sh, art.kind) : null, info: null }; // a slot too small for a placard (a playdate quadrant) has none
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
   var fullInf = geo.full.info, bandFull = fullInf && fullInf.fill ? scr.h * fullInf.band / 100 : scr.h;
