@@ -57,12 +57,7 @@
 {% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink--0 {{ mat }}" data-picture="1">
     <img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
   </div>{% endcapture %}
-{% if inf.layout == "band" %}
-<div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
-  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
-  <div class="flex flex--row flex--center flex--center-y w--[{{ inf.bandw }}cqw] h--[{{ inf.band }}cqh] shrink--0 {{ mat }}" data-band="1">{{ picture }}</div>
-  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
-  <div class="w--[{{ inf.bandw }}cqw] grow" data-info-block="below">
+{% capture strip_p %}
     {% if inf.datein == 0 %}{{ d_p }}{% if info.has_date %}<div class="w--full h--[{{ inf.sepv }}px] shrink--0"></div>{% endif %}{% endif %}
     {% for row in inf.rows %}
     {% unless forloop.first %}<div class="w--full h--[{{ inf.rowgap }}px] shrink--0"></div>{% endunless %}
@@ -75,7 +70,21 @@
     </div>
     {% endfor %}
     {% if inf.rows.size == 0 and inf.datein > 0 %}<div class="flex flex--row flex--left flex--top w--full">{{ d_p }}</div>{% endif %}
+{% endcapture %}
+{% if inf.layout == "band" and inf.portrait %}
+<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
+  <div class="flex flex--col flex--center-x gap--none w--full">
+    {{ picture }}
+    <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
+    <div class="w--[{{ inf.bandw }}cqw]" data-info-block="below">{{ strip_p }}</div>
   </div>
+</div>
+{% elsif inf.layout == "band" %}
+<div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
+  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
+  <div class="flex flex--row flex--center flex--center-y w--[{{ inf.bandw }}cqw] h--[{{ inf.band }}cqh] shrink--0 {{ mat }}" data-band="1">{{ picture }}</div>
+  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
+  <div class="w--[{{ inf.bandw }}cqw] grow" data-info-block="below">{{ strip_p }}</div>
 </div>
 {% else %}
 <div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="column" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">

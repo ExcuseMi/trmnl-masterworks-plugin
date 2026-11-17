@@ -200,6 +200,18 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
   end
 
+  it 'the X: a work 16:9 gets the band at about two thirds of the height, the date and the columns in ONE row' do
+    page = frame(all_on, 16.0 / 9, device: 'v2')
+    expect(page).to have_css("#{P}[data-layout=\"band\"][data-profile=\"x\"]")
+    lay = box(page, P)
+    pic = box(page, "#{P} [data-picture]")
+    expect((pic[3] - pic[1]) / (lay[3] - lay[1])).to be >= 0.55
+    expect(page.evaluate("document.querySelectorAll('#{P} [data-row]').length")).to eq(1), 'one row of date and columns'
+    day = box(page, "#{P} [data-day]")
+    col = box(page, "#{P} [data-col]")
+    expect(col[0]).to be > day[2], 'the columns stand beside the date'
+  end
+
   # portrait screens: the work on top, the strip below (a work a fill would crop too much hangs whole in the band area)
   [['frame', 'f'], ['v2', 'x'], ['og_png', 'o']].each do |device, profile|
     { '3:4' => 0.75, '16:9' => 16.0 / 9 }.each do |name, aspect|
@@ -214,6 +226,9 @@ RSpec.describe 'Masterworks Frame layouts' do
         expect(strip[3]).to be <= lay[3] + 2, 'inside the screen'
         expect(page).to have_css("#{P} [data-label]")
         expect(page).to have_css("#{P} [data-day]")
+        gap = strip[1] - pic[3]
+        expect(gap).to be <= lay[2] * 0.06, "no gap between the work and the strip: #{gap}"
+        expect((pic[1] - lay[1]) - (lay[3] - strip[3])).to be_within(0.06 * (lay[3] - lay[1])).of(0), 'the group is centred vertically'
         ratio = ((pic[2] - pic[0]) / (pic[3] - pic[1])) / aspect
         expect((ratio - 1).abs < 0.03 || (pic[2] - pic[0]) >= 0.9 * (lay[2] - lay[0])).to be(true), "the whole work (its shape) or a cover across the band: #{ratio}"
         cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")

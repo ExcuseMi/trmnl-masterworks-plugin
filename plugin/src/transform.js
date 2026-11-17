@@ -107,11 +107,11 @@ var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most
 var FRAME_MIN_BAND = 32; // a band lower than this share of the screen drops events (two, one, none), then the forecast line
 // per device class: text classes with their CSS px (for height estimates), spacings in CSS px, the width of the date block when it shares the first row
 var FRAME_PROFILES = {
-  f: { z: 1, infow: 26, band: 65, drop: 48, wdrop: 40, lead: 24, sep: 24, rowgap: 30, minw: 300, dateIn: 30, num: 380, col: 220, words: 58, temp: 74, med: 38, small: 32,
+  f: { z: 1, infow: 26, band: 65, drop: 48, wdrop: 40, lead: 24, sep: 24, rowgap: 30, minw: 300, minwP: 620, dateIn: 30, num: 380, col: 220, words: 58, temp: 74, med: 38, small: 32,
     cls: { num: 'value--peta', col: 'value--giga', words: 'value value--large', temp: 'value value--xlarge', med: 'value value--base', small: 'label label--xxlarge' } },
-  x: { z: 1872 / 800, infow: 38, band: 0, drop: 0, wdrop: 4, lead: 8, sep: 14, rowgap: 12, minw: 140, dateIn: 0, num: 128, col: 74, words: 38, temp: 38, med: 30, small: 21,
-    cls: { num: 'value--xxxlarge', col: 'value--xlarge', words: 'value value--base', temp: 'value value--base', med: 'title title--large', small: 'label label--large' } },
-  o: { z: 1, infow: 30, band: 0, drop: 0, wdrop: 2, lead: 6, sep: 10, rowgap: 8, minw: 130, dateIn: 0, num: 74, col: 58, words: 26, temp: 38, med: 30, small: 18,
+  x: { z: 1872 / 800, infow: 38, band: 0, drop: 0, wdrop: 4, lead: 8, sep: 14, rowgap: 12, minw: 80, minwP: 250, dateIn: 40, num: 96, col: 74, words: 38, temp: 38, med: 30, small: 21,
+    cls: { num: 'value--xxlarge', col: 'value--xlarge', words: 'value value--base', temp: 'value value--base', med: 'title title--large', small: 'label label--large' } },
+  o: { z: 1, infow: 30, band: 0, drop: 0, wdrop: 2, lead: 6, sep: 10, rowgap: 8, minw: 100, minwP: 200, dateIn: 30, num: 74, col: 58, words: 26, temp: 38, med: 30, small: 18,
     cls: { num: 'value--xlarge', col: 'value--large', words: 'value value--small', temp: 'value value--base', med: 'title title--base', small: 'label label--base' } },
 };
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
@@ -958,7 +958,7 @@ function framePlan(art, sw, sh, set, key) {
     var H = frameHeights(P, noForecast), hasW = b.weather, n = (hasW ? 1 : 0) + events + (label ? 1 : 0), out = null;
     var rowH = Math.max(hasW ? H.weather : 0, events ? H.event : 0, label ? H.label : 0);
     var inlineDate = !!P.dateIn && !portrait && b.date, dateH = b.date ? H.date(P.num) : 0;
-    var avail = bandW - (inlineDate ? P.dateIn + FRAME_GAP_PCT : 0), minw = Math.ceil(P.minw / cw * 100);
+    var avail = bandW - (inlineDate ? P.dateIn + FRAME_GAP_PCT : 0), minw = Math.ceil((portrait && P.minwP ? P.minwP : P.minw) / cw * 100);
     var k = Math.max(1, Math.min(n, Math.floor((avail + FRAME_GAP_PCT) / (minw + FRAME_GAP_PCT)))), rows = n ? Math.ceil(n / k) : 0;
     var colW = Math.floor((avail - (k - 1) * FRAME_GAP_PCT) / k);
     var stripH = inlineDate ? Math.max(dateH, rows * rowH + (rows - 1) * P.rowgap) : dateH + (rows ? (dateH ? P.sep : 0) + rows * rowH + (rows - 1) * P.rowgap : 0);
@@ -977,7 +977,7 @@ function framePlan(art, sw, sh, set, key) {
       for (ci = 0; ci < events; ci++) cells.push('e' + ci);
       if (label) cells.push('l');
       for (ci = 0; ci < cells.length; ci += k) rowsOf.push(cells.slice(ci, ci + k));
-      out = { layout: 'band', rows: rowsOf, margin: m, bandw: bandW, band: bandPct, artw: inner.w, arth: inner.h, whole: !cover, bandPx: [sw * inner.w / 100, sh * inner.h / 100], lead: P.lead, drop: inlineDate ? P.drop : 0, wdrop: P.wdrop,
+      out = { layout: 'band', portrait: portrait, rows: rowsOf, margin: m, bandw: bandW, band: bandPct, artw: inner.w, arth: inner.h, whole: !cover, bandPx: [sw * inner.w / 100, sh * inner.h / 100], lead: P.lead, drop: inlineDate ? P.drop : 0, wdrop: P.wdrop,
         numcls: P.cls.num, datein: inlineDate ? P.dateIn : 0, gap: FRAME_GAP_PCT, colw: colW, rowgap: P.rowgap, sepv: P.sep, cols: n };
     }
     out.noAgenda = noAgenda; out.noForecast = noForecast; out.events = events;
