@@ -47,7 +47,7 @@
     </div>
     {% if gl.label %}
     <div class="flex flex--col flex--right gap--none w--[{{ gl.a }}cqw] {{ lpad }}" data-label="1">
-      <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}">{{ art.title | escape }}</span>
+      <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}" data-clamp-lg="2">{{ art.title | escape }}</span>
       {% if gl.label.who != blank %}<span class="label {{ acls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
       {% if gl.label.detail != blank %}<span class="label {{ dcls }} {{ ink }} block w--full text--right" data-clamp="1">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>

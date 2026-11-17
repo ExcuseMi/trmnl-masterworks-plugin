@@ -200,6 +200,8 @@ RSpec.describe 'Masterworks' do
       gal = screen('full', 'v2', mocks: shard_mocks('one-landscape', 'one-portrait'))
       wait(gal)
       expect(gal.evaluate("document.querySelector('[data-label] .label').getAttribute('data-clamp-lg')")).to eq('2')
+      # TRMNL review 2026-11-17: the gallery title wraps to a second line on X too (was cut: "Dawn Moon of the Shinto Rites (S...")
+      expect(gal.evaluate("document.querySelector('[data-label] .title').getAttribute('data-clamp-lg')")).to eq('2')
       # a work that fills the view: the Frame (the attribute does not depend on the device)
       full = screen('full', 'frame', mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
       wait(full)
