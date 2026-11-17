@@ -46,5 +46,11 @@
   },
   "re:/data/portrait-7\\.json": {
     "json_file": "tests/fixtures/one-portrait.json"
+  },
+  "re:api\\.open-meteo\\.com/v1/forecast": {
+    "json_file": "tests/fixtures/weather-rain.json"
+  },
+  "re:geocoding-api\\.open-meteo\\.com": {
+    "json_file": "tests/fixtures/geocode.json"
   }
 }

@@ -69,6 +69,16 @@ var LABEL_GAP_SHARE = 0.018;
 var LABEL_PX = { big: [40, 26, 21], normal: [20, 16, 16] }; // title, artist and detail sizes the markup uses (the floor of the room a label needs, and to guess how many lines a title takes)
 var LABEL_MAX_SHARE = 0.4; // a label that would need more of a slot's height than this is left out (a playdate quadrant)
 var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
+// The info strip (setting info): a calm strip at the bottom of a view with the day, and the weather. It takes STRIP_SHARE of the slot's height
+// (never less than STRIP_MIN_CSS CSS px: a slot too small for that has no strip); the work is picked and fitted for the band above it.
+var STRIP_SHARE = { landscape: 0.27, portrait: 0.14 };
+var STRIP_MIN_CSS = 90; // CSS px: below this a strip has no room
+var STRIP_MAX_SHARE = 0.4;
+var STRIP_TIERS = [[280, 'xl'], [180, 'l'], [120, 'm'], [0, 's']]; // strip height in CSS px -> the text size tier the markup uses
+var STRIP_TIER_WIDTH = 0.2; // the strip's text tier follows min(strip height, this share of the slot's width)
+var WEATHER_MS = 1800; // one request; the whole weather step has WEATHER_DEADLINE_MS, parallel to the data fetch (the run has 5 s)
+var WEATHER_DEADLINE_MS = 3200;
+var FAHRENHEIT_REGION = /[-_](US|LR|BS|BZ|KY|PW|FM|MH)$/i; // the account has a language, not a unit: these regions use Fahrenheit
 var VIEWS = { full: [1, 1], half_horizontal: [1, 0.5], half_vertical: [0.5, 1], quadrant: [0.5, 0.5] }; // slot size as a share of the screen
 
 /** MD5 as lowercase hex of a UTF-8 string, in plain JS: Commons paths are built from it and a sandbox may lack `crypto`. */
@@ -171,15 +181,22 @@ function settingsOf(input) {
   if (txt(movement) === 'all' || txt(movement) === 'any') movement = '';
   // the ticked genres that exist; none ticked (or only unknown ones, or an old "all") means every genre
   var genres = listOf(c.genres).map(function (g) { return g.toLowerCase(); }).filter(function (g, i, a) { return GENRE_SETS[g] && a.indexOf(g) === i; });
+  var unit = txt(c.temperature_unit);
   return {
     label: flag(c.label, true), // a select value from an older version ("corner", "off") is read as well
     genres: genres, movement: movement, family_friendly: flag(c.family_friendly, true),
+    show_date: flag(c.show_date, false), show_weather: flag(c.show_weather, false), show_agenda: flag(c.show_agenda, false), // the info strip's three parts, each off by default
+    weather_location: String(c.weather_location === undefined || c.weather_location === null ? '' : c.weather_location).trim().slice(0, 80),
+    temperature_unit: unit === 'c' || unit === 'f' ? unit : 'auto',
   };
 }
 
 function cleanState(s) {
   var h = s && Array.isArray(s.h) ? s.h.filter(function (n) { return typeof n === 'number'; }) : [];
-  return { h: h.slice(-HISTORY) };
+  var out = { h: h.slice(-HISTORY) };
+  var l = s && s.loc;
+  if (l && typeof l.q === 'string' && isFinite(l.lat) && isFinite(l.lon)) out.loc = { q: l.q.slice(0, 80), lat: Number(l.lat), lon: Number(l.lon) }; // the geocoded weather location, so a name is looked up once
+  return out;
 }
 
 var qnum = function (id) { return Number(String(id).replace(/^Q/, '')) || 0; };
@@ -348,7 +365,8 @@ function plateFor(art, slotW, slotH, kind) {
  * nearest the work's shape is taken and the picture covers its box, so an error of a fraction of a percent is cropped,
  * never a gap), and what the label needs. withLabel false: the picture alone, centred.
  */
-function galleryFor(art, slotW, slotH, withLabel, kind, zoom) {
+function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH) {
+  pctH = pctH || slotH; // the percent classes are of the whole slot; with an info strip the picture's room (slotH) is the band above it
   var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
   var widthCap = (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE) * slotW;
   var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
@@ -367,13 +385,13 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom) {
   var ideal = 100 * pw / slotW, best = null, da, db;
   for (da = -1; da <= 1; da++) {
     for (db = -1; db <= 1; db++) {
-      var A = Math.floor(ideal) + da, B = Math.floor(100 * (pw / aspect) / slotH) + db;
+      var A = Math.floor(ideal) + da, B = Math.floor(100 * (pw / aspect) / pctH) + db;
       if (A < 1 || B < 1 || A > 100 || B > 100) continue;
-      var err = Math.abs((A * slotW) / (B * slotH) / aspect - 1) + 0.002 * (Math.abs(A - ideal) + Math.abs(B - 100 * (pw / aspect) / slotH));
+      var err = Math.abs((A * slotW) / (B * pctH) / aspect - 1) + 0.002 * (Math.abs(A - ideal) + Math.abs(B - 100 * (pw / aspect) / pctH));
       if (!best || err < best.err) best = { a: A, b: B, err: err };
     }
   }
-  var out = { a: best.a, b: best.b, pw: Math.round(best.a * slotW / 100), ph: Math.round(best.b * slotH / 100) };
+  var out = { a: best.a, b: best.b, pw: Math.round(best.a * slotW / 100), ph: Math.round(best.b * pctH / 100) };
   if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: hasDetail ? detailLine(art) : '' };
   return out;
 }
@@ -400,6 +418,462 @@ function srcsetOf(file, workWidth) {
   return out.join(', ');
 }
 
+// ---- the info strip: the day and the weather ----------------------------------------------------------------------------
+// TRMNL gives a plugin the account's language (trmnl.user.locale) and time zone (time_zone_iana, utc_offset) but no location and no unit:
+// the weather location is a setting (a place name, looked up once with Open-Meteo's geocoder and kept in the state, or "lat,lon"),
+// the unit follows the language's region unless the setting says. The forecast line is in English.
+
+function userLocale(input) {
+  var l = input && input.trmnl && input.trmnl.user && input.trmnl.user.locale;
+  if (!l) return 'en';
+  try { new Intl.DateTimeFormat(String(l).replace('_', '-')); return String(l).replace('_', '-'); } catch (e) { return 'en'; }
+}
+
+/** The account's zone: the IANA name, else the UTC offset, else UTC. { zone: IANA name for Intl, shift: ms added to the time first }. */
+function userZone(input) {
+  var u = (input && input.trmnl && input.trmnl.user) || {};
+  if (u.time_zone_iana) {
+    try { new Intl.DateTimeFormat('en', { timeZone: u.time_zone_iana }); return { zone: u.time_zone_iana, shift: 0 }; } catch (e) { /* an unknown name: the offset */ }
+  }
+  return { zone: 'UTC', shift: (Number(u.utc_offset) || 0) * 1000 };
+}
+
+/** The day as the strip shows it, in the account's language and zone: { day: "5", weekday: "Thursday", month: "November", hour, iso: "2026-11-05T14:00" }. */
+function dayInfo(nowMs, locale, z) {
+  var t = new Date(nowMs + z.shift);
+  var fmt = function (loc, o) { o.timeZone = z.zone; try { return new Intl.DateTimeFormat(loc, o).format(t); } catch (e) { return new Intl.DateTimeFormat('en', o).format(t); } };
+  var p = {};
+  new Intl.DateTimeFormat('en-CA', { timeZone: z.zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(t).forEach(function (x) { p[x.type] = x.value; });
+  return {
+    day: String(Number(p.day)), weekday: fmt(locale, { weekday: 'long' }), month: fmt(locale, { month: 'long' }),
+    hour: Number(p.hour), iso: p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute,
+  };
+}
+
+var unitOf = function (set, locale) { return set.temperature_unit === 'f' || (set.temperature_unit === 'auto' && FAHRENHEIT_REGION.test(locale)) ? 'fahrenheit' : 'celsius'; };
+
+/** "lat,lon" -> { lat, lon }, else null. */
+function latLon(text) {
+  var m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(String(text || ''));
+  if (!m) return null;
+  var lat = Number(m[1]), lon = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat: lat, lon: lon } : null;
+}
+
+var WET_KINDS = { Drizzle: [51, 53, 55, 56, 57], Rain: [61, 63, 65, 66, 67, 80, 81, 82], Snow: [71, 73, 75, 77, 85, 86], Storm: [95, 96, 99] };
+function wetKind(code) {
+  for (var k in WET_KINDS) if (WET_KINDS[k].indexOf(code) >= 0) return k;
+  return null;
+}
+
+/**
+ * The one short line under the temperature. w = { code: the weather code now, times: hourly local "YYYY-MM-DDTHH:00", codes: hourly
+ * weather codes }; nowIso the local time now. Looks from this hour to the end of the day: "Rain by noon", "Snow tonight", "Rain until
+ * noon" (it is raining and stops), "Dry all day". English.
+ */
+function forecastLine(w, nowIso) {
+  var day = nowIso.slice(0, 10), hour = Number(nowIso.slice(11, 13)), now = nowIso.slice(0, 13) + ':00', i0 = -1, i;
+  for (i = 0; i < w.times.length; i++) if (w.times[i] >= now && w.times[i].slice(0, 10) === day) { i0 = i; break; }
+  var hours = [];
+  if (i0 >= 0) for (i = i0; i < w.times.length && w.times[i].slice(0, 10) === day; i++) hours.push({ h: Number(w.times[i].slice(11, 13)), kind: wetKind(w.codes[i]) });
+  var cur = wetKind(w.code);
+  var first = hours.filter(function (x) { return x.kind; })[0];
+  var word = function (h) { return h <= 12 ? 'by noon' : h <= 17 ? 'this afternoon' : h <= 21 ? 'this evening' : 'tonight'; };
+  if (cur) {
+    var clear = hours.filter(function (x) { return !x.kind; })[0];
+    if (!clear) return cur + (hour < 15 ? ' all day' : hour < 18 ? ' this evening' : ' tonight');
+    return cur + (clear.h <= 12 ? ' until noon' : clear.h <= 18 ? ' until evening' : ' until late');
+  }
+  if (first) return first.kind + (first.h <= hour + 1 ? ' soon' : ' ' + word(first.h));
+  if (w.code === 45 || w.code === 48) return 'Fog';
+  var night = hour >= 18 || hour < 6;
+  if (w.code === 0 || w.code === 1) return night ? 'Clear tonight' : 'Sunny all day';
+  return hour >= 17 || hour < 6 ? 'Dry tonight' : 'Dry all day';
+}
+
+/** Resolves to the value of p, or null after ms (and on a rejection): the weather never holds the run up and never throws. */
+function withDeadline(p, ms) {
+  return new Promise(function (resolve) {
+    var t = setTimeout(function () { resolve(null); }, ms);
+    p.then(function (v) { clearTimeout(t); resolve(v); }, function () { clearTimeout(t); resolve(null); });
+  });
+}
+
+async function getJson(url) {
+  var res = await fetch(url, { signal: AbortSignal.timeout(WEATHER_MS) });
+  if (!res || !res.ok) throw new Error('HTTP ' + (res && res.status));
+  return res.json();
+}
+
+/** { temp: "8°", line, loc } or null on any failure or without a location. loc: the place found (kept in the state). */
+async function fetchWeather(set, locale, z, nowIso, saved) {
+  if (!set.weather_location) return null;
+  var loc = latLon(set.weather_location);
+  if (loc) loc = { q: set.weather_location, lat: loc.lat, lon: loc.lon };
+  else if (saved && saved.q === set.weather_location) loc = saved;
+  else {
+    var g = await getJson('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(set.weather_location) + '&count=1&language=en&format=json');
+    var r = g && g.results && g.results[0];
+    if (!r || !isFinite(r.latitude) || !isFinite(r.longitude)) return null;
+    loc = { q: set.weather_location, lat: Number(r.latitude), lon: Number(r.longitude) };
+  }
+  var j = await getJson('https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
+    '&current=temperature_2m,weather_code&hourly=weather_code&forecast_days=2&timezone=' + encodeURIComponent(z.zone === 'UTC' && z.shift ? 'auto' : z.zone) +
+    '&temperature_unit=' + unitOf(set, locale));
+  var t = j && j.current && j.current.temperature_2m, h = j && j.hourly;
+  if (typeof t !== 'number' || !isFinite(t) || !h || !Array.isArray(h.time) || !Array.isArray(h.weather_code)) return null;
+  // the forecast's own clock is the place's: the hours are compared with the place's now (current.time), not the account's
+  var placeNow = j.current.time && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(j.current.time) ? j.current.time : nowIso;
+  return { temp: Math.round(t) + '\u00b0', line: forecastLine({ code: j.current.weather_code, times: h.time, codes: h.weather_code }, placeNow), loc: loc };
+}
+
+// ---- the agenda: an ICS calendar link -----------------------------------------------------------------------------------
+// The link is a secret (a private calendar address): it is read from the settings only here, never put in the merge variables, the
+// state, an error message or a log. Limits: ICS_MS for the request, ICS_MAX_BYTES read (a calendar of years of history can be many
+// MB; the run has 128 MB and 5 s, and the parse below is linear, so 2 MB is a generous year of events); too big, too slow or not a
+// calendar gives no agenda and the rest of the strip stays. Only today and tomorrow are expanded.
+
+var ICS_MS = 2500;
+var ICS_MAX_BYTES = 2000000;
+var ICS_DEADLINE_MS = 3200;
+var AGENDA_ITEMS = 2;
+var AGENDA_TOMORROW_FROM = 18; // from this hour the agenda shows tomorrow's events (when there are any)
+var RECUR_LOOP_CAP = 6000; // periods looked at per rule
+var WINDOWS_ZONES = { // what Outlook writes as TZID: the common ones
+  'W. Europe Standard Time': 'Europe/Berlin', 'Romance Standard Time': 'Europe/Paris', 'GMT Standard Time': 'Europe/London', 'Central Europe Standard Time': 'Europe/Budapest',
+  'Central European Standard Time': 'Europe/Warsaw', 'E. Europe Standard Time': 'Europe/Bucharest', 'FLE Standard Time': 'Europe/Kiev', 'Russian Standard Time': 'Europe/Moscow',
+  'Eastern Standard Time': 'America/New_York', 'Central Standard Time': 'America/Chicago', 'Mountain Standard Time': 'America/Denver', 'Pacific Standard Time': 'America/Los_Angeles',
+  'Alaskan Standard Time': 'America/Anchorage', 'US Mountain Standard Time': 'America/Phoenix', 'Atlantic Standard Time': 'America/Halifax', 'E. South America Standard Time': 'America/Sao_Paulo',
+  'India Standard Time': 'Asia/Kolkata', 'China Standard Time': 'Asia/Shanghai', 'Tokyo Standard Time': 'Asia/Tokyo', 'Korea Standard Time': 'Asia/Seoul',
+  'AUS Eastern Standard Time': 'Australia/Sydney', 'New Zealand Standard Time': 'Pacific/Auckland', 'UTC': 'UTC', 'Singapore Standard Time': 'Asia/Singapore',
+  'Arab Standard Time': 'Asia/Riyadh', 'Israel Standard Time': 'Asia/Jerusalem', 'South Africa Standard Time': 'Africa/Johannesburg', 'Turkey Standard Time': 'Europe/Istanbul',
+};
+
+/** The https link of the setting (webcal:// and http:// are upgraded), or '' (empty or not a link). */
+function icsUrl(input) {
+  var c = (input && input.trmnl && input.trmnl.plugin_settings && input.trmnl.plugin_settings.custom_fields_values) || {};
+  var u = String(c.ics_url === undefined || c.ics_url === null ? '' : c.ics_url).trim();
+  u = u.replace(/^webcal:\/\//i, 'https://').replace(/^http:\/\//i, 'https://');
+  return /^https:\/\/[^\s]+$/i.test(u) && u.length <= 2000 ? u : '';
+}
+
+var zoneFormatters = {};
+function zoneFmt(zone) {
+  if (!zoneFormatters[zone]) zoneFormatters[zone] = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' });
+  return zoneFormatters[zone];
+}
+/** The zone's offset from UTC at an instant, in ms. */
+function offsetAt(ms, zone) {
+  var p = {};
+  zoneFmt(zone).formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = Number(x.value); });
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+}
+/** The instant of a wall-clock time in a zone (a time that does not exist on a DST day moves forward, a repeated one is the first). */
+function wallToEpoch(y, mo, d, h, mi, sec, zone) {
+  var guess = Date.UTC(y, mo - 1, d, h, mi, sec), off = offsetAt(guess, zone), e = guess - off, off2 = offsetAt(e, zone);
+  if (off2 !== off) e = guess - off2;
+  return e;
+}
+function validZone(name) {
+  if (!name) return null;
+  var n = String(name).replace(/^"|"$/g, '').replace(/^\//, '');
+  if (WINDOWS_ZONES[n]) n = WINDOWS_ZONES[n];
+  try { zoneFmt(n); return n; } catch (e) { return null; }
+}
+
+/** Unfolded lines: a line starting with a space or a tab continues the one before. */
+function icsLines(text) { return String(text).replace(/\r?\n[ \t]/g, '').split(/\r?\n/); }
+
+/** "NAME;P=V;P2=V2:value" -> { name, params, value } (a ":" inside a quoted parameter does not end the parameters). */
+function icsProp(line) {
+  var q = false, i, colon = -1;
+  for (i = 0; i < line.length; i++) {
+    var ch = line.charAt(i);
+    if (ch === '"') q = !q;
+    else if (ch === ':' && !q) { colon = i; break; }
+  }
+  if (colon < 0) return null;
+  var head = line.slice(0, colon).split(';'), params = {};
+  head.slice(1).forEach(function (kv) { var e = kv.indexOf('='); if (e > 0) params[kv.slice(0, e).toUpperCase()] = kv.slice(e + 1).replace(/^"|"$/g, ''); });
+  return { name: head[0].toUpperCase(), params: params, value: line.slice(colon + 1) };
+}
+var icsText = function (v) { return String(v || '').replace(/\\([nN,;\\])/g, function (m, c) { return c === 'n' || c === 'N' ? ' ' : c; }).replace(/\s+/g, ' ').trim(); };
+
+/** { events: [{ props: { NAME: [prop, ...] } }] }: the VEVENTs (alarms inside them skipped). */
+function icsEvents(text) {
+  var events = [], cur = null, alarm = 0;
+  icsLines(text).forEach(function (line) {
+    if (line === 'BEGIN:VEVENT') { cur = {}; alarm = 0; return; }
+    if (!cur) return;
+    if (line === 'END:VEVENT') { events.push(cur); cur = null; return; }
+    if (/^BEGIN:VALARM/i.test(line)) { alarm++; return; }
+    if (/^END:VALARM/i.test(line)) { alarm--; return; }
+    if (alarm > 0) return;
+    var p = icsProp(line);
+    if (p) (cur[p.name] = cur[p.name] || []).push(p);
+  });
+  return events;
+}
+
+/** A DTSTART / DTEND / EXDATE / RECURRENCE-ID value: { allDay, y, mo, d, h, mi, s, utc, zone }; zone is the IANA name the wall time is in. */
+function icsTime(prop, userZoneName) {
+  var v = prop.value.trim(), m;
+  if (prop.params.VALUE === 'DATE' || /^\d{8}$/.test(v)) {
+    m = /^(\d{4})(\d\d)(\d\d)$/.exec(v);
+    return m ? { allDay: true, y: +m[1], mo: +m[2], d: +m[3], h: 0, mi: 0, s: 0, zone: userZoneName } : null;
+  }
+  m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)?(Z?)$/.exec(v);
+  if (!m) return null;
+  var utc = m[7] === 'Z';
+  return { allDay: false, y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5], s: +(m[6] || 0), utc: utc, zone: utc ? 'UTC' : validZone(prop.params.TZID) || userZoneName };
+}
+var dayNumber = function (y, mo, d) { return Math.floor(Date.UTC(y, mo - 1, d) / 864e5); };
+function civilOf(dayN) { var t = new Date(dayN * 864e5); return { y: t.getUTCFullYear(), mo: t.getUTCMonth() + 1, d: t.getUTCDate(), wd: t.getUTCDay() }; }
+var DAY_CODES = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function parseRule(value) {
+  var r = { freq: '', interval: 1, count: 0, until: '', byday: [], bymonthday: [], bymonth: [], wkst: 1 };
+  String(value).split(';').forEach(function (kv) {
+    var e = kv.indexOf('='), k = kv.slice(0, e).toUpperCase(), v = kv.slice(e + 1);
+    if (k === 'FREQ') r.freq = v.toUpperCase();
+    else if (k === 'INTERVAL') r.interval = Math.max(1, parseInt(v, 10) || 1);
+    else if (k === 'COUNT') r.count = Math.max(0, parseInt(v, 10) || 0);
+    else if (k === 'UNTIL') r.until = v;
+    else if (k === 'BYDAY') r.byday = v.split(',').map(function (x) { var m = /^([+-]?\d+)?(SU|MO|TU|WE|TH|FR|SA)$/i.exec(x.trim()); return m ? { n: m[1] ? parseInt(m[1], 10) : 0, wd: DAY_CODES[m[2].toUpperCase()] } : null; }).filter(Boolean);
+    else if (k === 'BYMONTHDAY') r.bymonthday = v.split(',').map(Number).filter(function (n) { return n && Math.abs(n) <= 31; });
+    else if (k === 'BYMONTH') r.bymonth = v.split(',').map(Number).filter(function (n) { return n >= 1 && n <= 12; });
+    else if (k === 'WKST') r.wkst = DAY_CODES[v.toUpperCase()] === undefined ? 1 : DAY_CODES[v.toUpperCase()];
+  });
+  return ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].indexOf(r.freq) >= 0 ? r : null;
+}
+
+/** The days (day numbers) of one month that a rule's BYDAY / BYMONTHDAY pick: "1MO" the first Monday, "-1FR" the last Friday. */
+function monthDays(r, y, mo, startDom) {
+  var first = dayNumber(y, mo, 1), len = civilOf(dayNumber(mo === 12 ? y + 1 : y, mo === 12 ? 1 : mo + 1, 1) - 1).d, out = [], i;
+  if (r.bymonthday.length) r.bymonthday.forEach(function (n) { var d = n > 0 ? n : len + n + 1; if (d >= 1 && d <= len) out.push(first + d - 1); });
+  else if (r.byday.length) {
+    r.byday.forEach(function (b) {
+      var days = [];
+      for (i = 0; i < len; i++) if (civilOf(first + i).wd === b.wd) days.push(first + i);
+      if (!b.n) out = out.concat(days);
+      else { var d = b.n > 0 ? days[b.n - 1] : days[days.length + b.n]; if (d !== undefined) out.push(d); }
+    });
+  } else if (startDom <= len) out.push(first + startDom - 1);
+  return out.sort(function (a, b) { return a - b; });
+}
+
+/**
+ * The days an RRULE gives from the start day on, those within [fromDay, toDay]. A rule with COUNT is counted from its first day; one
+ * without jumps near the window. Wall-clock days: the time of day is the caller's (so a DST change keeps "09:00 on Mondays").
+ */
+function ruleDays(r, startDay, fromDay, toDay, untilDay) {
+  var st = civilOf(startDay), out = [], n = 0, k, i, per = r.freq === 'DAILY' ? 1 : r.freq === 'WEEKLY' ? 7 : r.freq === 'MONTHLY' ? 28 : 365;
+  var k0 = r.count ? 0 : Math.max(0, Math.floor((fromDay - startDay) / (per * r.interval)) - 2);
+  for (k = k0; k < k0 + RECUR_LOOP_CAP; k++) {
+    var days = [], ps;
+    if (r.freq === 'DAILY') { days = [startDay + k * r.interval]; ps = days[0]; }
+    else if (r.freq === 'WEEKLY') {
+      ps = startDay - ((st.wd - r.wkst + 7) % 7) + 7 * r.interval * k;
+      (r.byday.length ? r.byday.map(function (b) { return b.wd; }) : [st.wd]).forEach(function (wd) { days.push(ps + ((wd - r.wkst + 7) % 7)); });
+      days.sort(function (a, b) { return a - b; });
+    } else if (r.freq === 'MONTHLY') {
+      var m0 = st.y * 12 + (st.mo - 1) + k * r.interval;
+      ps = dayNumber(Math.floor(m0 / 12), (m0 % 12) + 1, 1);
+      if (!r.bymonth.length || r.bymonth.indexOf((m0 % 12) + 1) >= 0) days = monthDays(r, Math.floor(m0 / 12), (m0 % 12) + 1, st.d);
+    } else {
+      var y = st.y + k * r.interval;
+      ps = dayNumber(y, 1, 1);
+      (r.bymonth.length ? r.bymonth : [st.mo]).forEach(function (mo) { days = days.concat(monthDays(r, y, mo, st.d)); });
+      days.sort(function (a, b) { return a - b; });
+    }
+    if (ps > toDay + 1 && days.every(function (d) { return d > toDay; })) break;
+    for (i = 0; i < days.length; i++) {
+      var d = days[i];
+      if (d < startDay) continue;
+      if (untilDay !== null && d > untilDay) return out;
+      n++;
+      if (d >= fromDay && d <= toDay) out.push(d);
+      if (r.count && n >= r.count) return out;
+    }
+  }
+  return out;
+}
+
+/** "P1DT2H30M" / "PT45M" / "P1W" -> ms, or 0. */
+function icsDuration(v) {
+  var m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(String(v).trim());
+  if (!m) return 0;
+  return (m[1] === '-' ? -1 : 1) * (((+m[2] || 0) * 7 + (+m[3] || 0)) * 864e5 + (+m[4] || 0) * 36e5 + (+m[5] || 0) * 6e4 + (+m[6] || 0) * 1e3);
+}
+
+/**
+ * The occurrences that touch the days [firstDay, lastDay] (day numbers in the account's zone): [{ allDay, start, end (instants) or
+ * startDay, endDay (exclusive), title, location }]. Cancelled events are skipped, EXDATEs removed, RECURRENCE-ID overrides replace the
+ * occurrence they name.
+ */
+function icsOccurrences(text, zoneName, firstDay, lastDay) {
+  var events = icsEvents(text), out = [], masters = [], overrides = {};
+  var one = function (ev, name) { return (ev[name] || [])[0]; };
+  var cancelled = function (ev) { var s = one(ev, 'STATUS'); return !!s && /^CANCELLED$/i.test(s.value.trim()); };
+  var dayStartAt = function (dayN) { var c = civilOf(dayN); return wallToEpoch(c.y, c.mo, c.d, 0, 0, 0, zoneName); };
+  var winStart = dayStartAt(firstDay), winEnd = dayStartAt(lastDay + 1);
+  var key = function (t) { return t.allDay ? 'd' + dayNumber(t.y, t.mo, t.d) : 't' + wallToEpoch(t.y, t.mo, t.d, t.h, t.mi, t.s, t.zone); };
+  var shape = function (ev, startT, startKey) { // one occurrence from its start (a time, or a day number for an all-day event)
+    var endT = one(ev, 'DTEND') && icsTime(one(ev, 'DTEND'), zoneName), dur = one(ev, 'DURATION') ? icsDuration(one(ev, 'DURATION').value) : null;
+    var o = { title: icsText((one(ev, 'SUMMARY') || {}).value), location: icsText((one(ev, 'LOCATION') || {}).value) };
+    if (startT.allDay) {
+      var span = endT && endT.allDay ? Math.max(1, dayNumber(endT.y, endT.mo, endT.d) - dayNumber(startT.y, startT.mo, startT.d)) : dur ? Math.max(1, Math.round(dur / 864e5)) : 1;
+      o.allDay = true; o.startDay = startKey; o.endDay = startKey + span;
+    } else {
+      var s0 = wallToEpoch(startT.y, startT.mo, startT.d, startT.h, startT.mi, startT.s, startT.zone);
+      var len = endT && !endT.allDay ? wallToEpoch(endT.y, endT.mo, endT.d, endT.h, endT.mi, endT.s, endT.zone) - s0 : dur !== null ? dur : 0;
+      o.allDay = false; o.start = startKey === undefined ? s0 : startKey; o.end = o.start + Math.max(0, len);
+    }
+    return o;
+  };
+  events.forEach(function (ev) {
+    var ds = one(ev, 'DTSTART'), uid = (one(ev, 'UID') || {}).value;
+    if (!ds || !icsTime(ds, zoneName)) return;
+    var rid = one(ev, 'RECURRENCE-ID');
+    if (rid && icsTime(rid, zoneName)) {
+      var rt = icsTime(rid, zoneName);
+      (overrides[uid] = overrides[uid] || {})[key(rt)] = true;
+      if (!cancelled(ev)) masters.push({ ev: ev, single: true });
+    } else if (!cancelled(ev)) masters.push({ ev: ev, uid: uid });
+  });
+  masters.forEach(function (m) {
+    var ev = m.ev, st = icsTime(one(ev, 'DTSTART'), zoneName), rr = one(ev, 'RRULE'), rule = rr && !m.single ? parseRule(rr.value) : null;
+    if (!rule) {
+      var o = st.allDay ? shape(ev, st, dayNumber(st.y, st.mo, st.d)) : shape(ev, st);
+      out.push(o);
+      return;
+    }
+    var ex = {};
+    (ev.EXDATE || []).forEach(function (p) { p.value.split(',').forEach(function (v) { var t = icsTime({ value: v, params: p.params }, zoneName); if (t) ex[key(t)] = true; }); });
+    var ov = overrides[m.uid] || {};
+    var untilT = rule.until ? icsTime({ value: rule.until, params: {} }, zoneName) : null;
+    var untilDay = untilT ? dayNumber(untilT.y, untilT.mo, untilT.d) : null;
+    var untilEpoch = untilT && !untilT.allDay ? wallToEpoch(untilT.y, untilT.mo, untilT.d, untilT.h, untilT.mi, untilT.s, untilT.zone) : null;
+    var startDay = dayNumber(st.y, st.mo, st.d);
+    ruleDays(rule, startDay, firstDay - 3, lastDay + 1, untilDay).forEach(function (dn) {
+      var c = civilOf(dn), occ = { allDay: st.allDay, y: c.y, mo: c.mo, d: c.d, h: st.h, mi: st.mi, s: st.s, zone: st.zone };
+      var k = key(occ);
+      if (ex[k] || ov[k]) return;
+      if (st.allDay) out.push(shape(ev, st, dn));
+      else {
+        var at = wallToEpoch(c.y, c.mo, c.d, st.h, st.mi, st.s, st.zone);
+        if (untilEpoch !== null && at > untilEpoch) return;
+        out.push(shape(ev, st, at));
+      }
+    });
+  });
+  return out.filter(function (o) {
+    if (!o.title && !o.location) return false;
+    if (o.allDay) return o.startDay <= lastDay && o.endDay > firstDay;
+    return o.end > o.start ? o.start < winEnd && o.end > winStart : o.start >= winStart && o.start < winEnd;
+  }).map(function (o) { o.zoneDayStart = winStart; return o; });
+}
+
+/** The next AGENDA_ITEMS events to show: today's that are not over, from AGENDA_TOMORROW_FROM (or when none is left) tomorrow's. { day, items } or null. */
+function pickAgenda(text, userZ, nowMs, local, timeFmt) {
+  var zoneName = userZ.zone, today = dayNumber(+local.iso.slice(0, 4), +local.iso.slice(5, 7), +local.iso.slice(8, 10));
+  var occ = icsOccurrences(text, zoneName, today, today + 1), dayStart = function (dn) { var c = civilOf(dn); return wallToEpoch(c.y, c.mo, c.d, 0, 0, 0, zoneName); };
+  var onDay = function (dn) {
+    var a = dayStart(dn), b = dayStart(dn + 1);
+    return occ.filter(function (o) { return o.allDay ? o.startDay <= dn && o.endDay > dn : (o.end > o.start ? o.start < b && o.end > a : o.start >= a && o.start < b); })
+      .sort(function (x, y) { return (x.allDay ? 0 : 1) - (y.allDay ? 0 : 1) || (x.start || 0) - (y.start || 0); });
+  };
+  var todays = onDay(today).filter(function (o) { return o.allDay || o.end > nowMs || (o.end === o.start && o.start >= nowMs); }), tomorrows = onDay(today + 1);
+  var useTomorrow = tomorrows.length && (local.hour >= AGENDA_TOMORROW_FROM || !todays.length);
+  var list = useTomorrow ? tomorrows : todays;
+  return {
+    day: useTomorrow ? 'tomorrow' : 'today',
+    items: list.slice(0, AGENDA_ITEMS).map(function (o) { return { time: o.allDay ? 'All day' : timeFmt(o.start), title: o.title.slice(0, 80), loc: o.location.slice(0, 60) }; }),
+  };
+}
+
+/** The ICS text of a link, read up to ICS_MAX_BYTES (more: null); null on any failure. Nothing of the link is kept or reported. */
+async function fetchIcs(url) {
+  var res = await fetch(url, { signal: AbortSignal.timeout(ICS_MS), headers: { Accept: 'text/calendar, text/plain, */*' } });
+  if (!res || !res.ok) return null;
+  var text = '';
+  if (res.body && typeof res.body.getReader === 'function') {
+    var reader = res.body.getReader(), dec = new TextDecoder(), got = 0;
+    for (;;) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      got += chunk.value.length;
+      if (got > ICS_MAX_BYTES) { try { await reader.cancel(); } catch (e) { /* closed */ } return null; }
+      text += dec.decode(chunk.value, { stream: true });
+    }
+  } else {
+    text = await res.text();
+    if (text.length > ICS_MAX_BYTES) return null;
+  }
+  return /BEGIN:VCALENDAR/i.test(text) ? text : null;
+}
+
+/** { day, label, items } for the strip, or null (no link, a failure, too big): never throws. */
+async function fetchAgenda(url, locale, userZ, nowMs, local) {
+  if (!url) return null;
+  var text = await fetchIcs(url);
+  if (!text) return null;
+  var h24 = /h2[34]/.test(new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle || ''); // the account language's own clock: 9:00 AM or 09:00
+  var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', timeZone: userZ.zone });
+  var a = pickAgenda(text, userZ, nowMs, local, function (ms) { return tf.format(new Date(ms)); });
+  var label = '';
+  if (a.day === 'tomorrow') {
+    try { label = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(1, 'day'); } catch (e) { label = 'tomorrow'; }
+    label = label.charAt(0).toUpperCase() + label.slice(1);
+  }
+  return { day: a.day, label: label, items: a.items };
+}
+
+// CSS px of width each part of the strip needs at each text tier (a measured guess, see the renders): the strip drops the museum label
+// when the parts and the label do not fit one row, and goes to two rows when the parts alone do not.
+var STRIP_NEED = {
+  xl: { date: 760, weather: 440, agenda: 600, label: 580 }, l: { date: 500, weather: 290, agenda: 480, label: 380 },
+  m: { date: 300, weather: 220, agenda: 300, label: 250 }, s: { date: 210, weather: 170, agenda: 220, label: 190 },
+};
+
+/**
+ * The strip of one view slot, or null when there is none: { pct, band, tier, rows, rule, label, detail, label_w, agenda_w }.
+ * set.strip says whether a part is on and has content, set.blocks which ({ date, weather, agenda, n }). A slot too small for the
+ * minimum strip height has none; a work-only slot is not a strip's business.
+ */
+function stripFor(scr, sw, sh, zoom, set) {
+  if (!set.strip) return null;
+  var hc = sh / zoom, wc = sw / zoom, b = set.blocks;
+  var share = Math.max(STRIP_SHARE[scr.o], STRIP_MIN_CSS / hc);
+  if (share > STRIP_MAX_SHARE) return null;
+  var tierOf = function (h, w) { var tc = Math.min(h, w * STRIP_TIER_WIDTH), t = 's'; STRIP_TIERS.some(function (x) { if (tc >= x[0]) { t = x[1]; return true; } return false; }); return t; };
+  var pct = Math.round(share * 100), tier = tierOf(hc * pct / 100, wc), rows = 1, label = !!set.label;
+  var order = ['xl', 'l', 'm', 's'], need = function (t, withLabel) {
+    var n = STRIP_NEED[t];
+    return (b.date ? n.date : 0) + (b.weather ? n.weather : 0) + (b.agenda ? n.agenda : 0) + (withLabel ? n.label : 0);
+  };
+  var fitted = false, i;
+  for (i = order.indexOf(tier); i < order.length && !fitted; i++) { // one row, at the tier or the next smaller
+    if (label && need(order[i], true) <= wc * 0.97) { tier = order[i]; fitted = true; }
+    else if (need(order[i], false) <= wc * 0.97) { tier = order[i]; label = false; fitted = true; }
+  }
+  if (!fitted) { // two rows: the date and the weather, then the agenda and the label
+    rows = 2;
+    share = Math.min(0.5, share * 1.6);
+    pct = Math.round(share * 100);
+    if (hc * pct / 100 / 2 < STRIP_MIN_CSS / 2) return null;
+    tier = tierOf(hc * pct / 100 / 2, wc);
+    var n2 = STRIP_NEED[tier];
+    label = !!set.label && (b.agenda ? n2.agenda : 0) + n2.label <= wc * 0.97;
+  }
+  var n = STRIP_NEED[tier];
+  return {
+    pct: pct, band: 100 - pct, tier: tier, rows: rows, rule: Math.round(pct * (rows === 2 ? 0.25 : 0.5)), label: label, detail: hc * pct / 100 / rows >= 120,
+    label_w: Math.min(45, Math.floor(100 * n.label / wc)), agenda_w: Math.min(60, Math.floor(100 * n.agenda / wc)), single: b.n === 1,
+  };
+}
+
 function artOf(work, shard, set, scr) {
   var art = {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
@@ -410,51 +884,82 @@ function artOf(work, shard, set, scr) {
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
-    if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null };
-    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null };
+    // with an info strip the picture has the band above it (and the museum label moves into the strip)
+    var st = stripFor(scr, sw, sh, art.zoom, set), bh = st ? Math.round(sh * st.band / 100) : sh;
+    if (st) {
+      st.who = st.label ? whoLine(art) : '';
+      st.detail = st.label && st.detail ? detailLine(art) : '';
+    }
+    if (modeFor(art, sw, bh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, bh, st ? false : set.label, art.kind, art.zoom, st ? sh : undefined), plate: null };
+    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: !st && set.label ? plateFor(art, sw, sh, art.kind) : null };
+    geo[v].strip = st;
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
+  var fullH = geo.full.strip ? scr.h * geo.full.strip.band / 100 : scr.h;
   art.width = geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
-    thumbWidth(work.w, work.h, scr.w, scr.h, 'fill');
+    thumbWidth(work.w, work.h, scr.w, fullH, 'fill');
   art.url = thumbUrl(work.f, art.width);
   art.srcset = srcsetOf(work.f, work.w);
   return { art: art, geo: geo };
 }
 
+/** What the strip shows: { info, layout }. info null when no part has content; layout the settings plus { strip, blocks }. */
+async function infoOf(set, local, wxP, agP, state) {
+  var wx = await wxP, ag = await agP;
+  if (wx) state.loc = wx.loc;
+  var blocks = { date: set.show_date, weather: !!wx, agenda: !!ag };
+  blocks.n = (blocks.date ? 1 : 0) + (blocks.weather ? 1 : 0) + (blocks.agenda ? 1 : 0);
+  var info = blocks.n ? {
+    has_date: blocks.date, day: local.day, weekday: local.weekday, month: local.month,
+    has_weather: blocks.weather, temp: wx ? wx.temp : '', forecast: wx ? wx.line : '', has_agenda: blocks.agenda, agenda: ag,
+  } : null;
+  return { info: info, layout: Object.assign({}, set, { strip: blocks.n > 0, blocks: blocks }) };
+}
+
 async function run(input) {
-  var set = settingsOf(input);
+  var set = settingsOf(input), set0 = set;
   var scr = screenOf(input);
   var state = cleanState(input && input.trmnl && input.trmnl.state);
+  var locale = userLocale(input), zone = userZone(input), nowMs = Date.now(), local = dayInfo(nowMs, locale, zone), url = set.show_agenda ? icsUrl(input) : '';
+  // the weather and the agenda are asked while the data is fetched; a failure, a missing location or link, or the deadline leave them out
+  var wxP = set.show_weather ? withDeadline(fetchWeather(set, locale, zone, local.iso, state.loc), WEATHER_DEADLINE_MS) : Promise.resolve(null);
+  var agP = url ? withDeadline(fetchAgenda(url, locale, zone, nowMs, local), ICS_DEADLINE_MS) : Promise.resolve(null);
   var shard;
   try {
     shard = await fetchShard(scr.o, Math.random);
   } catch (err) {
     // Hand the state back unchanged. The work shown last stays on the screen, without a notice; else a plain message.
     var prev = input && input.trmnl && input.trmnl.previous_merge_variables;
-    var out = { settings: set, trmnl_state: state };
+    var made0 = await infoOf(set, local, wxP, agP, state);
+    var out = { settings: set0, trmnl_state: state, info: made0.info };
     if (prev && prev.art && prev.art.url) { out.art = prev.art; out.geo = prev.geo; out.backup = prev.backup || null; }
     else out.notice = 'The artwork list could not be loaded. The next refresh tries again.';
     out.debug = String(err && err.message ? err.message : err);
     return out;
   }
+  var made1 = await infoOf(set, local, wxP, agP, state), info = made1.info;
+  set = made1.layout; // the settings and what the strip has (also in the merge variables: no link in it, see icsUrl)
+  // the work is picked for the shape of its room: with a strip, the band above it
+  var zoom0 = scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), st0 = stripFor(scr, scr.w, scr.h, zoom0, set);
+  var pickAspect = scr.w / (st0 ? scr.h * st0.band / 100 : scr.h);
   var chosen = pick(shard, {
-    k: ASPECT_K, aspect: scr.w / scr.h, movement: set.movement, genres: set.genres, family: set.family_friendly,
+    k: ASPECT_K, aspect: pickAspect, movement: set.movement, genres: set.genres, family: set.family_friendly,
   }, state.h, Math.random);
   var work = shard.w[chosen.index];
   state.h.push(qnum(work.i));
   state.h = state.h.slice(-HISTORY);
   var made = artOf(work, shard, set, scr);
-  var pickCtx = { k: ASPECT_K, aspect: scr.w / scr.h, movement: set.movement, genres: set.genres, family: set.family_friendly };
+  var pickCtx = { k: ASPECT_K, aspect: pickAspect, movement: set.movement, genres: set.genres, family: set.family_friendly };
   var bIdx = pickBackup(shard, pickCtx, state.h, chosen.index, Math.random);
   var backup = bIdx === null ? null : artOf(shard.w[bIdx], shard, set, scr);
   // filters_relaxed: the narrowing filters that left too few works and were dropped for this refresh
   // trmnl_state records the primary: whether its picture loaded (or the backup replaced it) is only known in the browser
-  return { art: made.art, geo: made.geo, backup: backup, settings: set, filters_relaxed: chosen.relaxed, trmnl_state: state };
+  return { art: made.art, geo: made.geo, backup: backup, info: info, settings: set0, filters_relaxed: chosen.relaxed, trmnl_state: state };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, stripFor: stripFor, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }

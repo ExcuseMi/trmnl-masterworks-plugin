@@ -27,6 +27,51 @@ custom_fields:
   default: 'true'
   optional: true
   help_text: "<b>On</b>: title, artist and year, then technique and where the work hangs, as on a museum wall. <b>Off</b>: only the artwork."
+- keyname: show_date
+  group: Info strip
+  field_type: boolean
+  name: Show the date
+  default: 'false'
+  optional: true
+  help_text: "A calm strip at the bottom with the day number, weekday and month in your account's language. The artwork is shown in the space above it and the museum label moves into the strip (or is left out when the strip has no room). The strip appears when any of the three parts is on."
+- keyname: show_weather
+  group: Info strip
+  field_type: boolean
+  name: Show the weather
+  default: 'false'
+  optional: true
+  help_text: "The temperature and a short forecast line from Open-Meteo. Needs a weather location; without one, or when the weather cannot be fetched, this part is left out."
+- keyname: show_agenda
+  group: Info strip
+  field_type: boolean
+  name: Show the agenda
+  default: 'false'
+  optional: true
+  help_text: "Your next two events of today (tomorrow's from 6 pm, or when none is left) from a calendar link. Needs the calendar link below; without one nothing shows."
+- keyname: ics_url
+  group: Info strip
+  field_type: password
+  name: Calendar (ICS link)
+  optional: true
+  help_text: "The private ICS address of a calendar (Google Calendar: Settings, Integrate calendar, Secret address in iCal format; Outlook: Publish calendar; iCloud: Public calendar link). Treated as a secret: it is only used to fetch your events and is never shown, logged or passed on. A calendar larger than 2 MB, or one that is slow to answer, shows no agenda."
+- keyname: weather_location
+  group: Info strip
+  field_type: string
+  name: Weather location
+  optional: true
+  placeholder: Paris, France
+  help_text: "A city or place name, or latitude and longitude (<code>48.85, 2.35</code>). TRMNL does not share your location, so the weather needs this. Weather from Open-Meteo (no account needed); the forecast line is in English."
+- keyname: temperature_unit
+  group: Info strip
+  field_type: select
+  name: Temperature unit
+  default: auto
+  optional: true
+  help_text: "Auto: Fahrenheit for an account language of the United States, else Celsius."
+  options:
+  - Auto: auto
+  - Celsius: c
+  - Fahrenheit: f
 - keyname: family_friendly
   group: Selection
   field_type: boolean
