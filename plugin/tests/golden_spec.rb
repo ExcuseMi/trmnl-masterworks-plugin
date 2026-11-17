@@ -44,7 +44,7 @@ RSpec.describe 'Masterworks pixel guard for the screens that are not the Frame' 
   CASES.each do |device, orientation, view, work, fields|
     name = [device, orientation, view, work, fields.empty? ? 'label' : 'weather'].join('-')
     it "#{name}: the render is the committed one" do
-      page = trmnl.render(view:, device:, orientation:, mocks: shards(work, work).merge(services), custom_fields: fields)
+      page = trmnl.render(view:, device:, orientation:, mocks: shards(work, work).merge(services), custom_fields: fields.merge('fill' => 'false'))
       page.has_css?('img.image')
       golden = File.join(GOLDEN_DIR, "#{name}.png")
       if ENV['GOLDEN'] == 'update'

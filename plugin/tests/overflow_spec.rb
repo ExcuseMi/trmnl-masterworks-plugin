@@ -32,9 +32,9 @@ RSpec.describe 'Masterworks label and info never overflow a small screen' do
 
   %w[joan_6 joan_6_pro joan_13 onyx_boox_go_10_3_lumi tcl_nxtpaper_14].each do |device|
     %w[half_horizontal quadrant full].each do |view|
-      [['the label only', {}], ['the info on', :info]].each do |what, fields|
+      [['the label only', {}], ['the label only, fill off', { 'fill' => 'false' }], ['the info on', :info], ['the info on, fill off', :info_off]].each do |what, fields|
         it "#{view} on #{device} portrait, #{what}: nothing overflows" do
-          custom = fields == :info ? all_on : fields
+          custom = fields == :info ? all_on : fields == :info_off ? all_on.merge('fill' => 'false') : fields
           page = trmnl.render(view:, device:, orientation: 'portrait', mocks: shards('one-landscape', 'one-portrait').merge(services), custom_fields: custom)
           expect(page).to have_no_overflow
         end

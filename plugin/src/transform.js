@@ -39,7 +39,8 @@ var STEPS = [120, 250, 500, 960, 1280, 1920, 3840]; // the thumbnail widths Wiki
 var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
-var AUTO_CROP_MAX = 0.05; // full screen when filling the view would crop less than this share of the work's area, else the gallery
+var AUTO_CROP_MAX = 0.05; // fill off: full screen when filling the view would crop less than this share of the work's area, else the gallery
+var FILL_CROP_MAX = 0.15; // fill on (the default, setting fill): the work fills its area edge to edge when that crops at most this share of it; with info on the area is the band above the strip
 var ASPECT_K = 2; // shape factor exp(-ASPECT_K x |ln(work aspect / screen aspect)|): works shaped like the screen come up more often
 // the genre choices of the settings and the genres (the data's own names) each one lets through
 var GENRE_SETS = {
@@ -192,7 +193,7 @@ function settingsOf(input) {
   var genres = listOf(c.genres).map(function (g) { return g.toLowerCase(); }).filter(function (g, i, a) { return GENRE_SETS[g] && a.indexOf(g) === i; });
   var unit = txt(c.temperature_unit);
   return {
-    label: flag(c.label, true), // a select value from an older version ("corner", "off") is read as well
+    fill: flag(c.fill, true), label: flag(c.label, true), // a select value from an older version ("corner", "off") is read as well
     genres: genres, movement: movement, family_friendly: flag(c.family_friendly, true),
     show_date: flag(c.show_date, false), show_weather: flag(c.show_weather, false), show_agenda: flag(c.show_agenda, false), // the info strip's three parts, each off by default
     weather_location: String(c.weather_location === undefined || c.weather_location === null ? '' : c.weather_location).trim().slice(0, 80),
@@ -421,9 +422,10 @@ function cropShare(workAspect, slotAspect) {
   return 1 - Math.min(r, 1 / r);
 }
 
-/** "full" when a fill crops less than AUTO_CROP_MAX of the work in a slot of this shape, else "gallery". */
-function modeFor(art, slotW, slotH) {
-  return cropShare(art.w / art.h, slotW / slotH) < AUTO_CROP_MAX ? 'full' : 'gallery';
+/** "full" when a fill crops at most FILL_CROP_MAX (fill on) or less than AUTO_CROP_MAX (fill off) of the work in a slot of this shape, else "gallery". */
+function modeFor(art, slotW, slotH, fill) {
+  var c = cropShare(art.w / art.h, slotW / slotH);
+  return (fill ? c <= FILL_CROP_MAX : c < AUTO_CROP_MAX) ? 'full' : 'gallery';
 }
 
 /** The largest standard thumbnail width that is at most cap. */
@@ -894,14 +896,17 @@ function infoPlace(art, sw, sh, zoom, set) {
     var z = INFO_SIZES[tier], mPx = z.m * zoom;
     var g = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: (z.h + z.gap) * zoom, share: (sw - 2 * mPx) / sw });
     var base = z.L + midCols * z.M, label = !!set.label, need = base + (label ? z.R : 0);
-    // the groups stand on the work's edges when it is wide enough (INFO_NARROW of the slot) and they all fit there, else on the margins
-    var edgesOk = g.pw >= INFO_NARROW * sw && g.pw / zoom * cw >= need;
+    // fill on: when filling the band above the strip (the slot less the strip, its gap and the margin under it) crops at most FILL_CROP_MAX, the work fills it edge to edge
+    var bandH = sh - (z.gap + z.h + z.m) * zoom, fill = !!set.fill && bandH > 0.4 * sh && cropShare(art.w / art.h, sw / bandH) <= FILL_CROP_MAX;
+    // the groups stand on the work's edges when it is wide enough (INFO_NARROW of the slot) and they all fit there, else on the margins; a work that fills the width: the margins
+    var edgesOk = !fill && g.pw >= INFO_NARROW * sw && g.pw / zoom * cw >= need;
     var stripPx = edgesOk ? g.pw : sw - 2 * mPx, room = stripPx / zoom * cw;
     if (label && room < need) { if (!noLabelOk) return null; label = false; }
     if (room < base && !force) return null;
     return {
       place: 'below', arrange: 'strip', tier: tier, gallery: g, stripw: Math.round(100 * stripPx / sw), lw: Math.round(100 * z.L * zoom / sw), mw: Math.round(100 * z.M * zoom / sw),
       midcols: midCols, label: label, who: '', detail: '', gap: z.gap, h: z.h, rule: 0,
+      margin: z.m, fill: fill, band: fill ? Math.round(100 * bandH / sh) : 0, // fill: the work's band above the strip, in percent of the slot's height
     };
   };
   var i, out = null;
@@ -923,13 +928,14 @@ function artOf(work, shard, set, scr) {
     var inf = infoPlace(art, sw, sh, art.zoom, set);
     if (inf) { // info on: the work always hangs on its mat (no placard over the art), the info beside it or below
       if (inf.label) { inf.who = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : ''); inf.detail = ''; } // the technique is left out when info is on
-      geo[v] = { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
-    } else if (modeFor(art, sw, sh) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null };
+      geo[v] = inf.fill ? { mode: 'full', fit: 'cover', gallery: null, plate: null, info: inf } : { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
+    } else if (modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null };
     else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label ? plateFor(art, sw, sh, art.kind) : null, info: null };
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
+  var fullInf = geo.full.info, bandFull = fullInf && fullInf.fill ? scr.h * fullInf.band / 100 : scr.h;
   art.width = geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
-    thumbWidth(work.w, work.h, scr.w, scr.h, 'fill');
+    thumbWidth(work.w, work.h, scr.w, bandFull, 'fill');
   if (work.r && art.width > work.r) art.width = capStep(work.r); // a PNG-only work: its thumbnail is a PNG, many MB at the wide steps (the build measured and set r)
   art.url = thumbUrl(work.f, art.width);
   art.srcset = srcsetOf(work.f, work.w, work.r);
@@ -973,7 +979,12 @@ async function run(input) {
   }
   var made1 = await infoOf(set, local, wxP, agP, state), info = made1.info;
   set = made1.layout; // the settings and what the strip has (also in the merge variables: no link in it, see icsUrl)
+  // with fill on the work is picked for the shape it fills: the screen, or the band above the strip
   var pickAspect = scr.w / scr.h;
+  if (set.fill && set.strip) {
+    var z0 = scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), tz = scr.frame ? (scr.w >= 2000 ? 'f' : 'g') : (scr.h / z0 >= 900 ? 'xl' : scr.h / z0 >= 560 ? 'l' : scr.h / z0 >= 340 ? 'm' : 's'), zz = INFO_SIZES[tz];
+    if (scr.h / z0 >= INFO_MIN_SLOT && scr.w / z0 >= INFO_MIN_SLOT_W) pickAspect = scr.w / (scr.h - (zz.gap + zz.h + zz.m) * z0);
+  }
   var chosen = pick(shard, {
     k: ASPECT_K, aspect: pickAspect, movement: set.movement, genres: set.genres, family: set.family_friendly,
   }, state.h, Math.random);
@@ -992,6 +1003,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }

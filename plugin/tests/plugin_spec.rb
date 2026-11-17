@@ -6,7 +6,8 @@ require 'json'
 require 'uri'
 
 RSpec.describe 'Masterworks' do
-  let(:custom_fields) { {} }
+  # the automatic choice of these examples is the 5 % rule (fill off); the fill setting has its own examples in info_spec.rb
+  let(:custom_fields) { { 'fill' => 'false' } }
 
   def fixture(name) = JSON.parse(File.read(File.join(__dir__, 'fixtures', "#{name}.json")))
 

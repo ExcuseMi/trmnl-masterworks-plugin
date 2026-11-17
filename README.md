@@ -33,12 +33,12 @@ Random and weighted; the weight is the product of the rows below. The constants 
 
 ## How a work is shown
 
-The plugin decides per work and per view, with no setting.
+The plugin decides per work and per view; the one setting is Fill the screen.
 
 | When | Look |
 |---|---|
-| A fill would crop less than 5 % of the work (`AUTO_CROP_MAX`, 0.05) | Full screen, with a small placard in the picture's bottom-left corner: a solid plate, black on a dark corner and white on a light one, a thin solid edge, a margin to the picture's edges |
-| Otherwise | The whole work in a gallery: a pure white or black mat (by the work's brightness), a thin bevel line in the opposite colour, the label right-aligned under the picture |
+| A fill would crop at most 15 % of the work (`FILL_CROP_MAX`; fill off: less than 5 %, `AUTO_CROP_MAX`) | Full screen, with a small placard in the picture's bottom-left corner: a solid plate, black on a dark corner and white on a light one, a thin solid edge, a margin to the picture's edges |
+| Otherwise | The whole work in a gallery: a pure white or black mat (by the work's brightness), no outline, the label right-aligned under the picture |
 
 A work takes up to 80 % of the dimension that is not its limit; a panorama may take up to 92 % of the width, a tall work up to 88 % of the height, always with room for the label. The label has three lines: title, ARTIST and year, then technique and where the work hangs (the museum, not a room), for example `Oil on canvas · Rijksmuseum`. The build names the technique from Wikidata's materials (Oil on canvas, Oil on panel, Tempera on panel, Fresco, Watercolour, Gouache, Woodblock print, Etching, Engraving, Lithograph, Colour lithograph, Drawing, Pastel, Mixed media...); a material it cannot name is left out and the line shows only the place. Size stays in the data, not on the label.
 
@@ -46,6 +46,7 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 
 | Group | Setting | Default | Values |
 |---|---|---|---|
+| (none) | Fill the screen | On | On: a work whose fill crops at most 15 % (`FILL_CROP_MAX`) fills the screen edge to edge (with the info on: the band above the strip), with the placard; the rest hang on the mat. Off: only under 5 % (`AUTO_CROP_MAX`) fills |
 | (none) | Museum label | On | On or off |
 | Selection | Family friendly | On | Leaves out works whose subject is nudity or graphic violence |
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |

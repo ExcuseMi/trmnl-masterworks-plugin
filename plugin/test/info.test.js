@@ -240,3 +240,57 @@ test('agenda: tomorrow\'s events say so in the time (weekday short), no heading,
   assert.strictEqual(a.day, 'tomorrow');
   assert.strictEqual(a.items[0].time, 'Wed 8:30 AM');
 });
+
+// fill on / off x info on / off
+const cropOf = (aspect, w, h) => 1 - Math.min(aspect / (w / h), (w / h) / aspect);
+
+test('fill on, info off: a work whose fill crops at most 15 % fills the screen edge to edge; fill off: only under 5 %', () => {
+  assert.strictEqual(t.FILL_CROP_MAX, 0.15);
+  assert.strictEqual(t.modeFor({ w: 1600, h: 900 }, 2560, 1440, true), 'full');
+  assert.strictEqual(t.modeFor({ w: 3, h: 2 }, 2560, 1440, true), 'gallery', '3:2 on a 16:9 screen crops 15.6 %');
+  assert.strictEqual(t.modeFor({ w: 2000, h: 1000 }, 2560, 1440, true), 'full', '2:1 crops 11 %');
+});
+
+test('fill on, info off, in a run: the works that crop up to 15 % fill; fill off keeps the 5 % rule', async () => {
+  const geoOf = async (fields, w, h) => {
+    globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => ({ ...shardJson, w: [{ ...shardJson.w[0], w, h }] }) });
+    return (await t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, plugin_settings: { custom_fields_values: fields }, state: {} } })).geo.full;
+  };
+  const wide = await geoOf({}, 1800, 1000); // 16:9 is 1.78, this 1.8: nearly the screen
+  assert.strictEqual(wide.mode, 'full');
+  const near = await geoOf({}, 2000, 1000); // 2:1 crops 11 %
+  assert.strictEqual(near.mode, 'full', 'fill on (the default)');
+  assert.strictEqual((await geoOf({ fill: 'false' }, 2000, 1000)).mode, 'gallery', 'fill off: the 5 % rule');
+  assert.strictEqual((await geoOf({ fill: 'false' }, 1800, 1000)).mode, 'full', 'fill off: under 5 % still fills');
+});
+
+test('fill on, info on: the work fills the band above the strip when that crops at most 15 %, else it hangs whole on its mat; fill off: always on the mat', () => {
+  const ON = { ...ALL, fill: true }, OFF = { ...ALL, fill: false };
+  const frame = (aspect, set) => t.infoPlace({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 2560, 1440, 1, set);
+  const z = t.INFO_SIZES.f, bandH = 1440 - (z.gap + z.h + z.m);
+  for (const [name, aspect] of Object.entries(SHAPES)) {
+    const on = frame(aspect, ON), off = frame(aspect, OFF);
+    assert.strictEqual(on.fill, cropOf(aspect, 2560, bandH) <= 0.15, `${name}: fills the band exactly when that crops at most 15 % (${cropOf(aspect, 2560, bandH).toFixed(3)})`);
+    assert.strictEqual(off.fill, false, `${name}: fill off never fills with the info on`);
+    if (on.fill) {
+      assert.ok(Math.abs(on.band - Math.round(100 * bandH / 1440)) <= 1, `${name}: the band above the strip`);
+      assert.strictEqual(on.stripw, Math.round(100 * (2560 - 2 * z.m) / 2560), `${name}: the strip's text stands on the margins`);
+      assert.ok(on.label, `${name}: the museum label is in the strip, no placard over the art`);
+    }
+  }
+  assert.strictEqual(frame(2.2, ON).fill, true, 'a 2.2:1 work fills the band of the Frame');
+});
+
+test('fill on, info on, in a run: the work fills the band edge to edge, no placard; the thumbnail is sized for the band', async () => {
+  globalThis.fetch = async (url) => (/open-meteo/.test(url) ? reply(FORECAST)() : reply({ ...shardJson, w: [{ ...shardJson.w[0], w: 2200, h: 1000 }] })());
+  const out = await t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, user: { locale: 'en', time_zone_iana: 'UTC' }, plugin_settings: { custom_fields_values: { show_date: 'true' } }, state: {} } });
+  assert.strictEqual(out.geo.full.mode, 'full');
+  assert.strictEqual(out.geo.full.plate, null);
+  assert.ok(out.geo.full.info.fill && out.geo.full.info.label);
+  const off = await runWith2({ show_date: 'true', fill: 'false' });
+  assert.strictEqual(off.geo.full.mode, 'gallery');
+});
+async function runWith2(fields) {
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ...shardJson, w: [{ ...shardJson.w[0], w: 2200, h: 1000 }] }) });
+  return t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, user: { locale: 'en', time_zone_iana: 'UTC' }, plugin_settings: { custom_fields_values: fields }, state: {} } });
+}

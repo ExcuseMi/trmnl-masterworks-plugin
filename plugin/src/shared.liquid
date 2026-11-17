@@ -8,7 +8,26 @@
   {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}{% assign ppad = "px--3 py--2" %}
 {% endif %}
 {% assign inf = gv.info %}
-{% if gv.mode == "full" %}
+{% comment %} mat and ink are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
+{% if art.mat == "black" %}
+  {% assign mat = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
+{% else %}
+  {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
+{% endif %}
+{% if gv.mode == "full" and inf %}
+{% comment %} fill on and info on: the work fills the band above the strip edge to edge, from the top of the screen; the strip is full width under it on the mat's colour, its text inside the margins {% endcomment %}
+<div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}"{% if art.kind == "big" or trmnl.device.model == "frame" %} data-frame="1"{% endif %}>
+  <div class="relative w--full h--[{{ inf.band }}cqh]" data-fill-band="1">
+    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+  </div>
+  <div class="flex flex--col flex--bottom flex--center-x w--full h--[{{ 100 | minus: inf.band }}cqh] {{ mat }}">
+    <div class="flex flex--row flex--bottom w--[{{ inf.stripw }}cqw]" data-info-block="below">
+      {% render "info", inf:inf, info:info, art:art, ink:ink, frame:true %}
+    </div>
+    <div class="w--full h--[{{ inf.margin }}px]"></div>
+  </div>
+</div>
+{% elsif gv.mode == "full" %}
 <div class="layout layout--center p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
   <div class="relative w--full h--full bg--white">
     <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
@@ -33,11 +52,6 @@
 {% else %}
 {% comment %} mat and ink are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
 {% assign gl = gv.gallery %}
-{% if art.mat == "black" %}
-  {% assign mat = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
-{% else %}
-  {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
-{% endif %}
 {% capture bevel %}
     {% comment %} the picture in a whole-percent sized box on the mat: no outline, the mat alone frames the work (owner 2026-11-17); the picture covers its box {% endcomment %}
     <div class="{{ mat }} w--[{{ gl.a }}cqw] h--[{{ gl.b }}cqh]" data-bevel="1">

@@ -50,7 +50,7 @@ RSpec.describe 'Masterworks info strip' do
   VIEWS_INFO = %w[full half_horizontal].freeze
 
   def screen(device, fields, view: 'full', orientation: 'landscape', mocks: shards.merge(services))
-    base = { 'weather_location' => 'Paris', 'ics_url' => LINK }
+    base = { 'weather_location' => 'Paris', 'ics_url' => LINK, 'fill' => 'false' } # the mat examples; fill has its own below
     trmnl.render(view:, device:, orientation:, mocks:, custom_fields: base.merge(fields))
   end
 
@@ -217,5 +217,95 @@ RSpec.describe 'Masterworks info strip' do
     wait(page)
     expect(page.evaluate("getComputedStyle(document.querySelector('[data-gallery][data-block=\"primary\"]')).backgroundColor")).to eq('rgb(0, 0, 0)')
     expect(page.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"] [data-day]')).color")).to eq('rgb(255, 255, 255)')
+  end
+
+  # the fill setting: on (the default) a work that crops at most 15 % fills its area edge to edge; off: the 5 % rule and the mat
+  describe 'fill the screen' do
+    def fill_screen(device, fields, aspect, orientation: 'landscape')
+      screen(device, { 'fill' => 'true' }.merge(fields), orientation:, mocks: shape_shards(aspect).merge(services))
+    end
+
+    it 'info off: a work that crops 11 % fills the Frame edge to edge with its placard; fill off hangs it on the mat' do
+      on = fill_screen('frame', {}, 2.0)
+      wait(on)
+      expect(on).to have_css('[data-mode="full"]')
+      expect(on).to have_no_css('[data-gallery]')
+      expect(on).to have_css('[data-placard]')
+      img = box(on, '[data-block="primary"] img.image')
+      lay = box(on, '[data-block="primary"]')
+      expect(img).to eq(lay), 'edge to edge'
+      off = screen('frame', { 'fill' => 'false' }, mocks: shape_shards(2.0).merge(services))
+      wait(off)
+      expect(off).to have_css('[data-gallery]')
+    end
+
+    it 'info off: a work that crops more than 15 % hangs on the mat even with fill on' do
+      page = fill_screen('frame', {}, 4.0 / 3)
+      wait(page)
+      expect(page).to have_css('[data-gallery]')
+    end
+
+    %w[frame og_png v2].each do |device|
+      it "info on, #{device}: a work that fills the band goes edge to edge from the top, the strip is full width under it, the label in the strip, no placard" do
+        page = fill_screen(device, fields_for(%w[show_date show_weather]), device == 'v2' ? 1.8 : 2.1) # about the shape of the band above the strip
+        wait(page)
+        expect(page).to have_css('[data-mode="full"][data-block="primary"]')
+        expect(page).to have_no_css('[data-placard]')
+        expect(page).to have_css('[data-info-block] [data-label]')
+        lay = box(page, '[data-block="primary"]')
+        band = box(page, '[data-fill-band]')
+        strip = box(page, '[data-block="primary"] [data-info-block]')
+        expect(band[0]).to be_within(1).of(lay[0])
+        expect(band[2]).to be_within(1).of(lay[2])
+        expect(band[1]).to be_within(1).of(lay[1])
+        expect(strip[1]).to be >= band[3] - 1, 'the strip is under the band'
+        expect(strip[3]).to be <= lay[3] + 1
+        expect(strip[0] - lay[0]).to be_within(4).of(lay[2] - strip[2]), 'equal outer margins'
+        expect(page.evaluate("document.querySelector('[data-fill-band] img').getBoundingClientRect().height")).to be_within(2).of(band[3] - band[1])
+        expect(cut_parts(page)).to eq([])
+      end
+    end
+
+    it 'info on: a work that would crop more than 15 % of the band hangs whole on the mat, the strip under it; fill off always so' do
+      %w[frame og_png].each do |device|
+        page = fill_screen(device, fields_for(%w[show_date]), 1.0)
+        wait(page)
+        expect(page).to have_css('[data-gallery]')
+        expect(page).to have_no_css('[data-fill-band]')
+        expect_composed(page, "square on #{device}")
+        off = screen(device, fields_for(%w[show_date]), mocks: shape_shards(2.1).merge(services))
+        wait(off)
+        expect(off).to have_css('[data-gallery]'), "#{device} fill off: the mat"
+      end
+    end
+
+    # fill on / off x info on / off x every shape, on the Frame
+    [true, false].each do |fill|
+      [true, false].each do |info|
+        SHAPES.each do |name, aspect|
+          it "#{name} on the Frame, fill #{fill ? 'on' : 'off'}, info #{info ? 'on' : 'off'}: composed, nothing overlapping or cut" do
+            fields = (info ? fields_for(%w[show_date show_weather]) : {}).merge('fill' => fill.to_s)
+            page = screen('frame', fields, mocks: shape_shards(aspect).merge(services))
+            wait(page)
+            if info
+              expect(page).to have_css('[data-info-block]')
+              expect(page).to have_no_css('[data-placard]')
+              if page.has_css?('[data-fill-band]')
+                expect(fill).to be(true)
+              else
+                expect_composed(page, "#{name} fill #{fill} info on")
+              end
+              expect(cut_parts(page)).to eq([])
+            else
+              expect(page).to have_no_css('[data-info-block]')
+              expect(page).to have_css('[data-placard], [data-label]')
+              crop = 1 - [aspect / (2560.0 / 1440), (2560.0 / 1440) / aspect].min
+              fills = fill ? crop <= 0.15 : crop < 0.05
+              expect(page).to have_css(fills ? '[data-mode="full"]' : '[data-gallery]')
+            end
+          end
+        end
+      end
+    end
   end
 end

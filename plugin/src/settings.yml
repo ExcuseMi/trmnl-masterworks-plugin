@@ -21,6 +21,12 @@ custom_fields:
   category: art,images
   github_url: https://github.com/ExcuseMi/trmnl-masterworks-plugin
   learn_more_url: https://www.wikidata.org
+- keyname: fill
+  field_type: boolean
+  name: Fill the screen
+  default: 'true'
+  optional: true
+  help_text: "<b>On</b> (default): a work that fills the screen edge to edge while cropping at most 15 % of it does so, with a small placard in its corner (with the date, weather or agenda on: it fills the space above the strip). Other works hang whole on a white or black mat. <b>Off</b>: only a work that needs almost no cropping (5 %) fills the screen; the rest hang on the mat."
 - keyname: label
   field_type: boolean
   name: Museum label
