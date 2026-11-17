@@ -63,7 +63,7 @@ test('weather line: under the temperature, the coming rain or snow in words, a d
 
 test('day: number, weekday and month in the account language and zone', () => {
   const now = Date.UTC(2026, 10, 5, 23, 30); // 5 Nov 23:30 UTC = 6 Nov in Brussels
-  assert.deepStrictEqual(t.dayInfo(now, 'en', { zone: 'UTC', shift: 0 }), { day: '5', weekday: 'Thursday', month: 'November', hour: 23, iso: '2026-11-05T23:30' });
+  assert.deepStrictEqual(t.dayInfo(now, 'en', { zone: 'UTC', shift: 0 }), { day: '5', weekday: 'Thursday', month: 'November', weekdayShort: 'Thu', monthShort: 'Nov', hour: 23, iso: '2026-11-05T23:30' });
   const bxl = t.dayInfo(now, 'nl', { zone: 'Europe/Brussels', shift: 0 });
   assert.deepStrictEqual([bxl.day, bxl.weekday, bxl.month, bxl.hour], ['6', 'vrijdag', 'november', 0]);
   assert.strictEqual(t.dayInfo(now, 'xx-not-a-locale-', { zone: 'UTC', shift: 0 }).weekday, 'Thursday', 'a bad locale falls back to English');
@@ -190,15 +190,17 @@ test('shape table: every shape on every screen hangs whole on its mat with one s
       const art = { w: Math.round(aspect * 1000), h: 1000, kind, lg, title: 'A title', artist: 'Artist', medium: 'Oil on canvas', collection: 'Museum' };
       const inf = t.infoPlace(art, sw, sh, zoom, ALL);
       const where = `${name} on ${sname}`;
-      assert.ok(inf, `${where}: has a strip`);
+      if (!inf) { // only a work too narrow for even the date in short names (64 CSS px of a scroll on the OG): no strip, the work keeps its label
+        assert.ok(aspect * 0.88 * sh / zoom < 150, `${where}: no strip only for a work narrower than 150 CSS px`);
+        continue;
+      }
       assert.strictEqual(inf.place, 'below', `${where}: the strip is under the work, never beside it`);
       const g = inf.gallery, z = t.INFO_SIZES[inf.tier];
       assert.ok(Math.abs(g.pw / g.ph / aspect - 1) < 0.04, `${where}: no crop (box ${g.pw} x ${g.ph} is not ${aspect.toFixed(2)})`);
-      assert.ok(g.ph + (z.h + z.gap) * zoom <= sh * 0.93 + 0.012 * sh, `${where}: the work and the strip fit the slot with a margin`);
+      assert.ok(g.ph + (inf.h + z.gap) * zoom <= sh * 0.93 + 0.012 * sh + 2, `${where}: the work and the strip (${inf.arrange}, ${inf.h}) fit the slot with a margin`);
       assert.ok(g.pw <= sw - 2 * z.m * zoom + 0.012 * sw, `${where}: inside the side margins`);
-      const onEdges = Math.abs(inf.stripw - g.a) <= 1, onMargins = Math.abs(inf.stripw - Math.round(100 * (sw - 2 * z.m * zoom) / sw)) <= 1;
-      assert.ok(onEdges || onMargins, `${where}: the strip stands on the work's edges or on the margins`);
-      if (g.pw < t.INFO_NARROW * sw) assert.ok(onMargins, `${where}: a narrow work: the groups stand on the margins`);
+      assert.ok(Math.abs(inf.stripw - g.a) <= 1, `${where}: the strip stands on the work's edges, always (${inf.stripw} vs ${g.a})`);
+      assert.ok(['row', 'wrap', 'stackMid', 'stackAll', 'dateStack', 'dateOnly'].includes(inf.arrange));
     }
   }
   const frame = t.infoPlace({ w: 1800, h: 1000, kind: 'big', title: 't', artist: 'a' }, 2560, 1440, 1, ALL);

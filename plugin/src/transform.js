@@ -79,11 +79,13 @@ var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
 // Frame (2560 wide; the Frame reports screen--md, a TRMNL bug, so its Framework sizes are picked by name), "g" a portrait Frame, xl..s the
 // other screens by the slot's height in CSS px. A slot too small for the smallest tier has no info.
 var INFO_TIERS = [[900, 'xl'], [560, 'l'], [340, 'm'], [0, 's']];
-var INFO_SIZES = { // CSS px: strip height, gap from the work to the strip's cap line, outer margin, width of the date group, of one middle group, least of the label
-  f: { h: 150, gap: 40, m: 60, L: 600, M: 520, R: 640 }, g: { h: 120, gap: 34, m: 50, L: 420, M: 360, R: 480 },
-  xl: { h: 130, gap: 32, m: 24, L: 430, M: 360, R: 440 }, l: { h: 100, gap: 26, m: 22, L: 320, M: 260, R: 330 },
-  m: { h: 80, gap: 20, m: 18, L: 215, M: 185, R: 230 }, s: { h: 62, gap: 16, m: 14, L: 150, M: 130, R: 170 },
+var INFO_SIZES = { // CSS px: strip height, gap from the work to the strip's cap line, outer margin, width of the date group, of one middle group, least of the label, lift, line heights (medium, small), width of a stacked date
+  // lift: CSS px under the day number, the month, the forecast and the artist line: the groups are bottom-aligned boxes whose baselines differ by their sizes' descent, so each is lifted to one baseline (measured on the Frame in the browser: num 1364, month 1363.5, forecast 1375.5, artist 1385.5 before; the others scaled)
+  f: { h: 150, gap: 40, m: 60, L: 480, M: 320, R: 640, lift: [14, 17, 24, 24], lm: 64, ls: 40, Ln: 300 }, g: { h: 120, gap: 34, m: 50, L: 340, M: 220, R: 480, lift: [9, 11, 16, 16], lm: 44, ls: 30, Ln: 210 },
+  xl: { h: 130, gap: 32, m: 24, L: 330, M: 240, R: 440, lift: [10, 12, 17, 17], lm: 46, ls: 32, Ln: 210 }, l: { h: 100, gap: 26, m: 22, L: 320, M: 200, R: 330, lift: [8, 10, 14, 14], lm: 40, ls: 26, Ln: 160 },
+  m: { h: 80, gap: 20, m: 18, L: 215, M: 150, R: 230, lift: [7, 9, 12, 12], lm: 36, ls: 22, Ln: 110 }, s: { h: 62, gap: 16, m: 14, L: 150, M: 115, R: 170, lift: [5, 6, 8, 8], lm: 28, ls: 18, Ln: 80 },
 };
+var INFO_TEXT_PX = { f: [58, 32], g: [38, 26], xl: [40, 26], l: [35, 21], m: [30, 18], s: [24, 16] }; // medium and small text size in CSS px per tier: the label's width is estimated from its text
 var INFO_NARROW = 0.55;
 var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INFO_MIN_SLOT_W, has no info
 var INFO_MIN_SLOT_W = 380;
@@ -479,6 +481,7 @@ function dayInfo(nowMs, locale, z) {
     .formatToParts(t).forEach(function (x) { p[x.type] = x.value; });
   return {
     day: String(Number(p.day)), weekday: fmt(locale, { weekday: 'long' }), month: fmt(locale, { month: 'long' }),
+    weekdayShort: fmt(locale, { weekday: 'short' }), monthShort: fmt(locale, { month: 'short' }), // for a work too narrow for the long names
     hour: Number(p.hour), iso: p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':' + p.minute,
   };
 }
@@ -894,20 +897,40 @@ function infoPlace(art, sw, sh, zoom, set) {
   var xScreen = Math.abs(sw / sh - 4 / 3) < 0.01 || Math.abs(sw / sh - 3 / 4) < 0.01, cw = art.lg && !xScreen ? 0.85 : 1; // the X's CSS canvas is exactly 800 x 600
   var midCols = (b.weather ? 1 : 0) + (b.agenda ? b.events : 0);
   var plan = function (tier, force, noLabelOk) {
-    var z = INFO_SIZES[tier], mPx = z.m * zoom;
-    var g = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: (z.h + z.gap) * zoom, share: (sw - 2 * mPx) / sw });
-    var base = z.L + midCols * z.M, label = !!set.label, need = base + (label ? z.R : 0);
+    var z = INFO_SIZES[tier], mPx = z.m * zoom, label = !!set.label, tp = INFO_TEXT_PX[tier];
+    // the label's width from its text (title at the medium size, ARTIST . year . museum at the small), at least z.R; two lines each need about half
+    var whoText = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : '');
+    var Rn = Math.max(z.R, 0.5 * tp[0] * String(art.title).length, 0.52 * tp[1] * whoText.length), R2 = Math.max(z.R * 0.55, Rn * 0.55);
     // fill on: when filling the band above the strip (the slot less the strip, its gap and the margin under it) crops at most FILL_CROP_MAX, the work fills it edge to edge
     var bandH = sh - (z.gap + z.h + z.m) * zoom, fill = !!set.fill && bandH > 0.4 * sh && cropShare(art.w / art.h, sw / bandH) <= FILL_CROP_MAX;
-    // the groups stand on the work's edges when it is wide enough (INFO_NARROW of the slot) and they all fit there, else on the margins; a work that fills the width: the margins
-    var edgesOk = !fill && g.pw >= INFO_NARROW * sw && g.pw / zoom * cw >= need;
-    var stripPx = edgesOk ? g.pw : sw - 2 * mPx, room = stripPx / zoom * cw;
-    if (label && room < need) { if (!noLabelOk) return null; label = false; }
-    if (room < base && !force) return null;
+    var line = z.lm + z.ls, mids = midCols > 0, labelH = 2 * line;
+    // the strip's arrangements, in order: one row; the label wrapped to two lines each; the weather (agenda) under the date; everything stacked, left-aligned, at the work's width; the date stacked too.
+    // The strip stands on the work's edges (never wider than the work): the first arrangement that fits the width the work has at its own height wins.
+    var arr = [
+      { name: 'row', h: z.h, need: z.L + midCols * z.M + (label ? Rn : 0) },
+      { name: 'wrap', h: Math.max(z.h, labelH), need: z.L + midCols * z.M + (label ? R2 : 0), wrap: true },
+    ];
+    if (mids) arr.push({ name: 'stackMid', h: Math.max(z.h + line, labelH), need: Math.max(z.L, z.M * midCols > 0 ? z.M : 0) + (label ? z.R * 0.55 : 0), wrap: true });
+    arr.push({ name: 'stackAll', h: z.h + (mids ? line : 0) + (label ? labelH : 0), need: Math.max(z.L, mids ? z.M : 0, label ? z.R * 0.55 : 0), wrap: true });
+    arr.push({ name: 'dateStack', h: z.h * 1.7 + (mids ? line : 0) + (label ? labelH : 0), need: Math.max(z.Ln, mids ? z.M * 0.7 : 0, label ? z.R * 0.55 : 0), wrap: true, dateStack: true });
+    arr.push({ name: 'dateOnly', h: z.h * 1.7, need: z.Ln * 0.6, wrap: true, dateStack: true, only: true }); // a very narrow work: the date alone, in short names
+    var k, pick = null, g = null;
+    for (k = 0; k < arr.length && !pick; k++) {
+      var a = arr[k];
+      g = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: (a.h * 1.15 + z.gap) * zoom, share: (sw - 2 * mPx) / sw });
+      if (fill) { pick = arr[0]; g = galleryFor(art, sw, sh, false, art.kind, zoom, sh, { reserve: (z.h + z.gap) * zoom, share: (sw - 2 * mPx) / sw }); break; } // filling the width: the margins give a whole row
+      if (g.pw / zoom * cw >= a.need) pick = a;
+    }
+    if (!pick) return null; // not even the date alone fits the work's width: no strip (the work keeps its museum label under it)
+    if (pick.only) { label = false; }
+    var stripPx = fill ? sw - 2 * mPx : g.pw, room = stripPx / zoom * cw;
+    if (fill && label && room < arr[0].need) { if (!noLabelOk) return null; label = false; }
+    if (!fill && label && !noLabelOk && pick === arr[arr.length - 1] && g.pw / zoom * cw < pick.need) return null; // try a smaller text tier before giving up the label
     return {
-      place: 'below', arrange: 'strip', tier: tier, gallery: g, stripw: Math.round(100 * stripPx / sw), lw: Math.round(100 * z.L * zoom / sw), mw: Math.round(100 * z.M * zoom / sw),
-      midcols: midCols, label: label, who: '', detail: '', gap: z.gap, h: z.h, rule: 0,
-      margin: z.m, fill: fill, band: fill ? Math.round(100 * bandH / sh) : 0, // fill: the work's band above the strip, in percent of the slot's height
+      place: 'below', arrange: pick.name, tier: tier, gallery: g, stripw: Math.round(100 * stripPx / sw), lw: Math.round(100 * z.L * zoom / sw), mw: Math.round(100 * z.M * zoom / sw),
+      midcols: pick.only ? 0 : midCols, label: label, who: '', detail: '', gap: z.gap, h: Math.round(pick.h * 1.15), // the heights are estimates: 15 % over
+      rule: 0, wrap: !!pick.wrap, dateStack: !!pick.dateStack, short: !!pick.only,
+      margin: z.m, lift: z.lift, fill: fill, band: fill ? Math.round(100 * bandH / sh) : 0, // fill: the work's band above the strip, in percent of the slot's height
     };
   };
   var i, out = null;
@@ -951,7 +974,7 @@ async function infoOf(set, local, wxP, agP, state) {
   var blocks = { date: set.show_date, weather: !!wx, agenda: !!ag, events: ag ? ag.items.length : 0 };
   blocks.n = (blocks.date ? 1 : 0) + (blocks.weather ? 1 : 0) + (blocks.agenda ? 1 : 0);
   var info = blocks.n ? {
-    has_date: blocks.date, day: local.day, weekday: local.weekday, month: local.month,
+    has_date: blocks.date, day: local.day, weekday: local.weekday, month: local.month, weekday_short: local.weekdayShort, month_short: local.monthShort,
     has_weather: blocks.weather, temp: wx ? wx.temp : '', weather: wx ? wx.text : '', has_agenda: blocks.agenda, agenda: ag,
   } : null;
   return { info: info, layout: Object.assign({}, set, { strip: blocks.n > 0, blocks: blocks }) };

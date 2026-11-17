@@ -67,6 +67,13 @@ RSpec.describe 'Masterworks info strip' do
     page.evaluate("(() => { const e = document.querySelector('#{selector}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")
   end
 
+  # a work too narrow for even the date in short names (a scroll on the OG is 64 CSS px wide) has no strip and keeps its label under it
+  def narrow_without_strip(page, device, aspect)
+    expect(device).to eq('og_png'), "#{device}: a strip is always possible"
+    expect(aspect).to be <= 0.4
+    expect(page).to have_css('[data-label]')
+  end
+
   # nothing is cut: a text part whose lines are clamped must have all of its text visible (these texts are short)
   def cut_parts(page)
     page.evaluate("[...document.querySelectorAll('[data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
@@ -87,7 +94,14 @@ RSpec.describe 'Masterworks info strip' do
     end
     expect(pic[0] - lay[0]).to be_within(4).of(lay[2] - pic[2]), "#{where}: the picture is centred"
     expect(blk[0] - lay[0]).to be_within(4).of(lay[2] - blk[2]), "#{where}: the strip is centred"
-    expect(blk[0]).to be <= pic[0] + 4, "#{where}: the strip is at least as wide as the picture's edges"
+    # the strip stands on the work's edges and is never wider: its box and every text part lie within the picture's left and right edges
+    expect(blk[0]).to be >= pic[0] - 2, "#{where}: the strip starts at the picture's left edge #{pic} #{blk}"
+    expect(blk[2]).to be <= pic[2] + 2, "#{where}: the strip ends at the picture's right edge #{pic} #{blk}"
+    spans = page.evaluate("[...document.querySelectorAll('[data-block=\"primary\"] [data-info-block] span')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.right, e.innerText]; })")
+    spans.each do |l, r, text|
+      expect(l).to be >= pic[0] - 2, "#{where}: #{text} starts left of the picture"
+      expect(r).to be <= pic[2] + 2, "#{where}: #{text} ends right of the picture"
+    end
     cut = cut_parts(page)
     expect(cut).to eq([]), "#{where}: text is cut: #{cut}"
   end
@@ -192,9 +206,26 @@ RSpec.describe 'Masterworks info strip' do
         wait(page)
         expect(page).to have_css('[data-gallery]'), 'on the mat, never a placard over the art'
         expect(page).to have_no_css('[data-placard]')
+        next narrow_without_strip(page, device, aspect) unless page.has_css?('[data-info-block]')
+
         expect_composed(page, "#{name} on #{device} #{orientation}")
         pic = box(page, '[data-block="primary"] [data-bevel]')
         expect(((pic[2] - pic[0]).to_f / (pic[3] - pic[1]) / aspect) - 1).to be_within(0.05).of(0), "the picture has the work's shape (no crop): #{pic}"
+      end
+    end
+  end
+
+  # every shape x every set of parts: the strip stands within the work's left and right edges (the owner's rule), on the Frame and the OG
+  [['frame', 'landscape'], ['og_png', 'landscape'], ['frame', 'portrait']].each do |device, orientation|
+    SHAPES.each do |name, aspect|
+      COMBOS.each do |combo, keys|
+        it "#{name}, #{combo} on #{device} #{orientation}: the strip stands on the work's edges and nothing is cut" do
+          page = screen(device, fields_for(keys), orientation:, mocks: shape_shards(aspect).merge(services))
+          wait(page)
+          next narrow_without_strip(page, device, aspect) unless page.has_css?('[data-info-block]')
+
+          expect_composed(page, "#{name}, #{combo} on #{device} #{orientation}")
+        end
       end
     end
   end

@@ -47,6 +47,10 @@ test('Monet\'s Nymphéas are water lilies, not nymphs (JS \\b sees the accent as
   assert.deepStrictEqual(unfriendlyReasons({ title: 'Nymphs and Satyr' }), ['nudity']);
 });
 
+test('reviewed: Titian\'s Flora (a bare breast) is not family friendly', () => {
+  assert.deepStrictEqual(unfriendlyReasons({ id: 'Q2046100', title: 'Flora' }), ['nudity']);
+});
+
 test('a flagged series flags all its members: The Disasters of War', () => {
   assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!', series: 'Q1200522' }), ['violence']);
   assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!' }), [], 'no series, no tag: nothing to flag by');

@@ -21,7 +21,7 @@
     <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
   </div>
   <div class="flex flex--col flex--bottom flex--center-x w--full h--[{{ 100 | minus: inf.band }}cqh] {{ mat }}">
-    <div class="flex flex--row flex--bottom w--[{{ inf.stripw }}cqw]" data-info-block="below">
+    <div class="w--[{{ inf.stripw }}cqw]" data-info-block="below">
       {% render "info", inf:inf, info:info, art:art, ink:ink, frame:true %}
     </div>
     <div class="w--full h--[{{ inf.margin }}px]"></div>
@@ -73,7 +73,7 @@
   <div class="flex flex--col flex--center-x gap--none w--full" data-info-place="below">
     {{ bevel }}
     <div class="w--full h--[{{ inf.gap }}px]"></div>
-    <div class="flex flex--row flex--bottom w--[{{ inf.stripw }}cqw]" data-info-block="below">
+    <div class="w--[{{ inf.stripw }}cqw]" data-info-block="below">
       {% render "info", inf:inf, info:info, art:art, ink:ink, frame:frame %}
     </div>
   </div>
@@ -94,7 +94,7 @@
 {% endtemplate %}
 
 {% template info %}
-{% comment %} The info strip: one row on one baseline, three groups in fixed positions (the date at the left, the weather or the agenda in the middle, the museum label at the right), no hairlines, no headings. Three sizes only: the day number, a medium one (weekday and month, temperature, event text, label title) and a small one (forecast, event time, artist line). The Frame (tier f, g) gets Framework sizes by name; the other screens by the tier the transform names from the slot's height in CSS px. Every text span carries its colour class. {% endcomment %}
+{% comment %} The info strip: groups in fixed positions on one baseline (the date at the left, the weather or the agenda in the middle, the museum label at the right), no hairlines, no headings, three sizes (the day number, a medium one, a small one), always as wide as the work and never wider. When the work is too narrow for one row: (1) the label wraps to two lines each, (2) the weather (agenda) moves under the date, (3) everything stacks left-aligned, (4) the date stacks too. The Frame (tier f, g) gets Framework sizes by name; the other screens by the tier the transform names from the slot's height in CSS px. Every text span carries its colour class. {% endcomment %}
 {% assign tbase = "title" %}
 {% case inf.tier %}
 {% when "f" %}{% assign tbase = "value" %}{% assign ncls = "value--xxxlarge" %}{% assign mcls = "value--large" %}{% assign scls = "label--xxlarge" %}
@@ -104,41 +104,75 @@
 {% when "m" %}{% assign ncls = "value--large" %}{% assign mcls = "title--base" %}{% assign scls = "label--base" %}
 {% else %}{% assign ncls = "value--base" %}{% assign mcls = "title--small" %}{% assign scls = "label--small" %}
 {% endcase %}
-<div class="flex flex--row flex--bottom w--[{{ inf.lw }}cqw] shrink--0" data-slot="left">
+{% assign inrow = false %}{% if inf.arrange == "row" or inf.arrange == "wrap" %}{% assign inrow = true %}{% endif %}
+{% assign stacked = false %}{% if inf.arrange == "stackAll" or inf.arrange == "dateStack" %}{% assign stacked = true %}{% endif %}
+{% if inf.wrap %}{% assign lines = 2 %}{% else %}{% assign lines = 1 %}{% endif %}
+{% capture date_part %}
   {% if info.has_date %}
-  <div class="flex flex--row flex--bottom gap--medium" data-info="date">
+  {% if inf.dateStack %}
+  <div class="flex flex--col flex--left gap--none" data-info="date">
     <span class="value {{ ncls }} {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
+    <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-weekday="1">{% if inf.short %}{{ info.weekday_short | escape }}{% else %}{{ info.weekday | escape }}{% endif %}</span>
+    <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-month="1">{% if inf.short %}{{ info.month_short | escape }}{% else %}{{ info.month | escape }}{% endif %}</span>
+  </div>
+  {% else %}
+  <div class="flex flex--row flex--bottom gap--medium" data-info="date">
+    <div class="flex flex--col flex--left gap--none">
+      <span class="value {{ ncls }} {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
+      {% if inrow %}<div class="w--full h--[{{ inf.lift[0] }}px]" data-lift="1"></div>{% endif %}
+    </div>
     <div class="flex flex--col flex--left gap--none">
       <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
       <span class="{{ tbase }} {{ mcls }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
+      {% if inrow %}<div class="w--full h--[{{ inf.lift[1] }}px]" data-lift="1"></div>{% endif %}
     </div>
   </div>
   {% endif %}
-</div>
-{% if inf.midcols > 0 %}
-<div class="flex flex--row flex--bottom gap--large" data-slot="middle">
-  {% if info.has_weather %}
-  <div class="flex flex--col flex--left gap--none w--[{{ inf.mw }}cqw]" data-info="weather">
-    <span class="{{ tbase }} {{ mcls }} {{ ink }} block text--left value--tnums" data-temp="1">{{ info.temp | escape }}</span>
+  {% endif %}
+{% endcapture %}
+{% capture weather_part %}
+  {% if info.has_weather and inf.midcols > 0 %}
+  <div class="flex flex--col flex--left gap--none{% if inrow %} w--[{{ inf.mw }}cqw]{% endif %}" data-info="weather">
+    <span class="{{ tbase }} {{ mcls }} {{ ink }} block text--left" data-temp="1">{{ info.temp | escape }}</span>
     <span class="label {{ scls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>
+    {% if inrow %}<div class="w--full h--[{{ inf.lift[2] }}px]" data-lift="1"></div>{% endif %}
   </div>
   {% endif %}
-  {% if info.has_agenda %}
+{% endcapture %}
+{% capture events_part %}
+  {% if info.has_agenda and inf.midcols > 0 %}
   {% for ev in info.agenda.items %}
-  <div class="flex flex--col flex--left gap--none w--[{{ inf.mw }}cqw]" data-info="agenda" data-event="1" data-agenda="{{ info.agenda.day }}">
+  <div class="flex flex--col flex--left gap--none{% if inrow %} w--[{{ inf.mw }}cqw]{% endif %}" data-info="agenda" data-event="1" data-agenda="{{ info.agenda.day }}">
     <span class="label {{ scls }} {{ ink }} block text--left value--tnums" data-clamp="1" data-clamp-lg="2" data-event-time="1">{{ ev.time | escape }}</span>
     <span class="{{ tbase }} {{ mcls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
   </div>
   {% endfor %}
   {% endif %}
+{% endcapture %}
+{% capture label_part %}
+  {% if inf.label %}
+  <span class="{{ tbase }} {{ mcls }} {{ ink }} block w--full {% if inrow or inf.arrange == "stackMid" %}text--right{% else %}text--left{% endif %}" data-clamp="{{ lines }}" data-clamp-lg="2" data-label="1">{{ art.title | escape }}</span>
+  <span class="label {{ scls }} {{ ink }} block w--full {% if inrow or inf.arrange == "stackMid" %}text--right{% else %}text--left{% endif %}" data-clamp="{{ lines }}" data-clamp-lg="2" data-who="1">{{ inf.who | escape }}</span>
+  {% if inrow %}<div class="w--full h--[{{ inf.lift[3] }}px]" data-lift="1"></div>{% endif %}
+  {% endif %}
+{% endcapture %}
+{% if inrow %}
+<div class="flex flex--row flex--bottom w--full" data-arrange="{{ inf.arrange }}">
+  <div class="flex flex--row flex--bottom w--[{{ inf.lw }}cqw] shrink--0" data-slot="left">{{ date_part }}</div>
+  {% if inf.midcols > 0 %}<div class="flex flex--row flex--bottom gap--large" data-slot="middle">{{ weather_part }}{{ events_part }}</div>{% endif %}
+  <div class="flex flex--col flex--right gap--none grow" data-slot="right">{{ label_part }}</div>
+</div>
+{% elsif inf.arrange == "stackMid" %}
+<div class="flex flex--row flex--bottom gap--large w--full" data-arrange="stackMid">
+  <div class="flex flex--col flex--left gap--medium" data-slot="left">{{ date_part }}{{ weather_part }}{{ events_part }}</div>
+  <div class="flex flex--col flex--right gap--none grow" data-slot="right">{{ label_part }}</div>
+</div>
+{% else %}
+<div class="flex flex--col flex--left gap--medium w--full" data-arrange="{{ inf.arrange }}">
+  {{ date_part }}{{ weather_part }}{{ events_part }}
+  <div class="flex flex--col flex--left gap--none w--full" data-slot="right">{{ label_part }}</div>
 </div>
 {% endif %}
-<div class="flex flex--col flex--right gap--none grow" data-slot="right">
-  {% if inf.label %}
-  <span class="{{ tbase }} {{ mcls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2" data-label="1">{{ art.title | escape }}</span>
-  <span class="label {{ scls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ inf.who | escape }}</span>
-  {% endif %}
-</div>
 {% endtemplate %}
 
 {% template main %}

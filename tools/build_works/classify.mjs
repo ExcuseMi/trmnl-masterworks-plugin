@@ -42,6 +42,7 @@ export const REVIEWED_FLAGS = {
   Q28002799: 'nudity', // Adam and Eve (Klimt)
   Q19883512: 'nudity', // Hope II (Klimt)
   Q17001535: 'nudity', // Death and Life (Klimt)
+  Q2046100: 'nudity', // Flora (Titian: a bare breast)
 };
 // A series flagged as a whole: Goya's Disasters of War (corpses, mutilation, executions) is graphic by its subject, not by a tag.
 export const SERIES_FLAGS = { Q1200522: 'violence' };
