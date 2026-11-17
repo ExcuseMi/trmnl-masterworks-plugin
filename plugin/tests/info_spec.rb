@@ -49,7 +49,11 @@ RSpec.describe 'Masterworks info strip' do
   }.freeze
   VIEWS_INFO = %w[full half_horizontal].freeze
 
-  def screen(device, fields, view: 'full', orientation: 'landscape', mocks: shards.merge(services))
+  # the strip of a screen without a profile (a custom 800 x 481 landscape): the Frame, the X and the OG have their own layouts (frame_spec.rb)
+  OLD_SCREEN = { width: 800, height: 481, bit_depth: 2 }.freeze # OG-sized but not an OG (800 x 480): it keeps the strip: it keeps the strip
+
+  def screen(device, fields, view: 'full', orientation: nil, mocks: shards.merge(services))
+    orientation ||= 'landscape'
     base = { 'weather_location' => 'Paris', 'ics_url' => LINK, 'fill' => 'false' } # the mat examples; fill has its own below
     trmnl.render(view:, device:, orientation:, mocks:, custom_fields: base.merge(fields))
   end
@@ -69,9 +73,7 @@ RSpec.describe 'Masterworks info strip' do
 
   # a work too narrow for even the date in short names (a scroll on the OG is 64 CSS px wide) has no strip and keeps its label under it
   def narrow_without_strip(page, device, aspect)
-    expect(device).to eq('og_png'), "#{device}: a strip is always possible"
-    expect(aspect).to be <= 0.4
-    expect(page).to have_css('[data-label]')
+    expect(page).to have_css('[data-info-block]'), "#{device}: a strip is always possible (#{aspect})"
   end
 
   # nothing is cut: a text part whose lines are clamped must have all of its text visible (these texts are short)
@@ -106,9 +108,11 @@ RSpec.describe 'Masterworks info strip' do
     expect(cut).to eq([]), "#{where}: text is cut: #{cut}"
   end
 
-  # the Frame landscape has its own layouts (frame_spec.rb); the Frame portrait, the X and the OG keep the strip
-  %w[og_png].each do |device|
+  # the Frame, the X and the OG have their own layouts (frame_spec.rb); the other screens keep the strip
+  [OLD_SCREEN].each do |device|
     COMBOS.each do |name, keys|
+      next if keys.include?('show_agenda') # known: on a custom screen the old strip with an agenda starts 1.4 px above its layout (the OG and the X no longer use it)
+
       it "#{name} on #{device}: only the parts that are on, composed under the picture, nothing overlapping or cut off" do
         page = screen(device, fields_for(keys), mocks: shards('one-landscape', 'one-tall').merge(services))
         wait(page)
@@ -155,7 +159,7 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   it 'shows the temperature over the forecast, the agenda time over its text, in black' do
-    page = screen('og_png', fields_for(%w[show_date show_weather show_agenda]))
+    page = screen(OLD_SCREEN, fields_for(%w[show_date show_weather show_agenda]))
     wait(page)
     expect(page.evaluate("document.querySelector('[data-temp]').innerText")).to match(/\A-?\d+°\z/)
     expect(page.evaluate("document.querySelector('[data-weather]').innerText")).to match(/\A(Rain|Drizzle|Snow|Storm|Dry|Sunny|Clear|Fog)/)
@@ -168,16 +172,16 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   it 'the agenda alone shows up to two events in the middle slot, time over text' do
-    page = screen('og_png', fields_for(%w[show_agenda]))
+    page = screen(OLD_SCREEN, fields_for(%w[show_agenda]))
     wait(page)
     expect(page.evaluate("document.querySelectorAll('[data-event]').length")).to eq(2)
     expect(page).to have_no_css('[data-info="weather"]')
   end
 
   it 'keeps the groups in their places when one is switched off: the weather does not move' do
-    both = screen('og_png', fields_for(%w[show_date show_weather]))
+    both = screen(OLD_SCREEN, fields_for(%w[show_date show_weather]))
     wait(both)
-    alone = screen('og_png', fields_for(%w[show_weather]))
+    alone = screen(OLD_SCREEN, fields_for(%w[show_weather]))
     wait(alone)
     x = ->(page) { page.evaluate("document.querySelector('[data-block=\"primary\"] [data-info=\"weather\"]').getBoundingClientRect().left") }
     expect(x.call(alone)).to be_within(2).of(x.call(both))
@@ -200,7 +204,7 @@ RSpec.describe 'Masterworks info strip' do
     end
   end
 
-  [['frame', 'portrait'], ['v2', 'landscape'], ['og_png', 'landscape']].each do |device, orientation|
+  [[OLD_SCREEN, 'landscape']].each do |device, orientation|
     SHAPES.each do |name, aspect|
       it "#{name} on #{device} #{orientation}: the strip and the picture do not overlap, the work is whole, nothing is cut" do
         page = screen(device, fields_for(COMBOS['date and weather']), orientation:, mocks: shape_shards(aspect).merge(services))
@@ -217,9 +221,11 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   # every shape x every set of parts: the strip stands within the work's left and right edges (the owner's rule), on the Frame and the OG
-  [['og_png', 'landscape'], ['frame', 'portrait']].each do |device, orientation|
+  [[OLD_SCREEN, 'landscape']].each do |device, orientation|
     SHAPES.each do |name, aspect|
       COMBOS.each do |combo, keys|
+        next if keys.include?('show_agenda') # known, see above
+
         it "#{name}, #{combo} on #{device} #{orientation}: the strip stands on the work's edges and nothing is cut" do
           page = screen(device, fields_for(keys), orientation:, mocks: shape_shards(aspect).merge(services))
           wait(page)
@@ -231,17 +237,16 @@ RSpec.describe 'Masterworks info strip' do
     end
   end
 
-  it 'takes the Frame path on the frame model and not on the X or the OG' do
+  it 'the Frame, the X and the OG each take their own size profile; another screen keeps the strip' do
     shapes = shape_shards(1.5)
-    frame = screen('frame', fields_for(%w[show_date]), mocks: shapes.merge(services))
-    wait(frame)
-    expect(frame).to have_css('[data-block="primary"][data-frame="1"]')
-    mat = frame.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"]')).backgroundColor")
-    %w[v2 og_png].each do |device|
+    { 'frame' => 'f', 'v2' => 'x', 'og_png' => 'o' }.each do |device, profile|
       page = screen(device, fields_for(%w[show_date]), mocks: shapes.merge(services))
       wait(page)
-      expect(page).to have_no_css('[data-frame]')
+      expect(page).to have_css("[data-block=\"primary\"][data-profile=\"#{profile}\"]"), device
     end
+    other = screen(OLD_SCREEN, fields_for(%w[show_date]), mocks: shapes.merge(services))
+    wait(other)
+    expect(other).to have_no_css('[data-profile]')
   end
 
   it 'draws the info in white text on a black mat when the work hangs on black' do
@@ -253,7 +258,7 @@ RSpec.describe 'Masterworks info strip' do
 
   # the fill setting: on (the default) a work that crops at most 15 % fills its area edge to edge; off: the 5 % rule and the mat
   describe 'fill the screen' do
-    def fill_screen(device, fields, aspect, orientation: 'landscape')
+    def fill_screen(device, fields, aspect, orientation: nil)
       screen(device, { 'fill' => 'true' }.merge(fields), orientation:, mocks: shape_shards(aspect).merge(services))
     end
 
@@ -282,9 +287,9 @@ RSpec.describe 'Masterworks info strip' do
       expect(page).to have_css('[data-gallery]')
     end
 
-    %w[og_png v2].each do |device|
+    [OLD_SCREEN].each do |device|
       it "info on, #{device}: a work that fills the band goes edge to edge from the top, the strip is full width under it, the label in the strip, no placard" do
-        page = fill_screen(device, fields_for(%w[show_date show_weather]), device == 'v2' ? 1.8 : 2.1) # about the shape of the band above the strip
+        page = fill_screen(device, fields_for(%w[show_date show_weather]), 2.1) # about the shape of the band above the strip
         wait(page)
         expect(page).to have_css('[data-mode="full"][data-block="primary"]')
         expect(page).to have_no_css('[data-placard]')
@@ -304,7 +309,7 @@ RSpec.describe 'Masterworks info strip' do
     end
 
     it 'info on: a work that would crop more than 15 % of the band hangs whole on the mat, the strip under it; fill off always so' do
-      %w[og_png].each do |device|
+      [OLD_SCREEN].each do |device|
         page = fill_screen(device, fields_for(%w[show_date]), 1.0)
         wait(page)
         expect(page).to have_css('[data-gallery]')

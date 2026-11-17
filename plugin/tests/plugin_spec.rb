@@ -303,11 +303,17 @@ RSpec.describe 'Masterworks' do
       expect(backup_text(page)).to include(dark['t'])
     end
 
-    it 'the backup picture is not fetched while the primary shows (lazy)' do
+    it 'the backup picture is not requested while the primary shows: it has no src until the primary fails, then the swap gives it one' do
       page = trmnl.render(view: 'full', device: 'og_png', mocks: two, custom_fields:, state:)
       wait(page)
-      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').getAttribute('loading')")).to eq('lazy')
+      expect(page.evaluate("document.querySelectorAll('[data-block] img[src]').length")).to eq(1), 'a normal render makes one artwork image request'
+      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').hasAttribute('src')")).to be(false)
+      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').hasAttribute('srcset')")).to be(false)
+      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').dataset.src")).to include('http')
       expect(page.evaluate("document.querySelector('[data-block=\"primary\"] img').getAttribute('onerror')")).to include('hidden')
+      fail_picture(page, 'primary')
+      expect(page.evaluate("document.querySelector('[data-block=\"backup\"] img').getAttribute('src')")).to eq(page.evaluate("document.querySelector('[data-block=\"backup\"] img').dataset.src")), 'the failing primary makes the backup request'
+      expect(visible_block(page, 'backup')).to be(true)
     end
 
     it 'the state records the primary (whether its picture loaded is only known in the browser)' do

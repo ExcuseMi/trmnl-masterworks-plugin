@@ -38,9 +38,9 @@ RSpec.describe 'Masterworks Frame layouts' do
     { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') }, 'https://calendar.example.org/*' => { body: ics } }
   end
 
-  def frame(fields, aspect, fixture_name = 'one-landscape')
+  def frame(fields, aspect, fixture_name = 'one-landscape', device: 'frame', orientation: 'landscape')
     base = { 'weather_location' => 'Paris', 'ics_url' => LINK_FRAME }
-    page = trmnl.render(view: 'full', device: 'frame', orientation: 'landscape', mocks: shape_shards(aspect, fixture_name).merge(services), custom_fields: base.merge(fields))
+    page = trmnl.render(view: 'full', device:, orientation:, mocks: shape_shards(aspect, fixture_name).merge(services), custom_fields: base.merge(fields))
     page.has_css?('img.image')
     page
   end
@@ -159,6 +159,63 @@ RSpec.describe 'Masterworks Frame layouts' do
             expect(box(page, "#{P} [data-slot=\"label\"]")[3]).to be_within(2).of(pic[3]), 'the label stays at the bottom'
           end
         end
+        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        expect(cut).to eq([])
+      end
+    end
+  end
+
+  # the X (v2) and the OG: the same two layouts at their own sizes; what does not fit is dropped (events, then the forecast line, never the date or the label)
+  { 'v2' => 'x', 'og_png' => 'o' }.each do |device, profile|
+    [1.0, 0.75].each do |aspect|
+      it "#{device}, #{aspect}: the column layout in the device's profile, group centred, the label on the picture's bottom, date and label always there" do
+        page = frame(all_on, aspect, device:)
+        expect(page).to have_css("#{P}[data-layout=\"column\"][data-profile=\"#{profile}\"]")
+        lay = box(page, P)
+        pic = box(page, "#{P} [data-picture]")
+        col = box(page, "#{P} [data-info-block]")
+        expect(pic[0] - lay[0]).to be_within(6).of(lay[2] - col[2]), 'one centred group'
+        expect(col[0]).to be > pic[2]
+        expect(col[1]).to be_within(2).of(pic[1])
+        expect(box(page, "#{P} [data-slot=\"label\"]")[3]).to be_within(3).of(pic[3])
+        expect(page).to have_css("#{P} [data-day]")
+        expect(page).to have_css("#{P} [data-label]")
+        events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
+        forecast = page.has_css?("#{P} [data-weather]")
+        expect(events).to be <= 2
+        expect(events).to eq(0) unless forecast # the forecast line goes only after every event
+        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        expect(cut).to eq([])
+        expect(page).to have_no_overflow
+      end
+    end
+
+    it "#{device}: a work 16:9 and wider gets the band when its fill crops little, whole otherwise; nothing overlaps" do
+      page = frame(all_on, 2.4, device:)
+      expect(page).to have_css("#{P}[data-layout=\"band\"]")
+      pic = box(page, "#{P} [data-picture]")
+      strip = box(page, "#{P} [data-info-block]")
+      expect(strip[1]).to be >= pic[3] - 1
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(page.evaluate("document.querySelectorAll('#{P} [data-col]').length"))
+    end
+  end
+
+  # portrait screens: the work on top, the strip below (a work a fill would crop too much hangs whole in the band area)
+  [['frame', 'f'], ['v2', 'x'], ['og_png', 'o']].each do |device, profile|
+    { '3:4' => 0.75, '16:9' => 16.0 / 9 }.each do |name, aspect|
+      it "#{device} portrait, #{name}: the band layout, the picture on top, the strip under it in the same width, nothing cut" do
+        page = frame(all_on, aspect, device:, orientation: 'portrait')
+        expect(page).to have_css("#{P}[data-layout=\"band\"][data-profile=\"#{profile}\"]")
+        lay = box(page, P)
+        pic = box(page, "#{P} [data-picture]")
+        strip = box(page, "#{P} [data-info-block]")
+        expect(strip[1]).to be >= pic[3] - 1, 'the strip is under the picture'
+        expect(pic[0] - lay[0]).to be_within(4).of(lay[2] - pic[2]), 'centred'
+        expect(strip[3]).to be <= lay[3] + 2, 'inside the screen'
+        expect(page).to have_css("#{P} [data-label]")
+        expect(page).to have_css("#{P} [data-day]")
+        ratio = ((pic[2] - pic[0]) / (pic[3] - pic[1])) / aspect
+        expect((ratio - 1).abs < 0.03 || (pic[2] - pic[0]) >= 0.9 * (lay[2] - lay[0])).to be(true), "the whole work (its shape) or a cover across the band: #{ratio}"
         cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
         expect(cut).to eq([])
       end
