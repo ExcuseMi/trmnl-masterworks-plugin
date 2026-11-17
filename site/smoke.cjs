@@ -107,7 +107,6 @@ const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '
     if (!src) { fails.push(dev + ': no picture drawn in the frame'); continue; }
     const model = await page.$eval('#frame', (e) => e.getAttribute('model'));
     if (model !== dev) fails.push(dev + ': frame model is ' + model);
-    if (shots) { fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, 'wide-' + dev + '.png'), fullPage: true }); }
     seen.add(id);
     // the view fills the device window: no padding band around it (screen--no-bleed) and no empty band inside the window
     const box = await (async () => { for (const f of page.frames()) { try { const r = await f.evaluate(() => { const v = document.querySelector('.screen .view'); const sc = document.querySelector('.screen'); if (!v) return null; const b = v.getBoundingClientRect(), a = sc.getBoundingClientRect(); return { v: [b.left, b.top, b.width, b.height].map(Math.round), s: [a.left, a.top, a.width, a.height].map(Math.round), w: innerWidth, h: innerHeight }; }); if (r) return r; } catch (e) { /* frame gone */ } } return null; })();
@@ -124,6 +123,7 @@ const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '
         const bad = col.list.filter((c) => !INKS.includes(c));
         if (bad.length) fails.push(dev + ': picture has colours that are no ink, e.g. ' + bad.slice(0, 3).join(' / ') + ' (' + col.n + ' in all)');
       }
+      if (shots) { fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, 'wide-' + dev + '.png'), fullPage: true }); }
       console.log(dev + ' colours ' + col.n + ' ' + col.w + 'x' + col.h);
     }
     console.log(dev + ' ok ' + id);
@@ -166,6 +166,18 @@ const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '
   await page.check('#look');
   const back = await colours(page);
   if (!back || !back.look || back.n > 16) fails.push('toggle: device look did not come back');
+  }
+
+  // 1:1 zoom shows the native dithered picture
+  await page.click('#device button[data-v="frame"]');
+  await page.waitForFunction(() => document.querySelector('#frame')?.getAttribute('model') === 'frame', null, { timeout: 30000 });
+  await page.waitForSelector('#zoom:not([disabled])', { timeout: 30000 }).catch(() => fails.push('zoom button never enabled'));
+  if (await page.$('#zoom:not([disabled])')) {
+    await page.click('#zoom');
+    const zw = await page.$eval('#zoombox img', (i) => new Promise((ok) => { if (i.complete) ok(i.naturalWidth); else i.onload = () => ok(i.naturalWidth); }));
+    if (zw < 1000) fails.push('zoom picture is ' + zw + ' px wide, want native size');
+    if (shots) await page.screenshot({ path: path.join(shots, 'zoom-frame.png') });
+    await page.click('#zoomclose');
   }
 
   // phone width: no horizontal scroll

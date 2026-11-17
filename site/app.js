@@ -74,6 +74,7 @@
 
   function load(fr) {   // the plugin's markup in the screen document; "as on the device" adds the dither script
     var html = S.engine.pageHtml(S.markup, { device: S.device, framework: S.fw, noBleed: S.noBleed, extra: S.look && window.MWLook ? window.MWLook.script(S.device) : '' });
+    S.zoom = null; $('zoom').disabled = true;
     var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
     fr.setAttribute('src', url);
     if (S.lastUrl) setTimeout(function (u) { URL.revokeObjectURL(u); }.bind(null, S.lastUrl), 4000);
@@ -131,6 +132,19 @@
     bindSeg('device', 'device'); bindSeg('color', 'color');
     syncButtons();
     $('next').addEventListener('click', function () { show(); });
+    window.addEventListener('message', function (e) {   // the screen document reports its dithered picture
+      if (!e.data || !e.data.mwLook || typeof e.data.mwLook !== 'string') return;
+      S.zoom = e.data; $('zoom').disabled = false;
+    });
+    $('zoom').addEventListener('click', function () {
+      if (!S.zoom) return;
+      var box = $('zoombox'), im = new Image();
+      im.src = S.zoom.mwLook; im.style.cssText = 'display:block;image-rendering:pixelated;max-width:none';
+      box.textContent = ''; box.appendChild(im);
+      $('zoomdlg').showModal();
+      box.scrollLeft = Math.max(0, (S.zoom.w - box.clientWidth) / 2); box.scrollTop = Math.max(0, (S.zoom.h - box.clientHeight) / 2);
+    });
+    $('zoomclose').addEventListener('click', function () { $('zoomdlg').close(); });
     $('look').addEventListener('change', function () { S.look = $('look').checked; if (S.markup) load($('frame')); });
     ['label', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { show(); }); });
     var go = function () { show(); };

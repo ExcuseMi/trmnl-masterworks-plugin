@@ -8,7 +8,7 @@
   function inScreen(cfg) {
     var PAL = cfg.palette, INK = cfg.inks, LEVELS = cfg.levels;
     var st = document.createElement('style');
-    st.textContent = 'img.image-dither:not([data-mw-look]){visibility:hidden}';
+    st.textContent = 'img.image-dither:not([data-mw-look]){visibility:hidden}img.image-dither[data-mw-look]{image-rendering:auto!important}';
     document.head.appendChild(st);
 
     function sig(x) { return 1 / (1 + Math.exp(-x)); }
@@ -72,6 +72,7 @@
           cx.putImageData(id, 0, 0);
           cv.toBlob(function (bl) {
             img.removeAttribute('srcset'); img.dataset.mwLook = cfg.name; img.src = URL.createObjectURL(bl);
+            try { parent.postMessage({ mwLook: img.src, w: w, h: h }, '*'); } catch (e) { /* no parent */ }
           }, 'image/png');
         } catch (e) { img.dataset.mwLook = 'failed'; img.style.visibility = 'visible'; }
       };

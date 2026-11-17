@@ -66,7 +66,10 @@ footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
     <button type="button" data-v="white-oak" aria-pressed="true">White Oak</button><button type="button" data-v="cherry" aria-pressed="false">Cherry</button><button type="button" data-v="sapele" aria-pressed="false">Sapele</button><button type="button" data-v="walnut" aria-pressed="false">Walnut</button><button type="button" data-v="black" aria-pressed="false">Black</button><button type="button" data-v="white" aria-pressed="false">White</button></span></span>
 </div>
 
-<div class="bar"><label class="one"><input type="checkbox" id="look" checked> <span>Show as on the device (dithered, real inks). Untick for the original colours.</span></label></div>
+<div class="bar"><label class="one"><input type="checkbox" id="look" checked> <span>Show as on the device (dithered, real inks). Untick for the original colours.</span></label>
+  <button type="button" class="seg" id="zoom" disabled style="padding:8px 14px;min-height:40px;font:inherit;background:var(--panel);color:var(--ink);cursor:pointer">1:1 zoom</button></div>
+
+<dialog id="zoomdlg" style="max-width:96vw;padding:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px"><div id="zoombox" style="overflow:auto;max-width:90vw;max-height:80vh"></div><p class="hint" style="font:13px system-ui,sans-serif">Actual size of the dithered picture, one dot per device pixel. <button type="button" id="zoomclose">Close</button></p></dialog>
 
 <section class="opts" aria-label="Plugin settings">
   <h2>Plugin settings</h2>
