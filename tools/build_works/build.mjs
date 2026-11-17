@@ -5,7 +5,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, fetchSeries, isPublicDomain, TIERS, CURATED_SERIES, SERIES_CAP } from './wikidata.mjs';
+import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, fetchSeries, isPublicDomain, TIERS, CURATED_SERIES, SERIES_CAP, SERIES_INFO } from './wikidata.mjs';
+import { dedupe, titleKey } from './dedupe.mjs';
 import { MIN_LONG_SIDE_PRINT, fetchImageInfo, usable } from './commons.mjs';
 import { DARK_MAT_BELOW, PALETTE_ID, cornerBrightness, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
@@ -135,27 +136,37 @@ for (const batch of chunks(names, 50)) {
 const seenFile = new Set();
 const works = [];
 let mainCount = 0;
+// a woodblock print of a Japanese series may be 1200 px on its long side (that is what Commons holds), every other work 1500
+const imageOf = (p) => {
+  const jpSeries = SERIES_GENRE[(seriesOf.get(p.id) || [])[0]] === 'japanese print';
+  return p.d.files.slice(0, 3).find((n) => usable(infoCache[n], jpSeries ? MIN_LONG_SIDE_PRINT : undefined));
+};
+const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
+const artistOf = (p) => p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
+const reasonsOf = (p) => unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title: titleOf(p), genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, titleOf(p), yearInfo(tags[p.id].dates).year)) });
+// one work once: the most famous version of an artist + title is kept, with the flags of all its versions
+const once = dedupe(picked.filter((p) => imageOf(p)).map((p) => ({
+  id: p.id, key: titleKey(artistOf(p), titleOf(p)), fame: Math.max(p.sl, seriesFame.get(p.id) || 0), must: p.id in MUST_HAVE,
+  pixels: infoCache[imageOf(p)].w * infoCache[imageOf(p)].h, reasons: reasonsOf(p),
+})));
 for (const p of picked) {
+  if (imageOf(p) && !once.keep.has(p.id)) { stats.sameWork = (stats.sameWork || 0) + 1; continue; }
   const isMain = mainIds.has(p.id);
   if (isMain && mainCount >= LIMIT) continue; // the fame list is cut at LIMIT; each genre tier has its own list, cut at its cap
   if (!isMain && (tierCount[tierOf.get(p.id)] || 0) >= capOf(tierOf.get(p.id))) continue;
-  // a woodblock print of a Japanese series may be 1200 px on its long side (that is what Commons holds), every other work 1500
-  const jpSeries = SERIES_GENRE[(seriesOf.get(p.id) || [])[0]] === 'japanese print';
-  const minSide = jpSeries ? MIN_LONG_SIDE_PRINT : undefined;
-  const file = p.d.files.slice(0, 3).find((n) => usable(infoCache[n], minSide));
+  const file = imageOf(p);
   if (!file) { stats.commons++; continue; }
   const info = infoCache[file];
   if (seenFile.has(info.file)) { stats.dupe++; continue; }
   seenFile.add(info.file);
   if (isMain) mainCount++;
   else tierCount[tierOf.get(p.id)] = (tierCount[tierOf.get(p.id)] || 0) + 1;
-  const title = TITLE_FIXES[p.id] || p.title;
-  const artist = p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
+  const title = titleOf(p), artist = artistOf(p);
   works.push({
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), yearLabel: yearInfo(tags[p.id].dates).label,
     genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
-    reasons: unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title, genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)) }),
+    reasons: once.reasons.get(p.id),
     locations: tags[p.id].locations, collections: p.d.coll,
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
@@ -184,6 +195,16 @@ for (const batch of chunks(works.map((w) => w.id).filter((id) => !extra[id]), 10
   log(`extra ${Object.keys(extra).length}/${works.length}`);
 }
 for (const w of works) Object.assign(w, { rawMedium: (extra[w.id] || {}).medium, medium: normalizeMedium((extra[w.id] || {}).medium) || undefined, size: (extra[w.id] || {}).size });
+// a member of a series that Wikidata gives no date or technique says the series' (the Frame label shows year and technique)
+const seriesMembers = {};
+for (const w of works) {
+  const [sr] = seriesOf.get(w.id) || [];
+  const info = SERIES_INFO[sr];
+  if (!info || !info.artist.test(w.artist)) continue;
+  (seriesMembers[sr] = seriesMembers[sr] || []).push(w.id);
+  if (!w.yearLabel) { w.year = info.year; w.yearLabel = info.label; }
+  if (!w.medium) w.medium = info.medium;
+}
 log(`with a technique: ${works.filter((w) => w.medium).length} of ${works.length} (raw material text on ${works.filter((w) => w.rawMedium).length}), with a size: ${works.filter((w) => w.size).length}`);
 writeCache('media-map.json', works.filter((w) => w.rawMedium).map((w) => [w.rawMedium, w.medium || '']));
 
@@ -227,6 +248,9 @@ const meta = { v: 1, built: new Date().toISOString().slice(0, 10), palette: PALE
 mkdirSync(join(root, 'data'), { recursive: true });
 const out = (name, ws, extraMeta = {}) => writeFileSync(join(root, 'data', name), JSON.stringify(pack(ws, { ...meta, ...extraMeta })));
 for (const f of readdirSync(join(root, 'data'))) if (/^(landscape|portrait)(-\d+)?\.json$/.test(f)) rmSync(join(root, 'data', f)); // old shard files
+const finalIds = new Set(final.map((w) => w.id));
+// which works are members of a series with its own years and technique (a test checks that each says both)
+writeFileSync(join(root, 'tools', 'build_works', 'series-members.json'), JSON.stringify(Object.fromEntries(Object.entries(seriesMembers).map(([k, v]) => [k, v.filter((id) => finalIds.has(id)).sort()])), null, 1) + '\n');
 out('works.json', final, { shard: 'all' });
 for (const [name, ws] of [['landscape', landscapeOf(final)], ['portrait', portraitOf(final)]]) {
   const parts = splitParts(ws, meta);

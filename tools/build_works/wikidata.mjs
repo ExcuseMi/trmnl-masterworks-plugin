@@ -71,7 +71,19 @@ export const TIERS = [
 // One Hundred Famous Views of Edo are each as famous as the series. Series with at least SERIES_MIN_SITELINKS sitelinks are swept
 // automatically; CURATED_SERIES are ones Wikidata links by P361 or whose item has few sitelinks, with the fame they are given.
 export const SERIES_MIN_SITELINKS = 8;
-export const SERIES_CAP = 40; // works taken per series (the best known first), so one series does not fill a genre
+export const SERIES_CAP = 25; // works taken per swept series (the best known first): Water Lilies, Rouen, Haystacks must not flood a genre
+// What a member of a series says when Wikidata gives it no date or technique: the series' years and technique. artist (a regular
+// expression on the name) keeps another artist's series of the same name out.
+export const SERIES_INFO = {
+  Q243248: { artist: /Hiroshige/, year: 1833, label: '1833–34', medium: 'Woodblock print' }, // Fifty-three Stations of the Tokaido (Hoeido)
+  Q165190: { artist: /Hiroshige/, year: 1856, label: '1856–59', medium: 'Woodblock print' }, // One Hundred Famous Views of Edo
+  Q227494: { artist: /Hokusai/, year: 1830, label: '1830–32', medium: 'Woodblock print' }, // Thirty-six Views of Mount Fuji
+  Q2525862: { artist: /Hokusai/, year: 1830, label: '1830–32', medium: 'Woodblock print' }, // the same series, second item
+  Q6724086: { artist: /Hiroshige/, year: 1853, label: '1853–56', medium: 'Woodblock print' }, // Famous Views of the Sixty-odd Provinces
+  Q60228610: { artist: /Hokusai/, year: 1832, label: '1832–33', medium: 'Woodblock print' }, // A Tour of the Waterfalls of the Provinces
+  Q377817: { artist: /Audubon/, year: 1827, label: '1827–38', medium: 'Hand-coloured engraving and aquatint' }, // The Birds of America
+};
+
 export const CURATED_SERIES = {
   Q377817: { name: 'The Birds of America', fame: 27, cap: 110 },
   Q499643: { name: 'The Slav Epic', fame: 20, cap: 20 },

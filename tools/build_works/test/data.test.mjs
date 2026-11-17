@@ -20,3 +20,30 @@ test('no title has a word repeated three times in a row (vandalism)', () => {
 test('title fixes are in the data', () => {
   assert.ok(works.filter((w) => w.i === 'Q311243').every((w) => w.t === 'Wanderer above the Sea of Fog'));
 });
+
+// Round 2 review 2026-11-17: Wikidata held The Sick Child six times, Munch's Madonna four times, Water Lilies thirteen.
+import { titleKey } from '../dedupe.mjs';
+import { YEAR_LABEL_RE } from '../dates.mjs';
+
+test('no two works share an artist and a normalised title', () => {
+  const seen = new Map(), dup = [];
+  for (const w of new Map(works.map((x) => [x.i, x])).values()) { // a near-square work is in both orientations: one work once by id first
+    const k = titleKey(w.a, w.t);
+    if (seen.has(k)) dup.push(`${seen.get(k)} and ${w.i}: ${w.a} / ${w.t}`); else seen.set(k, w.i);
+  }
+  assert.deepStrictEqual(dup, []);
+});
+
+test('every year label has a known form (no "1885s")', () => {
+  const bad = works.filter((w) => w.yl && !YEAR_LABEL_RE.test(w.yl)).map((w) => `${w.i} ${w.t}: ${w.yl}`);
+  assert.deepStrictEqual(bad, []);
+});
+
+test('every member of a series with its own years and technique says both (year and technique on the label)', () => {
+  const members = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../series-members.json'), 'utf8'));
+  const byId = new Map(works.map((w) => [w.i, w]));
+  const ids = Object.values(members).flat();
+  assert.ok(ids.length > 200, `${ids.length} series members`);
+  const bad = ids.filter((id) => !byId.has(id) || byId.get(id).y === undefined || byId.get(id).e === undefined);
+  assert.deepStrictEqual(bad, []);
+});

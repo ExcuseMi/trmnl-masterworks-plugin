@@ -15,7 +15,7 @@ const HINTS = ['jesus', 'virgin mary', 'madonna', 'saint', 'angel', 'apostle', '
 export const DEPICTS_RE = [...NUDITY, ...VIOLENCE, ...HINTS].join('|');
 
 // A title safety net, many languages: words that mean a nude subject or a violent act. Anchored loosely on purpose.
-const TITLE_NUDITY = /\b(venus|vénus|nude|nudes|naked|nu couché|nu |desnud\w*|akt|bathers?|baigneuses?|badende\w*|bagnanti|bañistas|bagnante|odalisque|olympia|leda|dan[aë]e|susann?a|suzanne|bathsheba|bethsabée|hylas|sirens?|nymphs?|nymphes)\b|\bnues?\b|\bfemmes? nues?\b|\bthe source\b|\bla source\b|\brape of\b|\benlèvement\b|\braub der\b|\brapto de\b|\bratto di\b/i;
+const TITLE_NUDITY = /\b(venus|vénus|nude|nudes|naked|nu couché|nu |desnud\w*|akt|bathers?|baigneuses?|badende\w*|bagnanti|bañistas|bagnante|odalisque|olympia|leda|dan[aë]e|susann?a|suzanne|bathsheba|bethsabée|hylas|sirens?|nymphs?(?![a-zà-ÿ])|nymphes)\b|\bnues?\b|\bfemmes? nues?\b|\bthe source\b|\bla source\b|\brape of\b|\benlèvement\b|\braub der\b|\brapto de\b|\bratto di\b/i;
 const TITLE_VIOLENCE = /\b(judith|holofernes|massacres?|executions?|execution of|fusilamientos|martyrs?|martyrdom|martyre|märtyrer|beheading|beheaded|decapitat\w*|salome|saturn devouring|devouring his|flaying|slaughter\w*|murder\w*|the death of marat|the third of may|dos de mayo|tres de mayo|the rape)\b/i;
 
 export const FAMILY_FRIENDLY_REASONS = ['nudity', 'violence'];

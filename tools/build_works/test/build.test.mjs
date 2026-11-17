@@ -203,3 +203,36 @@ test('technique for the label: a short readable form, unknown or messy left out'
   assert.strictEqual(n(''), '');
   assert.strictEqual(n(undefined), '');
 });
+
+test('titleKey: versions of one work share a key, other works do not', async () => {
+  const { titleKey } = await import('../dedupe.mjs');
+  assert.strictEqual(titleKey('Edvard Munch', 'The Sick Child'), titleKey('Edvard Munch', 'Sick child (1907)'));
+  assert.strictEqual(titleKey('Claude Monet', 'Nymphéas'), titleKey('Claude Monet', 'Nympheas'));
+  assert.notStrictEqual(titleKey('Claude Monet', 'Rouen Cathedral, Portal, Sunlight'), titleKey('Claude Monet', 'Rouen Cathedral, End of the Day'));
+  assert.notStrictEqual(titleKey('Edvard Munch', 'Madonna'), titleKey('Gustav Klimt', 'Madonna'));
+});
+
+test('dedupe: the most famous version stays, a must-have wins, a flag of any version stays', async () => {
+  const { dedupe } = await import('../dedupe.mjs');
+  const it = (id, fame, extra = {}) => ({ id, key: 'k', fame, pixels: 10, reasons: [], ...extra });
+  let r = dedupe([it('Q1', 5), it('Q2', 9, { reasons: ['nudity'] }), it('Q3', 7), it('Q9', 1, { key: 'other' })]);
+  assert.deepStrictEqual([...r.keep].sort(), ['Q2', 'Q9']);
+  r = dedupe([it('Q1', 5), it('Q2', 9, { reasons: [] }), it('Q3', 7, { reasons: ['nudity'] })]);
+  assert.deepStrictEqual(r.reasons.get('Q2'), ['nudity'], 'the flag of the less famous version moves to the one kept');
+  r = dedupe([it('Q1', 5, { must: true }), it('Q2', 99)]);
+  assert.deepStrictEqual([...r.keep], ['Q1'], 'a must-have is kept over a more famous duplicate');
+  r = dedupe([it('Q8', 5, { pixels: 10 }), it('Q7', 5, { pixels: 20 })]);
+  assert.deepStrictEqual([...r.keep], ['Q7'], 'equal fame: more pixels');
+});
+
+test('yearInfo: a decade is the decade (1885 at decade precision is 1880s), every label has a known form', async () => {
+  const { yearInfo, YEAR_LABEL_RE } = await import('../dates.mjs');
+  assert.strictEqual(yearInfo([{ t: 1885, precision: 8 }]).label, '1880s');
+  assert.strictEqual(yearInfo([{ t: -470, precision: 8 }]).label, '470s BC');
+  assert.strictEqual(yearInfo([{ t: -1400, precision: 7 }]).label, '14th century BC');
+  for (const d of [{ t: 1503, precision: 9 }, { t: 1500, precision: 8 }, { t: 1600, precision: 7 }, { t: 1536, precision: 9, earliest: 1536, latest: 1541 }, { t: -470, precision: 9 }, { t: 1503, precision: 11 }]) {
+    const l = yearInfo([d]).label;
+    assert.ok(YEAR_LABEL_RE.test(l), l);
+  }
+  for (const bad of ['1885s', '-470s', '-14undefined century', 'undefined', '']) assert.ok(!YEAR_LABEL_RE.test(bad), bad);
+});

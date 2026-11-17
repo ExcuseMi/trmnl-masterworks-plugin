@@ -22,6 +22,9 @@ export function latestYear(dates) {
 
 const bc = (y) => (y < 0 ? `${-y} BC` : String(y));
 
+/** The forms a year label takes: "1503", "1536–41", "470 BC", "1500s", "470s BC", "16th century", "6th century BC", "c. 1503". */
+export const YEAR_LABEL_RE = /^(c\. )?\d{1,4}( BC)?(–\d{2,4}( BC)?)?$|^\d{2,4}0s( BC)?$|^\d{1,2}(st|nd|rd|th) century( BC)?$/;
+
 /** What the label says: "1503", "1536–41", "1500s", "16th century"; { year, label }. */
 export function yearInfo(dates) {
   if (!dates.length) return { year: undefined, label: '' };
@@ -36,7 +39,10 @@ export function yearInfo(dates) {
   }
   if (hasQualifier) return { year: a, label: bc(a) };
   if (d.precision >= 9) return { year: d.t, label: bc(d.t) };
-  if (d.precision === 8) return { year: d.t, label: `${d.t}s` };
-  if (d.precision === 7) return { year: d.t - 50, label: `${ordinal(Math.ceil(d.t / 100))} century` };
+  if (d.precision === 8) { // a decade: the value may be any year in it (1885 at decade precision means the 1880s)
+    const t = d.t < 0 ? -Math.floor(-d.t / 10) * 10 : Math.floor(d.t / 10) * 10;
+    return { year: t, label: t < 0 ? `${-t}s BC` : `${t}s` };
+  }
+  if (d.precision === 7) return { year: d.t - 50, label: d.t < 0 ? `${ordinal(Math.ceil(-d.t / 100))} century BC` : `${ordinal(Math.ceil(d.t / 100))} century` };
   return { year: d.t, label: `c. ${bc(d.t)}` };
 }

@@ -42,6 +42,11 @@ test('genres of the tiers: poster, Japanese print, nature illustration, modern a
   assert.notStrictEqual(genreOf({ title: 'View of Arles, Flowering Orchards' }), 'still life', 'flowering is not a flower piece');
 });
 
+test('Monet\'s Nymphéas are water lilies, not nymphs (JS \\b sees the accent as a word edge)', () => {
+  for (const t of ['Nymphéas', 'Nymphéas en fleur', 'Nympheas']) assert.deepStrictEqual(unfriendlyReasons({ title: t }), [], t);
+  assert.deepStrictEqual(unfriendlyReasons({ title: 'Nymphs and Satyr' }), ['nudity']);
+});
+
 test('a flagged series flags all its members: The Disasters of War', () => {
   assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!', series: 'Q1200522' }), ['violence']);
   assert.deepStrictEqual(unfriendlyReasons({ title: 'This is the [absolute] worst!' }), [], 'no series, no tag: nothing to flag by');
