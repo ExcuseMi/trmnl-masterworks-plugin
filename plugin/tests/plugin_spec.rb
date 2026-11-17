@@ -195,19 +195,25 @@ RSpec.describe 'Masterworks' do
     end
   end
 
-  describe 'the artist line may take two lines on the X (lg), so a long name is not cut' do
-    it 'carries data-clamp-lg 2 in the gallery label and in the placard' do
+  describe 'label and placard lines may take more lines on the X (lg), so nothing is cut that fits' do
+    # TRMNL reviews 2026-11-17 found the same cut three times (artist line, gallery title, detail line in the label and
+    # in the placard). One rule for every clamped line in the markup, present and future: a data-clamp has a
+    # data-clamp-lg that allows at least two lines.
+    it 'every data-clamp in the markup has a data-clamp-lg of 2 or more' do
+      tags = Dir[File.join(__dir__, '..', 'src', '*.liquid')].flat_map { |f| File.read(f).scan(/<[^<>]*\bdata-clamp="[^"]*"[^<>]*>/) }
+      expect(tags.length).to be >= 6
+      bad = tags.reject { |t| t =~ /data-clamp-lg="(\d+)"/ && $1.to_i >= 2 }
+      expect(bad).to eq([])
+    end
+
+    it 'the rendered gallery label and placard carry it (the attribute does not depend on the device)' do
       gal = screen('full', 'v2', mocks: shard_mocks('one-landscape', 'one-portrait'))
       wait(gal)
-      expect(gal.evaluate("document.querySelector('[data-label] .label').getAttribute('data-clamp-lg')")).to eq('2')
-      # TRMNL review 2026-11-17: the gallery title wraps to a second line on X too (was cut: "Dawn Moon of the Shinto Rites (S...")
-      expect(gal.evaluate("document.querySelector('[data-label] .title').getAttribute('data-clamp-lg')")).to eq('2')
-      # TRMNL review 2026-11-17: the detail line (technique · place) wraps on X too (was cut: "Oil on canvas · San Francisco Museum of ...")
-      expect(gal.evaluate("[...document.querySelectorAll('[data-label] .label')].every(e => e.getAttribute('data-clamp-lg') === '2')")).to eq(true)
-      # a work that fills the view: the Frame (the attribute does not depend on the device)
+      expect(gal.evaluate("[...document.querySelectorAll('[data-label] [data-clamp]')].every(e => +e.getAttribute('data-clamp-lg') >= 2)")).to eq(true)
       full = screen('full', 'frame', mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
       wait(full)
-      expect(full.evaluate("document.querySelector('[data-placard] .label').getAttribute('data-clamp-lg')")).to eq('2')
+      expect(full.evaluate("document.querySelectorAll('[data-placard] [data-clamp]').length")).to be >= 2
+      expect(full.evaluate("[...document.querySelectorAll('[data-placard] [data-clamp]')].every(e => +e.getAttribute('data-clamp-lg') >= 2)")).to eq(true)
     end
 
     it 'the settings page has no Display group (the label field stands alone)' do
