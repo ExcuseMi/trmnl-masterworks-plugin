@@ -5,7 +5,7 @@
  * Images: straight from Wikimedia Commons, as a thumbnail at the screen's width (only the standard widths exist).
  * State (kept under 1 kB, far below the 8 kB limit): { h: Q-numbers of the last HISTORY works shown }.
  * A failed fetch shows the last work again, else a clean message. Never a blank screen.
- * The plugin decides per work and per view how to show it: full screen with a corner placard when filling the view would
+ * The plugin decides per work and per view how to show it: full screen (label and info off only) when filling the view would
  * crop less than AUTO_CROP_MAX of the work, otherwise the work hangs whole on a white or black mat with a museum label
  * (geo[view].mode). The label and placard text are Framework classes (title, label, size utilities, data-clamp). The Frame is
  * screen--frame screen--md at 1x like the OG and the Framework has no variant for a device class, so the transform names the
@@ -40,7 +40,6 @@ var MAX_STEP = 1920; // 3840 px files are 2 to 9 MB: too heavy for a refresh
 var STEP_TOLERANCE = 0.8; // the next step down is used when it holds at least this part of the width needed
 var DEFAULT_W = 800, DEFAULT_H = 480;
 var AUTO_CROP_MAX = 0.05; // fill off: full screen when filling the view would crop less than this share of the work's area, else the gallery
-var PLATE_MIN_W = 200, PLATE_MIN_H = 150; // CSS px: a slot smaller than this has no placard over a work that fills it (the base check found the placard overflowing a playdate quadrant)
 var FILL_CROP_MAX = 0.15; // fill on (the default, setting fill): the work fills its area edge to edge when that crops at most this share of it; with info on the area is the band above the strip
 var ASPECT_K = 2; // shape factor exp(-ASPECT_K x |ln(work aspect / screen aspect)|): works shaped like the screen come up more often
 // the genre choices of the settings and the genres (the data's own names) each one lets through
@@ -87,6 +86,29 @@ var INFO_SIZES = { // CSS px: strip height, gap from the work to the strip's cap
 };
 var INFO_TEXT_PX = { f: [58, 32], g: [38, 26], xl: [40, 26], l: [35, 21], m: [30, 18], s: [24, 16] }; // medium and small text size in CSS px per tier: the label's width is estimated from its text
 var INFO_NARROW = 0.55;
+// The Frame (landscape) with any info on, two layouts (the info sits exactly under or beside the work, never across the screen):
+// BAND (the work is 16:9 or wider: a fill crops at most FRAME_BAND_CROP_MAX of it): the work covers a band across the width inside equal margins,
+// the strip under it in the band's width: the day number, then equal columns with a rule on top (weather, agenda items, the museum label).
+// COLUMN (any other shape): the whole work on the mat with the info column directly to its right (a wall label), the column's top on the
+// work's top, the painting's label at the column's bottom on the work's bottom edge; work and column are one group centred on the screen.
+// The Framework has whole-percent sizes of the screen (cqw, cqh) and pixel sizes up to 128, so sizes are whole percents of the 2560 x 1440
+// canvas; the work's box is the whole-percent pair nearest its shape (the picture covers it: a crop of about 1 %, never a gap).
+var FRAME_MARGIN_PCT = 2; // band: left and right margin, % of the width (51 px)
+var FRAME_MARGIN_PX = 51; // band: above the band and between band and strip
+var FRAME_BAND_PCT = 65; // band: height, % of the screen's
+var FRAME_BAND_CROP_MAX = 0.38; // a fill that would crop more of the work than this share gives the column layout (16:9 crops 32 %, 3:2 43 %)
+var FRAME_DATE_PCT = 30; // band: the day number and the weekday and month beside it, % of the width
+var FRAME_GAP_PCT = 2; // band: between the date and the columns and between columns
+var FRAME_COL_LEAD = 24; // band: px between a column's rule and its first line
+var FRAME_RULE_DROP = 48; // band: px above a column's rule: the day number's top sits this far below the strip's top
+var FRAME_WEEKDAY_DROP = 40; // band: px above the weekday: its top lines up with the day number's top
+var FRAME_COL_H_MAX = 92; // column layout: the work's box height at most, % of the screen's
+var FRAME_COL_W_MAX = 67; // column layout: the work's box width at most (the rest is the gutter and the column), %
+var FRAME_COL_INFO_W = 26; // column layout: the column's width, %
+var FRAME_COL_GUTTER = 3; // column layout: between the work and the column, %
+var FRAME_COL_SEP = 24; // column layout: px between sections
+var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most this (log ratio)
+var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
 var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INFO_MIN_SLOT_W, has no info
 var INFO_MIN_SLOT_W = 380;
 var WEATHER_MS = 1800; // one request; the whole weather step has WEATHER_DEADLINE_MS, parallel to the data fetch (the run has 5 s)
@@ -359,18 +381,6 @@ function whoLine(art) {
 }
 function detailLine(art) {
   return [art.medium, art.collection].filter(Boolean).join(' \u00b7 ');
-}
-
-/**
- * The placard of a work that fills the view: Framework text classes in a plate in the picture's bottom-left corner.
- * Returns { m, w, who, detail }: m the spacing step of the margin to the picture's edges (never across an edge), w the
- * widest the plate gets, as a share of the slot's width.
- */
-function plateFor(art, slotW, slotH, kind) {
-  return {
-    m: kind === 'big' ? 8 : slotW >= 500 ? 4 : 3, w: slotW >= 700 ? 45 : 80,
-    who: whoLine(art), detail: slotH >= 240 ? detailLine(art) : '',
-  };
 }
 
 /**
@@ -882,6 +892,38 @@ async function fetchAgenda(url, locale, userZ, nowMs, local) {
   return { day: a.day, label: label, items: a.items };
 }
 
+/** The whole-percent box { w: cqw, h: cqh } of the largest size within the limits whose shape is nearest the work's. */
+function frameBox(aspect, sw, sh, wMax, hMax) {
+  var h, w, best = null;
+  for (h = hMax; h >= 10 && !best; h--) {
+    for (w = wMax; w >= 10 && !best; w--) {
+      if (Math.abs(Math.log((w * sw) / (h * sh) / aspect)) <= FRAME_SHAPE_ERR) best = { w: w, h: h };
+    }
+  }
+  if (!best) { // no pair that close: the largest box of the work's shape that fits
+    h = Math.min(hMax, Math.floor(wMax * sw / sh / aspect)); best = { w: Math.min(wMax, Math.round(h * sh * aspect / sw)), h: h };
+  }
+  return best;
+}
+
+/** The Frame's layout with info on: { layout: "band" | "column", ... } (see FRAME_ constants). */
+function framePlan(art, sw, sh, set) {
+  var b = set.blocks, label = !!set.label, aspect = art.w / art.h, who = whoLine(art), coll = art.collection || '';
+  var bandW = 100 - 2 * FRAME_MARGIN_PCT, bandPx = [sw * bandW / 100, sh * FRAME_BAND_PCT / 100];
+  if (cropShare(aspect, bandPx[0] / bandPx[1]) <= FRAME_BAND_CROP_MAX) {
+    var cols = (b.weather ? 1 : 0) + (b.agenda ? b.events : 0) + (label ? 1 : 0), dateW = b.date ? FRAME_DATE_PCT : 0, n = Math.max(1, cols);
+    return {
+      frame: true, layout: 'band', tier: 'f', fit: 'cover', drop: FRAME_RULE_DROP, wdrop: FRAME_WEEKDAY_DROP, margin: FRAME_MARGIN_PX, bandw: bandW, band: FRAME_BAND_PCT, bandPx: bandPx, lead: FRAME_COL_LEAD,
+      numcls: 'value--peta', datew: dateW, gap: FRAME_GAP_PCT, colw: Math.floor((bandW - (dateW ? dateW + FRAME_GAP_PCT : 0) - (n - 1) * FRAME_GAP_PCT) / n), cols: cols, label: label, who: who, coll: coll, fill: false,
+    };
+  }
+  var box = frameBox(aspect, sw, sh, FRAME_COL_W_MAX, FRAME_COL_H_MAX);
+  return {
+    frame: true, layout: 'column', tier: 'f', fit: 'cover', artw: box.w, arth: box.h, bandPx: [sw * box.w / 100, sh * box.h / 100], infow: FRAME_COL_INFO_W, gap: FRAME_COL_GUTTER, sepv: FRAME_COL_SEP,
+    lead: 12, drop: 0, wdrop: 6, numcls: 'value--giga', label: label, who: who, coll: coll, fill: false,
+  };
+}
+
 /**
  * The info strip of one view slot, or null (none on, or no room): { place: "below", tier, gallery, stripw, lw, mw, midcols, label, who, detail, gap }.
  * set.strip says whether a part is on and has content, set.blocks which ({ date, weather, agenda, events: how many agenda items }).
@@ -949,16 +991,18 @@ function artOf(work, shard, set, scr) {
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
-    var inf = infoPlace(art, sw, sh, art.zoom, set);
-    if (inf) { // info on: the work always hangs on its mat (no placard over the art), the info beside it or below
+    var framed = v === 'full' && scr.frame && scr.o === 'landscape' && set.strip;
+    var inf = framed ? framePlan(art, sw, sh, set) : infoPlace(art, sw, sh, art.zoom, set);
+    if (framed) geo[v] = { mode: 'frame', fit: 'cover', gallery: null, plate: null, info: inf };
+    else if (inf) { // info on: the work always hangs on its mat (no placard over the art), the info beside it or below
       if (inf.label) { inf.who = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : ''); inf.detail = ''; } // the technique is left out when info is on
       geo[v] = inf.fill ? { mode: 'full', fit: 'cover', gallery: null, plate: null, info: inf } : { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
-    } else if (modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null };
-    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: set.label && sw / art.zoom >= PLATE_MIN_W && sh / art.zoom >= PLATE_MIN_H ? plateFor(art, sw, sh, art.kind) : null, info: null }; // a slot too small for a placard (a playdate quadrant) has none
+    } else if (set.label || modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null }; // the label on: always the mat and the label as a gallery label (a slot too small for it has none); text never lies over the art
+    else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: null, info: null }; // label off, no info: the work fills the view when that crops little
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
   var fullInf = geo.full.info, bandFull = fullInf && fullInf.fill ? scr.h * fullInf.band / 100 : scr.h;
-  art.width = geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
+  art.width = geo.full.mode === 'frame' ? thumbWidth(work.w, work.h, fullInf.bandPx[0], fullInf.bandPx[1], 'fill') : geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
     thumbWidth(work.w, work.h, scr.w, bandFull, 'fill');
   if (work.r && art.width > work.r) art.width = capStep(work.r); // a PNG-only work: its thumbnail is a PNG, many MB at the wide steps (the build measured and set r)
   art.url = thumbUrl(work.f, art.width);
@@ -967,10 +1011,10 @@ function artOf(work, shard, set, scr) {
 }
 
 /** What the strip shows: { info, layout }. info null when no part has content; layout the settings plus { strip, blocks }. */
-async function infoOf(set, local, wxP, agP, state) {
+async function infoOf(set, local, wxP, agP, state, scr) {
   var wx = await wxP, ag = await agP;
   if (wx) state.loc = wx.loc;
-  if (ag && wx) ag = { day: ag.day, label: ag.label, items: ag.items.slice(0, 1) }; // weather and agenda: the weather, then the next single event
+  if (ag && wx && !(scr.frame && scr.o === 'landscape')) ag = { day: ag.day, label: ag.label, items: ag.items.slice(0, 1) }; // weather and agenda: the weather, then the next single event
   var blocks = { date: set.show_date, weather: !!wx, agenda: !!ag, events: ag ? ag.items.length : 0 };
   blocks.n = (blocks.date ? 1 : 0) + (blocks.weather ? 1 : 0) + (blocks.agenda ? 1 : 0);
   var info = blocks.n ? {
@@ -994,18 +1038,19 @@ async function run(input) {
   } catch (err) {
     // Hand the state back unchanged. The work shown last stays on the screen, without a notice; else a plain message.
     var prev = input && input.trmnl && input.trmnl.previous_merge_variables;
-    var made0 = await infoOf(set, local, wxP, agP, state);
+    var made0 = await infoOf(set, local, wxP, agP, state, scr);
     var out = { settings: set0, trmnl_state: state, info: made0.info };
     if (prev && prev.art && prev.art.url) { out.art = prev.art; out.geo = prev.geo; out.backup = prev.backup || null; }
     else out.notice = 'The artwork list could not be loaded. The next refresh tries again.';
     out.debug = String(err && err.message ? err.message : err);
     return out;
   }
-  var made1 = await infoOf(set, local, wxP, agP, state), info = made1.info;
+  var made1 = await infoOf(set, local, wxP, agP, state, scr), info = made1.info;
   set = made1.layout; // the settings and what the strip has (also in the merge variables: no link in it, see icsUrl)
   // with fill on the work is picked for the shape it fills: the screen, or the band above the strip
   var pickAspect = scr.w / scr.h;
-  if (set.fill && set.strip) {
+  if (scr.frame && scr.o === 'landscape' && set.strip) pickAspect = FRAME_PICK_ASPECT;
+  else if (set.fill && set.strip) {
     var z0 = scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), tz = scr.frame ? (scr.w >= 2000 ? 'f' : 'g') : (scr.h / z0 >= 900 ? 'xl' : scr.h / z0 >= 560 ? 'l' : scr.h / z0 >= 340 ? 'm' : 's'), zz = INFO_SIZES[tz];
     if (scr.h / z0 >= INFO_MIN_SLOT && scr.w / z0 >= INFO_MIN_SLOT_W) pickAspect = scr.w / (scr.h - (zz.gap + zz.h + zz.m) * z0);
   }
@@ -1027,6 +1072,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, plateFor: plateFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, framePlan: framePlan, frameBox: frameBox, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }

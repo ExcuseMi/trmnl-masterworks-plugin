@@ -106,7 +106,8 @@ RSpec.describe 'Masterworks info strip' do
     expect(cut).to eq([]), "#{where}: text is cut: #{cut}"
   end
 
-  %w[frame og_png].each do |device|
+  # the Frame landscape has its own layouts (frame_spec.rb); the Frame portrait, the X and the OG keep the strip
+  %w[og_png].each do |device|
     COMBOS.each do |name, keys|
       it "#{name} on #{device}: only the parts that are on, composed under the picture, nothing overlapping or cut off" do
         page = screen(device, fields_for(keys), mocks: shards('one-landscape', 'one-tall').merge(services))
@@ -130,7 +131,7 @@ RSpec.describe 'Masterworks info strip' do
       page = screen(device, {})
       wait(page)
       expect(page).to have_no_css('[data-info-block]')
-      expect(page).to have_css('[data-label], [data-placard]')
+      expect(page).to have_css('[data-label]')
     end
 
     it "weather that cannot be fetched leaves the date alone and never an error (#{device})" do
@@ -154,7 +155,7 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   it 'shows the temperature over the forecast, the agenda time over its text, in black' do
-    page = screen('frame', fields_for(%w[show_date show_weather show_agenda]))
+    page = screen('og_png', fields_for(%w[show_date show_weather show_agenda]))
     wait(page)
     expect(page.evaluate("document.querySelector('[data-temp]').innerText")).to match(/\A-?\d+°\z/)
     expect(page.evaluate("document.querySelector('[data-weather]').innerText")).to match(/\A(Rain|Drizzle|Snow|Storm|Dry|Sunny|Clear|Fog)/)
@@ -167,16 +168,16 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   it 'the agenda alone shows up to two events in the middle slot, time over text' do
-    page = screen('frame', fields_for(%w[show_agenda]))
+    page = screen('og_png', fields_for(%w[show_agenda]))
     wait(page)
     expect(page.evaluate("document.querySelectorAll('[data-event]').length")).to eq(2)
     expect(page).to have_no_css('[data-info="weather"]')
   end
 
   it 'keeps the groups in their places when one is switched off: the weather does not move' do
-    both = screen('frame', fields_for(%w[show_date show_weather]))
+    both = screen('og_png', fields_for(%w[show_date show_weather]))
     wait(both)
-    alone = screen('frame', fields_for(%w[show_weather]))
+    alone = screen('og_png', fields_for(%w[show_weather]))
     wait(alone)
     x = ->(page) { page.evaluate("document.querySelector('[data-block=\"primary\"] [data-info=\"weather\"]').getBoundingClientRect().left") }
     expect(x.call(alone)).to be_within(2).of(x.call(both))
@@ -199,7 +200,7 @@ RSpec.describe 'Masterworks info strip' do
     end
   end
 
-  [['frame', 'landscape'], ['frame', 'portrait'], ['v2', 'landscape'], ['og_png', 'landscape']].each do |device, orientation|
+  [['frame', 'portrait'], ['v2', 'landscape'], ['og_png', 'landscape']].each do |device, orientation|
     SHAPES.each do |name, aspect|
       it "#{name} on #{device} #{orientation}: the strip and the picture do not overlap, the work is whole, nothing is cut" do
         page = screen(device, fields_for(COMBOS['date and weather']), orientation:, mocks: shape_shards(aspect).merge(services))
@@ -216,7 +217,7 @@ RSpec.describe 'Masterworks info strip' do
   end
 
   # every shape x every set of parts: the strip stands within the work's left and right edges (the owner's rule), on the Frame and the OG
-  [['frame', 'landscape'], ['og_png', 'landscape'], ['frame', 'portrait']].each do |device, orientation|
+  [['og_png', 'landscape'], ['frame', 'portrait']].each do |device, orientation|
     SHAPES.each do |name, aspect|
       COMBOS.each do |combo, keys|
         it "#{name}, #{combo} on #{device} #{orientation}: the strip stands on the work's edges and nothing is cut" do
@@ -234,8 +235,8 @@ RSpec.describe 'Masterworks info strip' do
     shapes = shape_shards(1.5)
     frame = screen('frame', fields_for(%w[show_date]), mocks: shapes.merge(services))
     wait(frame)
-    expect(frame).to have_css('[data-gallery][data-frame="1"]')
-    mat = frame.evaluate("getComputedStyle(document.querySelector('[data-gallery][data-block=\"primary\"]')).backgroundColor")
+    expect(frame).to have_css('[data-block="primary"][data-frame="1"]')
+    mat = frame.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"]')).backgroundColor")
     %w[v2 og_png].each do |device|
       page = screen(device, fields_for(%w[show_date]), mocks: shapes.merge(services))
       wait(page)
@@ -246,7 +247,7 @@ RSpec.describe 'Masterworks info strip' do
   it 'draws the info in white text on a black mat when the work hangs on black' do
     page = screen('frame', fields_for(%w[show_date]), mocks: shards('one-dark-landscape', 'one-portrait'))
     wait(page)
-    expect(page.evaluate("getComputedStyle(document.querySelector('[data-gallery][data-block=\"primary\"]')).backgroundColor")).to eq('rgb(0, 0, 0)')
+    expect(page.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"]')).backgroundColor")).to eq('rgb(0, 0, 0)')
     expect(page.evaluate("getComputedStyle(document.querySelector('[data-block=\"primary\"] [data-day]')).color")).to eq('rgb(255, 255, 255)')
   end
 
@@ -256,12 +257,17 @@ RSpec.describe 'Masterworks info strip' do
       screen(device, { 'fill' => 'true' }.merge(fields), orientation:, mocks: shape_shards(aspect).merge(services))
     end
 
-    it 'info off: a work that crops 11 % fills the Frame edge to edge with its placard; fill off hangs it on the mat' do
-      on = fill_screen('frame', {}, 2.0)
+    it 'info off, label off: a work that crops 11 % fills the Frame edge to edge; fill off hangs it on the mat; with the label on it never fills' do
+      labelled = fill_screen('frame', {}, 2.0)
+      wait(labelled)
+      expect(labelled).to have_css('[data-label]')
+      expect(labelled).to have_no_css('[data-placard]')
+      expect(labelled).to have_no_css('[data-mode="full"]')
+      on = fill_screen('frame', { 'label' => 'false' }, 2.0)
       wait(on)
       expect(on).to have_css('[data-mode="full"]')
       expect(on).to have_no_css('[data-gallery]')
-      expect(on).to have_css('[data-placard]')
+      expect(on).to have_no_css('[data-placard]')
       img = box(on, '[data-block="primary"] img.image')
       lay = box(on, '[data-block="primary"]')
       expect(img).to eq(lay), 'edge to edge'
@@ -276,7 +282,7 @@ RSpec.describe 'Masterworks info strip' do
       expect(page).to have_css('[data-gallery]')
     end
 
-    %w[frame og_png v2].each do |device|
+    %w[og_png v2].each do |device|
       it "info on, #{device}: a work that fills the band goes edge to edge from the top, the strip is full width under it, the label in the strip, no placard" do
         page = fill_screen(device, fields_for(%w[show_date show_weather]), device == 'v2' ? 1.8 : 2.1) # about the shape of the band above the strip
         wait(page)
@@ -298,7 +304,7 @@ RSpec.describe 'Masterworks info strip' do
     end
 
     it 'info on: a work that would crop more than 15 % of the band hangs whole on the mat, the strip under it; fill off always so' do
-      %w[frame og_png].each do |device|
+      %w[og_png].each do |device|
         page = fill_screen(device, fields_for(%w[show_date]), 1.0)
         wait(page)
         expect(page).to have_css('[data-gallery]')
@@ -321,18 +327,13 @@ RSpec.describe 'Masterworks info strip' do
             if info
               expect(page).to have_css('[data-info-block]')
               expect(page).to have_no_css('[data-placard]')
-              if page.has_css?('[data-fill-band]')
-                expect(fill).to be(true)
-              else
-                expect_composed(page, "#{name} fill #{fill} info on")
-              end
+              expect(page).to have_css('[data-layout]'), 'the Frame landscape: band or column (frame_spec.rb holds the geometry)'
               expect(cut_parts(page)).to eq([])
             else
               expect(page).to have_no_css('[data-info-block]')
-              expect(page).to have_css('[data-placard], [data-label]')
-              crop = 1 - [aspect / (2560.0 / 1440), (2560.0 / 1440) / aspect].min
-              fills = fill ? crop <= 0.15 : crop < 0.05
-              expect(page).to have_css(fills ? '[data-mode="full"]' : '[data-gallery]')
+              expect(page).to have_css('[data-gallery] [data-label], [data-label]'), 'label on, no info: the mat and the gallery label, never full screen'
+              expect(page).to have_no_css('[data-placard]')
+              expect(page).to have_no_css('[data-mode="full"]')
             end
           end
         end
@@ -372,7 +373,7 @@ RSpec.describe 'Masterworks info strip' do
     end
 
     it 'is never drawn around a work that fills the screen, and not with the info on and the work filling its band' do
-      full = screen('frame', { 'fill' => 'true' }, mocks: keyed('one-wide-landscape', { 'lw' => 1, 'lb' => 1 }))
+      full = screen('frame', { 'fill' => 'true', 'label' => 'false' }, mocks: keyed('one-wide-landscape', { 'lw' => 1, 'lb' => 1 }))
       wait(full)
       expect(full).to have_css('[data-mode="full"]')
       expect(full).to have_no_css('[data-keyline]')

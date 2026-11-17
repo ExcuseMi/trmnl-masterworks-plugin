@@ -198,11 +198,12 @@ test('run: picks a work, builds the thumbnail URL at a standard width, saves the
 test('run: a portrait screen reads the portrait shard and decides by the portrait screen', async () => {
   let asked;
   globalThis.fetch = async (url) => { asked = url; return answer(shard([{ w: 1440, h: 2560 }]))(); };
-  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' } }));
+  const NOLABEL = { label: 'false' }; // only with the label off does a work fill the screen
+  const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: NOLABEL } }));
   assert.match(asked, /\/data\/portrait-\d\.json$/);
   assert.strictEqual(out.geo.full.mode, 'full', 'a 9:16 work fills a 9:16 screen');
   globalThis.fetch = answer(shard([{ w: 3000, h: 2000 }]));
-  assert.strictEqual((await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' } }))).geo.full.mode, 'gallery');
+  assert.strictEqual((await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: NOLABEL } }))).geo.full.mode, 'gallery');
 });
 
 test('run: history is capped at 50 and the state stays small', async () => {
@@ -256,17 +257,17 @@ test('SHARDS equals the part files in data/ (a stale constant would fetch a part
 
 const ART = { title: 'The Great Wave off Kanagawa', artist: 'Katsushika Hokusai', year: '1831', medium: 'Woodblock print', size: [25.7, 37.9], collection: 'The Metropolitan Museum of Art', w: 8000, h: 5400 };
 
-test('mat: a dark work hangs on black, else white; a work that fills the view has the plate model and no gallery boxes', async () => {
+test('mat: a dark work hangs on black, else white; a work that fills the view (label off) has no plate and no gallery boxes; with the label on it never fills', async () => {
   globalThis.fetch = answer(shard([{ n: 1 }]));
   assert.strictEqual((await t.run(input())).art.mat, 'black');
   globalThis.fetch = answer(shard([{}]));
   assert.strictEqual((await t.run(input())).art.mat, 'white');
   globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
-  const full = await t.run(input());
-  assert.ok(full.geo.full.mode === 'full' && full.geo.full.plate.who.length > 0 && full.geo.full.plate.m >= 3 && full.geo.full.plate.w <= 80);
-  assert.strictEqual(full.geo.full.gallery, null);
+  const lab = await t.run(input());
+  assert.strictEqual(lab.geo.full.mode, 'gallery', 'label on: the mat and the gallery label, never full screen (no text over the art)');
+  assert.strictEqual(lab.geo.full.plate, null);
   const off = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
-  assert.strictEqual(off.geo.full.plate, null, 'label off: no plate');
+  assert.ok(off.geo.full.mode === 'full' && off.geo.full.plate === null && off.geo.full.gallery === null, 'label off: the work fills the screen');
   globalThis.fetch = answer(shard([{ w: 3000, h: 4500 }]));
   const gal = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
   assert.strictEqual(gal.geo.full.mode, 'gallery');
@@ -278,7 +279,7 @@ test('the thumbnail is sized by the picture box in the gallery, by the screen wh
   const gal = await t.run(input());
   assert.strictEqual(gal.geo.full.mode, 'gallery');
   globalThis.fetch = answer(shard([{ w: 6400, h: 3600 }]));
-  const full = await t.run(input());
+  const full = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } }));
   assert.strictEqual(full.geo.full.mode, 'full');
   assert.strictEqual(full.art.width, 1920);
   assert.ok(gal.art.width <= full.art.width);
@@ -305,11 +306,13 @@ test('automatic choice: full screen when a fill crops under AUTO_CROP_MAX (5 %) 
 
 test('the choice is per view: the same work fills the screen and hangs in a mat in a half slot', async () => {
   globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
-  const out = await t.run(input()); // Frame 2560 x 1440
+  const out = await t.run(input({ plugin_settings: { custom_fields_values: { label: 'false' } } })); // Frame 2560 x 1440, label off
   assert.strictEqual(out.geo.full.mode, 'full');
   assert.strictEqual(out.geo.half_horizontal.mode, 'gallery'); // 2560 x 720 slot, aspect 3.6
   assert.strictEqual(out.geo.quadrant.mode, 'full'); // 1280 x 720
-  assert.ok(out.geo.full.plate && !out.geo.full.gallery && out.geo.half_horizontal.gallery && !out.geo.half_horizontal.plate);
+  assert.ok(!out.geo.full.gallery && out.geo.half_horizontal.gallery && !out.geo.full.plate && !out.geo.half_horizontal.plate);
+  const withLabel = await t.run(input());
+  for (const v of ['full', 'half_horizontal', 'half_vertical', 'quadrant']) assert.ok(withLabel.geo[v].mode === 'gallery' && withLabel.geo[v].plate === null, `${v}: label on, no placard`);
   globalThis.fetch = answer(shard([{ w: 2000, h: 3000 }]));
   assert.strictEqual((await t.run(input())).geo.full.mode, 'gallery');
 });
@@ -369,13 +372,6 @@ test('year label: a range or a century from the data is shown as the label says'
   assert.strictEqual((await t.run(input())).art.year, '1536\u201341');
   globalThis.fetch = answer(shard([{ y: 1503 }]));
   assert.strictEqual((await t.run(input())).art.year, '1503');
-});
-
-test('the plate is black on a dark corner and white on a light one', async () => {
-  globalThis.fetch = answer(shard([{ w: 1600, h: 900, q: 1 }]));
-  assert.strictEqual((await t.run(input())).art.corner, 'black');
-  globalThis.fetch = answer(shard([{ w: 1600, h: 900 }]));
-  assert.strictEqual((await t.run(input())).art.corner, 'white');
 });
 
 test('default mix: with nothing ticked the genre weights favour landscapes, nature, prints and the like and lower religious art, portraits and history', () => {
@@ -470,17 +466,6 @@ test('a long title takes more label room (two lines where the slot is high enoug
   assert.strictEqual(t.galleryFor(long, 800, 480, true, 'normal').label.lines, 1, 'a low slot: one line, the Framework clamps it');
   const tallWork = { w: 1000, h: 3000 };
   assert.ok(t.galleryFor({ ...long, ...tallWork }, 1440, 2560, true, 'big').ph < t.galleryFor({ ...long, ...tallWork, title: 'Short' }, 1440, 2560, true, 'big').ph, 'a second title line costs picture height');
-});
-
-test('the placard of a work that fills the view: who, the collection, a margin that grows with the screen', () => {
-  const art = { title: 'Wheatfield with Crows', artist: 'Vincent van Gogh', year: '1890', medium: 'Oil on canvas', collection: 'Van Gogh Museum', w: 1920, h: 1080 };
-  const big = t.plateFor(art, 2560, 1440, 'big'), small = t.plateFor(art, 400, 240, 'normal');
-  assert.strictEqual(big.who, 'VINCENT VAN GOGH \u00b7 1890');
-  assert.strictEqual(big.detail, 'Oil on canvas \u00b7 Van Gogh Museum');
-  assert.ok(big.m > small.m && small.m >= 3, 'a margin step to the picture\'s edges that grows with the screen');
-  assert.ok(big.w < small.w, 'a narrow slot lets the plate take more of its width');
-  assert.strictEqual(t.plateFor({ ...art, collection: '' }, 2560, 1440, 'big').detail, 'Oil on canvas');
-  assert.strictEqual(t.plateFor({ ...art, collection: '', medium: '' }, 2560, 1440, 'big').detail, '');
 });
 
 test('text size tier: only the Frame is a big canvas (model frame, or 2560 x 1440 without a model); zoomed screens are not', async () => {

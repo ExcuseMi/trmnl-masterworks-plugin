@@ -33,12 +33,14 @@ Random and weighted; the weight is the product of the rows below. The constants 
 
 ## How a work is shown
 
-The plugin decides per work and per view; the one setting is Fill the screen.
+The plugin decides per work and per view; its one display setting is Fill the screen.
 
 | When | Look |
 |---|---|
-| A fill would crop at most 15 % of the work (`FILL_CROP_MAX`; fill off: less than 5 %, `AUTO_CROP_MAX`) | Full screen, with a small placard in the picture's bottom-left corner: a solid plate, black on a dark corner and white on a light one, a thin solid edge, a margin to the picture's edges |
-| Otherwise | The whole work in a gallery: a pure white or black mat (by the work's brightness), no outline, the label right-aligned under the picture |
+| Label and info off, a fill crops at most 15 % of the work (`FILL_CROP_MAX`; fill off: less than 5 %, `AUTO_CROP_MAX`) | Full screen, nothing over the art |
+| Museum label on (no info) | The whole work in a gallery: a pure white or black mat (by the work's brightness), no outline, the label right-aligned under the picture; a view too small for the label has none. Never full screen, never a placard over the art |
+| Info on, Frame landscape | A band for works 16:9 and wider (`FRAME_BAND_CROP_MAX`): the work covers the band, the strip in its width: day number, then equal columns with a rule on top (weather, up to two events, the label in regular weight). Any other shape: the whole work with a column on its right (a wall label): date, weather, events at the top, the label at the bottom on the work's bottom edge; work and column are one centred group |
+| Info on, other screens | The X, the OG and the Frame in portrait keep the strip (below) |
 
 No outline is drawn around a work on its mat. A work may carry a curator's keyline flag in the data: `lw` = 1 draws a fine line on a white mat, `lb` = 1 on a black one (none by default, never around a work that fills the screen).
 
@@ -48,14 +50,14 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 
 | Group | Setting | Default | Values |
 |---|---|---|---|
-| (none) | Fill the screen | On | On: a work whose fill crops at most 15 % (`FILL_CROP_MAX`) fills the screen edge to edge (with the info on: the band above the strip), with the placard; the rest hang on the mat. Off: only under 5 % (`AUTO_CROP_MAX`) fills |
-| (none) | Museum label | On | On or off |
+| (none) | Fill the screen | On | Appears only with the label, the date, the weather and the agenda all off. On: a work whose fill crops at most 15 % (`FILL_CROP_MAX`) fills the screen edge to edge; the rest hang on the mat. Off: only under 5 % (`AUTO_CROP_MAX`) fills |
+| (none) | Museum label | On | On or off; on hides Fill the screen |
 | Selection | Family friendly | On | Leaves out works whose subject is nudity or graphic violence |
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |
 | Selection | Period | All | Ten movements, such as Renaissance, Baroque, Impressionism |
-| Info | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the info appears when any part has something to show |
-| Info | Weather location, Temperature unit | Empty, Auto | A place name or `lat, lon` (TRMNL does not share a location); Auto is Fahrenheit for a US account language |
-| Info | Calendar (ICS link) | Empty | A private ICS address; a secret: never shown, logged or put in the output |
+| Info | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the info appears when any part has something to show; each one on hides Fill the screen |
+| Info | Weather location, Temperature unit | Empty, Auto | Appear only with Show the weather on. A place name or `lat, lon` (TRMNL does not share a location); Auto is Fahrenheit for a US account language |
+| Info | Calendar (ICS link) | Empty | Appears only with Show the agenda on. A private ICS address; a secret: never shown, logged or put in the output |
 
 ## The info (date, weather, agenda)
 

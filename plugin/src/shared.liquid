@@ -14,7 +14,77 @@
 {% else %}
   {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
-{% if gv.mode == "full" and inf %}
+{% if gv.mode == "frame" %}
+{% comment %} Frame landscape, info on (layouts in transform.js, FRAME_ constants). Band: the work covers a band across the width, the strip under it in the band's width, columns with a rule on top. Column: the whole work on the mat, the info column directly to its right, the painting's label at the column's bottom on the work's bottom edge; work and column are one group centred on the screen. The events are bold, the painting's label is regular weight. {% endcomment %}
+{% if art.mat == "black" %}{% assign rule = "border--h-white dark:border--h-black" %}{% else %}{% assign rule = "border--h-black dark:border--h-white" %}{% endif %}
+{% if inf.layout == "band" %}
+{% capture sep %}<div class="w--[{{ inf.gap }}cqw] shrink--0"></div>{% endcapture %}{% assign cw = "w--[" | append: inf.colw | append: "cqw] shrink--0" %}
+{% else %}
+{% capture sep %}<div class="w--full h--[{{ inf.sepv }}px] shrink--0"></div>{% endcapture %}{% assign cw = "w--full" %}
+{% endif %}
+{% capture d_p %}{% if info.has_date %}
+    <div class="flex flex--row flex--left flex--top {% if inf.layout == "band" %}w--[{{ inf.datew }}cqw] shrink--0{% else %}w--full{% endif %}" data-info="date">
+      <span class="value {{ inf.numcls }} text--bold {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
+      <div class="w--[28px] shrink--0"></div>
+      <div class="flex flex--col flex--left gap--none">
+        <div class="w--full h--[{{ inf.wdrop }}px]"></div>
+        <span class="value value--large {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
+        <span class="value value--large {{ ink }}" data-month="1">{{ info.month | escape }}</span>
+      </div>
+    </div>
+{% endif %}{% endcapture %}
+{% capture w_p %}{% if info.has_weather %}
+    <div class="flex flex--col flex--left gap--none {{ cw }}" data-info="weather" data-col="1">
+      {% if inf.layout == "band" %}<div class="w--full h--[{{ inf.drop }}px]"></div><div class="w--full h--[1px] {{ rule }}" data-rule="1"></div>{% endif %}
+      <div class="w--full h--[{{ inf.lead }}px]"></div>
+      <span class="value value--xlarge {{ ink }} block text--left" data-temp="1">{{ info.temp | escape }}</span>
+      <span class="label label--xxlarge {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>
+    </div>
+{% endif %}{% endcapture %}
+{% capture e_p %}{% if info.has_agenda %}{% for ev in info.agenda.items limit: 2 %}
+    <div class="flex flex--col flex--left gap--none {{ cw }}" data-info="agenda" data-event="1" data-col="1" data-agenda="{{ info.agenda.day }}">
+      {% if inf.layout == "band" %}<div class="w--full h--[{{ inf.drop }}px]"></div><div class="w--full h--[1px] {{ rule }}" data-rule="1"></div>{% endif %}
+      <div class="w--full h--[{{ inf.lead }}px]"></div>
+      <span class="label label--xxlarge {{ ink }} block text--left value--tnums" data-clamp="1" data-clamp-lg="2" data-event-time="1">{{ ev.time | escape }}</span>
+      <span class="value value--base text--bold {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
+      {% if ev.loc != blank %}<span class="label label--xxlarge {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-event-place="1">{{ ev.loc | escape }}</span>{% endif %}
+    </div>
+    {{ sep }}
+{% endfor %}{% endif %}{% endcapture %}
+{% capture l_p %}{% if inf.label %}
+    <div class="flex flex--col flex--left gap--none {{ cw }}" data-col="1" data-slot="label">
+      {% if inf.layout == "band" %}<div class="w--full h--[{{ inf.drop }}px]"></div><div class="w--full h--[1px] {{ rule }}" data-rule="1"></div>{% endif %}
+      <div class="w--full h--[{{ inf.lead }}px]"></div>
+      <span class="value value--base {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-label="1">{{ art.title | escape }}</span>
+      <span class="label label--xxlarge {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-who="1">{{ inf.who | escape }}</span>
+      {% if inf.coll != blank %}<span class="label label--xxlarge {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-museum="1">{{ inf.coll | escape }}</span>{% endif %}
+    </div>
+{% endif %}{% endcapture %}
+{% if inf.layout == "band" %}
+<div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1">
+  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
+  <div class="relative w--[{{ inf.bandw }}cqw] h--[{{ inf.band }}cqh] shrink--0 {{ mat }}" data-picture="1">
+    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ inf.bandw }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
+  </div>
+  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
+  <div class="flex flex--row flex--top w--[{{ inf.bandw }}cqw] grow" data-info-block="below">
+    {{ d_p }}{% if info.has_date %}{{ sep }}{% endif %}{{ w_p }}{% if info.has_weather %}{{ sep }}{% endif %}{{ e_p }}{{ l_p }}
+  </div>
+</div>
+{% else %}
+<div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="column" data-block="{{ block }}" data-frame="1">
+  <div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink--0 {{ mat }}" data-picture="1">
+    <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="{{ inf.artw }}vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
+  </div>
+  <div class="w--[{{ inf.gap }}cqw] shrink--0"></div>
+  <div class="flex flex--col flex--top w--[{{ inf.infow }}cqw] h--[{{ inf.arth }}cqh] shrink--0" data-info-block="column">
+    {{ d_p }}{% if info.has_date %}{{ sep }}{% endif %}{{ w_p }}{% if info.has_weather %}{{ sep }}{% endif %}{{ e_p }}
+    <div class="w--full grow"></div>
+    {{ l_p }}
+  </div>
+</div>
+{% endif %}
+{% elsif gv.mode == "full" and inf %}
 {% comment %} fill on and info on: the work fills the band above the strip edge to edge, from the top of the screen; the strip is full width under it on the mat's colour, its text inside the margins {% endcomment %}
 <div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}"{% if art.kind == "big" or trmnl.device.model == "frame" %} data-frame="1"{% endif %}>
   <div class="relative w--full h--[{{ inf.band }}cqh]" data-fill-band="1">
@@ -31,22 +101,6 @@
 <div class="layout layout--center p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
   <div class="relative w--full h--full bg--white">
     <img src="{{ art.url }}" srcset="{{ art.srcset }}" sizes="100vw"{% if block == "backup" %} loading="lazy"{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
-    {% assign pl = gv.plate %}
-    {% if pl %}
-    {% comment %} the plate sits inside the picture's bottom-left corner with a margin (never across an edge): solid black with white text on a dark corner, solid white with black text on a light one, a thin solid edge in the other colour; dark: swaps the tokens back so a dark-mode screen does not repaint it {% endcomment %}
-    {% if art.corner == "black" %}
-      {% assign plate = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
-    {% else %}
-      {% assign plate = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
-    {% endif %}
-    <div class="absolute bottom--{{ pl.m }} left--{{ pl.m }} z--2 {{ edge }} p--0.5 w--max-[{{ pl.w }}cqw]" data-placard="1">
-      <div class="{{ plate }} {{ ppad }} flex flex--col flex--left gap--none">
-        <span class="title {{ tcls }} {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2">{{ art.title | escape }}</span>
-        {% if pl.who != blank %}<span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2">{{ pl.who | escape }}</span>{% endif %}
-        {% if pl.detail != blank %}<span class="label {{ dcls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2">{{ pl.detail | escape }}</span>{% endif %}
-      </div>
-    </div>
-    {% endif %}
   </div>
 </div>
 {% else %}

@@ -117,6 +117,9 @@ RSpec.describe 'Masterworks' do
   end
 
   describe 'the automatic choice' do
+    # only a work with no label on it fills the screen (no text ever lies over the art)
+    let(:custom_fields) { { 'fill' => 'false', 'label' => 'false' } }
+
     # the plugin decides per work and per screen: a fill that crops under 10 % of the work, else the gallery
     it 'fills the Frame with a 16:9 work and hangs a 3:2 or a tall portrait work in the gallery' do
       wide = screen('full', 'frame', mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
@@ -161,9 +164,8 @@ RSpec.describe 'Masterworks' do
         expect(gal.evaluate("document.querySelector('[data-label] .title').getBoundingClientRect().height")).to be >= min_px
         full = screen('full', device, mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
         wait(full)
-        next unless full.has_css?('[data-placard]')
-
-        expect(full.evaluate("document.querySelector('[data-placard] .title').getBoundingClientRect().height")).to be >= min_px
+        expect(full).to have_no_css('[data-placard]'), 'no placard over the art, ever'
+        expect(full.evaluate("document.querySelector('[data-label] .title').getBoundingClientRect().height")).to be >= min_px
       end
     end
   end
@@ -215,8 +217,8 @@ RSpec.describe 'Masterworks' do
       expect(gal.evaluate("[...document.querySelectorAll('[data-label] [data-clamp]')].every(e => +e.getAttribute('data-clamp-lg') >= 2)")).to eq(true)
       full = screen('full', 'frame', mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
       wait(full)
-      expect(full.evaluate("document.querySelectorAll('[data-placard] [data-clamp]').length")).to be >= 2
-      expect(full.evaluate("[...document.querySelectorAll('[data-placard] [data-clamp]')].every(e => +e.getAttribute('data-clamp-lg') >= 2)")).to eq(true)
+      expect(full).to have_no_css('[data-placard]')
+      expect(full.evaluate("[...document.querySelectorAll('[data-label] [data-clamp]')].every(e => +e.getAttribute('data-clamp-lg') >= 2)")).to eq(true)
     end
 
     it 'the settings page has no Display group (the label field stands alone)' do
@@ -343,7 +345,7 @@ RSpec.describe 'Masterworks' do
           page = screen(view, device, orientation: orientation.to_sym, mocks: shard_mocks(fixture_name, 'one-portrait'))
           expect(page).to have_no_overflow
           wait(page)
-          sel = page.has_css?('[data-label]') ? '[data-label]' : '[data-placard]'
+          sel = '[data-label]'
           next unless page.has_css?(sel)
 
           expect(rect(page, sel)[2]).to be <= layout_rect(page)[2] - 3

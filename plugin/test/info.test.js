@@ -169,10 +169,10 @@ test('run: with info on the work hangs on its mat, no placard, no label under it
   const out = await runWith({ show_date: 'true' }, reply(FORECAST));
   const inf = out.geo.full.info;
   assert.ok(inf, 'the info has a place');
-  assert.ok(['below', 'side'].includes(inf.place));
-  assert.strictEqual(out.geo.full.mode, 'gallery');
+  assert.ok(['below', 'side'].includes(inf.place) || inf.layout, 'a strip under or beside the work, or the Frame layout');
+  assert.ok(['gallery', 'frame'].includes(out.geo.full.mode));
   assert.strictEqual(out.geo.full.plate, null);
-  assert.ok(!out.geo.full.gallery.label, 'no label under the picture');
+  assert.ok(!out.geo.full.gallery || !out.geo.full.gallery.label, 'no label under the picture');
   assert.ok(inf.label && inf.who.length > 0, 'the label text is in the info block');
   const off = await runWith({}, reply(FORECAST));
   assert.strictEqual(off.geo.full.info, null);
@@ -256,7 +256,7 @@ test('fill on, info off: a work whose fill crops at most 15 % fills the screen e
 test('fill on, info off, in a run: the works that crop up to 15 % fill; fill off keeps the 5 % rule', async () => {
   const geoOf = async (fields, w, h) => {
     globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => ({ ...shardJson, w: [{ ...shardJson.w[0], w, h }] }) });
-    return (await t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, plugin_settings: { custom_fields_values: fields }, state: {} } })).geo.full;
+    return (await t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, plugin_settings: { custom_fields_values: { label: 'false', ...fields } }, state: {} } })).geo.full; // the label off: only then does a work fill the screen
   };
   const wide = await geoOf({}, 1800, 1000); // 16:9 is 1.78, this 1.8: nearly the screen
   assert.strictEqual(wide.mode, 'full');
@@ -286,13 +286,45 @@ test('fill on, info on: the work fills the band above the strip when that crops 
 test('fill on, info on, in a run: the work fills the band edge to edge, no placard; the thumbnail is sized for the band', async () => {
   globalThis.fetch = async (url) => (/open-meteo/.test(url) ? reply(FORECAST)() : reply({ ...shardJson, w: [{ ...shardJson.w[0], w: 2200, h: 1000 }] })());
   const out = await t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, user: { locale: 'en', time_zone_iana: 'UTC' }, plugin_settings: { custom_fields_values: { show_date: 'true' } }, state: {} } });
-  assert.strictEqual(out.geo.full.mode, 'full');
+  assert.strictEqual(out.geo.full.mode, 'frame', 'the Frame landscape: band (2.2:1)');
+  assert.strictEqual(out.geo.full.info.layout, 'band');
   assert.strictEqual(out.geo.full.plate, null);
-  assert.ok(out.geo.full.info.fill && out.geo.full.info.label);
-  const off = await runWith2({ show_date: 'true', fill: 'false' });
-  assert.strictEqual(off.geo.full.mode, 'gallery');
+  assert.ok(out.geo.full.info.label);
 });
 async function runWith2(fields) {
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ...shardJson, w: [{ ...shardJson.w[0], w: 2200, h: 1000 }] }) });
   return t.run({ trmnl: { device: { width: 2560, height: 1440, model: 'frame', orientation: 'landscape' }, user: { locale: 'en', time_zone_iana: 'UTC' }, plugin_settings: { custom_fields_values: fields }, state: {} } });
 }
+
+// the Frame (landscape) layouts: band for 16:9 and wider, else the whole work with a column on its right
+const FRAME_SET = { strip: true, blocks: { date: true, weather: true, agenda: true, events: 2, n: 3 }, label: true };
+const framePlan = (aspect, set = FRAME_SET) => t.framePlan({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 2560, 1440, set);
+
+test('Frame: a band for 16:9 and wider, the column layout for every other shape', () => {
+  for (const a of [2.5, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`);
+  for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`);
+});
+
+test('Frame band: equal margins on three sides, the strip as wide as the band, equal columns', () => {
+  const p = framePlan(2);
+  assert.strictEqual(p.bandPx[0], 2560 - 2 * 51.2);
+  assert.ok(Math.abs(p.margin - 2560 * p.mpct / 100) < 2 || p.margin === 51);
+  assert.strictEqual(p.cols, 4);
+  assert.strictEqual(framePlan(2, { ...FRAME_SET, label: false }).cols, 3, 'a column that is off is not drawn');
+});
+
+test('Frame column: the whole work in a whole-percent box of its own shape, the group inside the screen and centred by its boxes', () => {
+  for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.4]) {
+    const p = framePlan(a), shape = (p.artw * 2560) / (p.arth * 1440);
+    assert.ok(Math.abs(Math.log(shape / a)) < 0.03, `${a}: the box has the work's shape (${shape.toFixed(3)})`);
+    assert.ok(p.artw + p.gap + p.infow <= 100 - 2 * 2, `${a}: the group leaves margins`);
+    assert.ok(p.arth <= 92 && p.arth >= 10);
+  }
+  const sq = framePlan(1), wide = framePlan(1.5);
+  assert.ok(sq.arth >= 80, 'as large as the screen allows');
+  assert.ok(wide.artw === 67 || wide.arth === 92, 'one of the limits is reached');
+});
+
+test('Frame: at most two agenda events are ever kept', () => {
+  assert.strictEqual(t.AGENDA_ITEMS, 2);
+});
