@@ -30,7 +30,7 @@ const BUILD_YEAR = new Date().getUTCFullYear();
 // Wikidata labels with a known error; the fix belongs on Wikidata, this keeps the data set right until then
 // Wikidata labels that are wrong or vandalized (Q311243 read "Wanderer above the Sea younes non non non ..." on 2026-11-17).
 const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa', Q311243: 'Wanderer above the Sea of Fog' };
-const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens', Q714802: 'Along the River During the Qingming Festival' };
+const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens' };
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
 
 mkdirSync(cacheDir, { recursive: true });
@@ -139,7 +139,7 @@ let mainCount = 0;
 // a woodblock print of a Japanese series may be 1200 px on its long side (that is what Commons holds), every other work 1500
 const imageOf = (p) => {
   const jpSeries = SERIES_GENRE[(seriesOf.get(p.id) || [])[0]] === 'japanese print';
-  return p.d.files.slice(0, 3).find((n) => usable(infoCache[n], jpSeries ? MIN_LONG_SIDE_PRINT : undefined));
+  return p.d.files.slice(0, 3).find((n) => usable(infoCache[n], jpSeries ? MIN_LONG_SIDE_PRINT : undefined, n));
 };
 const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
 const artistOf = (p) => p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';

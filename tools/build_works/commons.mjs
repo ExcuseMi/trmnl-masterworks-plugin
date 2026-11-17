@@ -59,6 +59,15 @@ export async function fetchImageInfo(names) {
 }
 
 /** Keep a file only when it is a bitmap with a long side of at least MIN_LONG_SIDE. */
-export function usable(info, minLongSide = MIN_LONG_SIDE) {
-  return !!info && info.bitmap && Math.max(info.w, info.h) >= minLongSide;
+// A photo taken in the gallery (camera file names, "exhibition" in Japanese) shows the frame, glare or an angle instead of
+// the work; a scroll longer than MAX_ASPECT becomes a sliver on any screen. Owner 2026-11-17: a photo of a museum
+// touchscreen showing Hokusai's Sumida scroll reached the Frame.
+export const GALLERY_PHOTO_RE = /展示|展覧|\bDSC[_N]?\d|\bDSCF\d|\bIMG[_-]?\d|\bPXL_\d|\bP\d{7}\b|\bWP_\d|Estampe-p\d/i;
+export const MAX_ASPECT = 5;
+
+export function usable(info, minLongSide = MIN_LONG_SIDE, name = '') {
+  if (!info || !info.bitmap || Math.max(info.w, info.h) < minLongSide) return false;
+  if (GALLERY_PHOTO_RE.test(name)) return false;
+  const r = info.w / info.h;
+  return r <= MAX_ASPECT && r >= 1 / MAX_ASPECT;
 }

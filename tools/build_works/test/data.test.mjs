@@ -47,3 +47,16 @@ test('every member of a series with its own years and technique says both (year 
   const bad = ids.filter((id) => !byId.has(id) || byId.get(id).y === undefined || byId.get(id).e === undefined);
   assert.deepStrictEqual(bad, []);
 });
+
+// Owner 2026-11-17: a photo of a museum touchscreen showing a scroll reached the Frame. No gallery photos (camera file
+// names) and no shape longer than MAX_ASPECT in the data; and the owner's family-friendly flags are kept.
+import { GALLERY_PHOTO_RE, MAX_ASPECT } from '../commons.mjs';
+
+test('no gallery photos and no sliver shapes in the data', () => {
+  const bad = works.filter((w) => GALLERY_PHOTO_RE.test(w.f) || w.w / w.h > MAX_ASPECT || w.w / w.h < 1 / MAX_ASPECT).map((w) => `${w.f} ${w.i} ${w.t}`);
+  assert.deepStrictEqual(bad, []);
+});
+
+test('reviewed family-friendly flags are in the data', () => {
+  for (const id of ['Q17491284', 'Q2438357']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
+});

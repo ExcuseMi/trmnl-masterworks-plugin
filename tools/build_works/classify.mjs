@@ -29,6 +29,8 @@ export const REVIEWED_FLAGS = {
   Q844675: 'nudity', // Sistine Chapel ceiling
   Q930535: 'nudity', // Tahitian Women on the Beach
   Q212616: 'violence', // The Raft of the Medusa (corpses, cannibalism)
+  Q17491284: 'nudity', // Equality Before Death (Bouguereau), owner 2026-11-17
+  Q2438357: 'nudity', // Death and the Maiden (Schiele)
   Q2293905: 'violence', // Medusa (Caravaggio, the severed head)
   // nudes in the posters and Art Nouveau tier (Wikidata has no tag on them)
   Q18331571: 'nudity', // The White and the Black (Vallotton)
