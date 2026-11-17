@@ -58,5 +58,5 @@ test('no gallery photos and no sliver shapes in the data', () => {
 });
 
 test('reviewed family-friendly flags are in the data', () => {
-  for (const id of ['Q17491284', 'Q2438357']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
+  for (const id of ['Q17491284', 'Q2438357', 'Q18891424', 'Q11873950']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
 });

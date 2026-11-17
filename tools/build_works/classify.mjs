@@ -30,6 +30,8 @@ export const REVIEWED_FLAGS = {
   Q930535: 'nudity', // Tahitian Women on the Beach
   Q212616: 'violence', // The Raft of the Medusa (corpses, cannibalism)
   Q17491284: 'nudity', // Equality Before Death (Bouguereau), owner 2026-11-17
+  Q18891424: 'nudity', // Woman in Three Stages (Munch), seen on the demo 2026-11-17
+  Q11873950: 'nudity', // Bathing Men (Munch)
   Q2438357: 'nudity', // Death and the Maiden (Schiele)
   Q2293905: 'violence', // Medusa (Caravaggio, the severed head)
   // nudes in the posters and Art Nouveau tier (Wikidata has no tag on them)
