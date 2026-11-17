@@ -2,6 +2,8 @@
 
 A famous public-domain artwork on your TRMNL, a new one at every refresh. Made for the TRMNL Frame (2560x1440, 6-colour e-paper); works on every model, view and orientation.
 
+[Live demo](https://excusemi.github.io/trmnl-masterworks-plugin/)
+
 ## What it shows
 
 5,000+ public-domain works: paintings, prints, drawings, posters and nature illustrations.

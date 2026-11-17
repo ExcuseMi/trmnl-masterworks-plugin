@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masterworks for TRMNL</title>
+<meta name="description" content="A famous public-domain artwork, new at every refresh, for TRMNL e-paper displays. Try the real plugin here on the Frame, the X and the OG.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/icon.png">
+<style>
+:root{--bg:#f4f2ee;--panel:#fbfaf7;--ink:#1c1b19;--mute:#6b675f;--line:#dcd8cf;--accent:#7a5a2e;--stage:#e6e2d9}
+@media (prefers-color-scheme:dark){:root{--bg:#161513;--panel:#1d1c1a;--ink:#ecE8df;--mute:#a09b90;--line:#34322e;--accent:#d2ad74;--stage:#0f0e0d}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Times New Roman",serif}
+a{color:var(--accent)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
+header{padding:32px 0 20px}
+h1{font-weight:400;font-size:clamp(1.8rem,5vw,2.6rem);letter-spacing:.01em;margin:0 0 6px}
+.lede{margin:0 0 10px;color:var(--mute);max-width:46em}
+.links{display:flex;gap:16px;flex-wrap:wrap;font:14px/1.4 system-ui,sans-serif}
+.stage{background:var(--stage);border:1px solid var(--line);border-radius:6px;padding:clamp(8px,3vw,32px)}
+trmnl-frame{display:block;width:100%;max-width:1000px;margin:0 auto}
+.cap{font:14px/1.4 system-ui,sans-serif;color:var(--mute);margin:14px 0 0;text-align:center;min-height:2.8em}
+.cap b{color:var(--ink);font-weight:600}
+.bar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:center;margin:16px 0 0;font:14px/1.4 system-ui,sans-serif}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;color:var(--ink);background:var(--panel);border:0;border-right:1px solid var(--line);padding:8px 14px;min-height:40px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.seg button:disabled{opacity:.4;cursor:default}
+button.next{font:600 15px system-ui,sans-serif;background:var(--accent);color:#fff;border:0;border-radius:6px;padding:10px 20px;min-height:44px;cursor:pointer}
+@media (prefers-color-scheme:dark){button.next{color:#161513}}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lbl{color:var(--mute)}
+section.opts{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;font:14px/1.4 system-ui,sans-serif}
+section.opts h2{font:600 15px system-ui,sans-serif;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px 24px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{padding:0;font-weight:600;margin-bottom:6px}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px}
+.checks label,.one{display:flex;gap:8px;align-items:center;min-height:32px}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-height:40px;max-width:100%}
+.hint{color:var(--mute);margin:4px 0 0}
+footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Masterworks for TRMNL</h1>
+  <p class="lede">A famous public-domain artwork, new at every refresh, for your TRMNL e-paper display. This page runs the real plugin in your browser.</p>
+  <div class="links"><a href="https://github.com/ExcuseMi/trmnl-masterworks-plugin">GitHub repository</a></div>
+</header>
+
+<div class="stage">
+  <trmnl-frame id="frame" model="frame" color="wood"></trmnl-frame>
+  <p class="cap" id="cap" aria-live="polite">Loading...</p>
+</div>
+
+<div class="bar">
+  <button class="next" id="next" type="button">Next artwork</button>
+  <span><span class="lbl">Device</span> <span class="seg" id="device" role="group" aria-label="Device">
+    <button type="button" data-v="frame" aria-pressed="true">Frame</button><button type="button" data-v="x" aria-pressed="false">X</button><button type="button" data-v="og" aria-pressed="false">OG</button></span></span>
+  <span><span class="lbl">Colour</span> <span class="seg" id="color" role="group" aria-label="Frame colour">
+    <button type="button" data-v="wood" aria-pressed="true">Wood</button><button type="button" data-v="walnut" aria-pressed="false">Walnut</button><button type="button" data-v="black" aria-pressed="false">Black</button><button type="button" data-v="white" aria-pressed="false">White</button></span></span>
+</div>
+
+<section class="opts" aria-label="Plugin settings">
+  <h2>Plugin settings</h2>
+  <div class="grid">
+    <fieldset><legend>Display</legend>
+      <label class="one"><input type="checkbox" id="label" checked> <span id="label-name">Museum label</span></label>
+      <label class="one"><input type="checkbox" id="family_friendly" checked> <span id="family-name">Family friendly</span></label>
+    </fieldset>
+    <fieldset><legend id="movement-name">Period</legend>
+      <select id="movement" aria-labelledby="movement-name"></select>
+    </fieldset>
+  </div>
+  <fieldset style="margin-top:16px"><legend id="genres-name">Genres</legend>
+    <div class="checks" id="genres"></div>
+    <p class="hint">Nothing ticked gives the default mix.</p>
+  </fieldset>
+</section>
+
+<footer>
+  Artwork data: Wikidata. Pictures: Wikimedia Commons, loaded from there. The screen is drawn with the TRMNL Framework, in TRMNL's device component. This page sets no cookies and keeps nothing; the list of works already shown lives in memory until you close the tab.
+</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/liquidjs@10.21.0/dist/liquid.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/ExcuseMi/trmnl-component@c777476f8c0e943078187d68ada9b888bfd29ef5/trmnl-component.js" defer></script>
+<script src="site/engine.js"></script>
+<script src="site/app.js"></script>
+</body>
+</html>
