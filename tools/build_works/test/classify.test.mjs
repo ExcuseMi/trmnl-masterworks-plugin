@@ -56,6 +56,10 @@ test('family friendly: nudity and graphic violence from Wikidata subjects and fr
   assert.deepStrictEqual(reasons('Martyrdom of Saint Sebastian'), ['violence']);
   assert.deepStrictEqual(reasons('Le Massacre des Innocents'), ['violence']);
   assert.deepStrictEqual(reasons('Susanna and the Elders'), ['nudity']);
+  assert.deepStrictEqual(reasons('Femme nue tenant un livre'), ['nudity']);
+  assert.deepStrictEqual(reasons('La Nue au bain'), ['nudity']);
+  assert.deepStrictEqual(unfriendlyReasons({ id: 'Q18331571', title: 'The White and the Black' }), ['nudity'], 'reviewed: a Vallotton nude with no tag');
+  assert.deepStrictEqual(reasons('Nuevo Mundo'), [], 'nue is a word, not a part of a word')
   assert.deepStrictEqual(reasons('The Rape of the Sabine Women'), ['nudity', 'violence']);
 });
 

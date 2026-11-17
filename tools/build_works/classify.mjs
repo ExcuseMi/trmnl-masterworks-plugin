@@ -15,7 +15,7 @@ const HINTS = ['jesus', 'virgin mary', 'madonna', 'saint', 'angel', 'apostle', '
 export const DEPICTS_RE = [...NUDITY, ...VIOLENCE, ...HINTS].join('|');
 
 // A title safety net, many languages: words that mean a nude subject or a violent act. Anchored loosely on purpose.
-const TITLE_NUDITY = /\b(venus|vénus|nude|nudes|naked|nu couché|nu |desnud\w*|akt|bathers?|baigneuses?|badende\w*|bagnanti|bañistas|bagnante|odalisque|olympia|leda|dan[aë]e|susann?a|suzanne|bathsheba|bethsabée|hylas|sirens?|nymphs?|nymphes)\b|\bthe source\b|\bla source\b|\brape of\b|\benlèvement\b|\braub der\b|\brapto de\b|\bratto di\b/i;
+const TITLE_NUDITY = /\b(venus|vénus|nude|nudes|naked|nu couché|nu |desnud\w*|akt|bathers?|baigneuses?|badende\w*|bagnanti|bañistas|bagnante|odalisque|olympia|leda|dan[aë]e|susann?a|suzanne|bathsheba|bethsabée|hylas|sirens?|nymphs?|nymphes)\b|\bnues?\b|\bfemmes? nues?\b|\bthe source\b|\bla source\b|\brape of\b|\benlèvement\b|\braub der\b|\brapto de\b|\bratto di\b/i;
 const TITLE_VIOLENCE = /\b(judith|holofernes|massacres?|executions?|execution of|fusilamientos|martyrs?|martyrdom|martyre|märtyrer|beheading|beheaded|decapitat\w*|salome|saturn devouring|devouring his|flaying|slaughter\w*|murder\w*|the death of marat|the third of may|dos de mayo|tres de mayo|the rape)\b/i;
 
 export const FAMILY_FRIENDLY_REASONS = ['nudity', 'violence'];
@@ -30,6 +30,16 @@ export const REVIEWED_FLAGS = {
   Q930535: 'nudity', // Tahitian Women on the Beach
   Q212616: 'violence', // The Raft of the Medusa (corpses, cannibalism)
   Q2293905: 'violence', // Medusa (Caravaggio, the severed head)
+  // nudes in the posters and Art Nouveau tier (Wikidata has no tag on them)
+  Q18331571: 'nudity', // The White and the Black (Vallotton)
+  Q47528815: 'nudity', // The Kiss (Vallotton)
+  Q116869771: 'nudity', // Femme nue tenant un livre (Vallotton)
+  Q113553121: 'nudity', // Femme nue debout tenant sa chemise a deux mains (Vallotton)
+  Q94636886: 'nudity', // Three Women and One Little Girl Playing in the Water (Vallotton)
+  Q62274515: 'nudity', // Bathing on a Summer Evening (Vallotton)
+  Q28002799: 'nudity', // Adam and Eve (Klimt)
+  Q19883512: 'nudity', // Hope II (Klimt)
+  Q17001535: 'nudity', // Death and Life (Klimt)
 };
 // Last Judgments show the damned, naked, in hell
 const TITLE_JUDGMENT = /\b(last judg(e)?ment|jüngste gericht|jugement dernier|giudizio universale|juicio final)\b/i;

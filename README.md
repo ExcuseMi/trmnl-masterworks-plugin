@@ -4,7 +4,7 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh. Made f
 
 ## What it shows
 
-3,838 public-domain works, about 3,440 of them with Family friendly on: paintings, prints, drawings, posters and nature illustrations.
+3,838 public-domain works, about 3,430 of them with Family friendly on: paintings, prints, drawings, posters and nature illustrations.
 
 | Genre | Works | Genre | Works |
 |---|---|---|---|
@@ -44,7 +44,7 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 
 | Group | Setting | Default | Values |
 |---|---|---|---|
-| Display | Museum label | On | On or off |
+| (none) | Museum label | On | On or off |
 | Selection | Family friendly | On | Leaves out works whose subject is nudity or graphic violence |
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |
 | Selection | Period | All | Ten movements, such as Renaissance, Baroque, Impressionism |

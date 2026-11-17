@@ -195,6 +195,22 @@ RSpec.describe 'Masterworks' do
     end
   end
 
+  describe 'the artist line may take two lines on the X (lg), so a long name is not cut' do
+    it 'carries data-clamp-lg 2 in the gallery label and in the placard' do
+      gal = screen('full', 'v2', mocks: shard_mocks('one-landscape', 'one-portrait'))
+      wait(gal)
+      expect(gal.evaluate("document.querySelector('[data-label] .label').getAttribute('data-clamp-lg')")).to eq('2')
+      # a work that fills the view: the Frame (the attribute does not depend on the device)
+      full = screen('full', 'frame', mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
+      wait(full)
+      expect(full.evaluate("document.querySelector('[data-placard] .label').getAttribute('data-clamp-lg')")).to eq('2')
+    end
+
+    it 'the settings page has no Display group (the label field stands alone)' do
+      expect(File.read(File.join(__dir__, '..', 'src', 'settings.yml'))).not_to include('group: Display')
+    end
+  end
+
   describe 'portrait' do
     %w[frame v2 og_png].each do |device|
       it "reads a portrait shard on #{device}" do

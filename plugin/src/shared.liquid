@@ -22,7 +22,7 @@
     <div class="absolute bottom--{{ pl.m }} left--{{ pl.m }} z--2 {{ edge }} p--0.5 w--max-[{{ pl.w }}cqw]" data-placard="1">
       <div class="{{ plate }} {{ ppad }} flex flex--col flex--left gap--none">
         <span class="title {{ tcls }} {{ ink }} block text--left" data-clamp="2">{{ art.title | escape }}</span>
-        {% if pl.who != blank %}<span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1">{{ pl.who | escape }}</span>{% endif %}
+        {% if pl.who != blank %}<span class="label {{ acls }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2">{{ pl.who | escape }}</span>{% endif %}
         {% if pl.detail != blank %}<span class="label {{ dcls }} {{ ink }} block text--left" data-clamp="1">{{ pl.detail | escape }}</span>{% endif %}
       </div>
     </div>
@@ -48,7 +48,7 @@
     {% if gl.label %}
     <div class="flex flex--col flex--right gap--none w--[{{ gl.a }}cqw] {{ lpad }}" data-label="1">
       <span class="title {{ tcls }} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}">{{ art.title | escape }}</span>
-      {% if gl.label.who != blank %}<span class="label {{ acls }} {{ ink }} block w--full text--right" data-clamp="1">{{ gl.label.who | escape }}</span>{% endif %}
+      {% if gl.label.who != blank %}<span class="label {{ acls }} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
       {% if gl.label.detail != blank %}<span class="label {{ dcls }} {{ ink }} block w--full text--right" data-clamp="1">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>
     {% endif %}
