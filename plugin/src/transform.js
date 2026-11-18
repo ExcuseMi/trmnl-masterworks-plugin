@@ -944,6 +944,10 @@ function framePlan(art, sw, sh, set, key) {
   } else {
     var below = frameBox(aspect, sw, sh, bandW, restPct), box = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
     var split = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - 2 * FRAME_COL_GUTTER - 2 * P.infow, FRAME_COL_H_MAX);
+    // the title on two lines needs this much width (cqw); the work may give up width to the column only down to the width the row-under layout gives it (the floor, owner 2026-11-18)
+    var titleW = 0.55 * P.title * String(art.title).length / cw * 100, colRoom = 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - below.w;
+    if (box && titleW > colRoom) box = null; // a title too long for a column at the floor: the row under the work, the title wraps in the full width
+    if (split && titleW > P.infow) split = null;
     var best = box && box.w * box.h >= below.w * below.h ? box : below;
     // the split (date, weather, events left of the work, the work centred, the label right) only when the work is shown as large as the best other layout gives; Frame only
     if (split && key === 'f' && split.w * split.h >= best.w * best.h) out = { layout: 'split', artw: split.w, arth: split.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
@@ -952,6 +956,7 @@ function framePlan(art, sw, sh, set, key) {
   }
   out = put(out);
   out.gap = out.layout === 'column' || out.layout === 'split' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
+  out.floorw = out.layout === 'column' ? below.w : 0; // the narrowest the work may get when the column widens for a long title
   out.bandPx = [sw * out.artw / 100, sh * out.arth / 100];
   return out;
 }

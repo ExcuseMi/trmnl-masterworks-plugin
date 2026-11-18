@@ -46,7 +46,7 @@
 {% capture img %}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{% if lay == "band" %} absolute top--0 left--0{% endif %} w--full h--full" alt="" />{% endcapture %}
 {% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink-0 {{ mat }}" data-picture="1" data-adj="1">{{ img }}</div>{% endcapture %}
 {% capture mgap %}<div class="w--full h--[{{ inf.margin }}px] shrink-0"></div>{% endcapture %}
-{% capture attrs %}data-mode="frame" data-layout="{{ lay }}" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}" data-m="{{ inf.margin }}" data-aspect="{{ inf.aspect }}" data-bandw="{{ inf.bandw }}"{% endcapture %}
+{% capture attrs %}data-mode="frame" data-layout="{{ lay }}" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}" data-m="{{ inf.margin }}" data-aspect="{{ inf.aspect }}" data-bandw="{{ inf.bandw }}" data-floor="{{ inf.floorw }}"{% endcapture %}
 {% if inrow %}
 <div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
   {% if lay == "band" %}{{ mgap }}<div class="relative grow basis--0 w--[{{ inf.bandw }}cqw] {{ mat }}" data-picture="1" data-band="1">{{ img }}</div>{% else %}{{ picture }}{% endif %}
@@ -275,6 +275,7 @@
     }); }
   function no(r) { (window.mwLog = window.mwLog || []).push(r); return true; }
   var culprit = null; // a text too wide for its column: in a column, dropping other parts gives it no width, so it (or its part) goes first
+  var tl = 2; // the lines the label title may take: two, more only in a row under the work when nothing else helps (never dropped, never cut)
   var strict = false; // a row first tries the painting's title on one line (then all second lines share one baseline), else allows two
   function bad(blk, lay, kind) {
     culprit = null;
@@ -285,7 +286,7 @@
       if (r.right > lb.right + 1 || r.bottom > lb.bottom + 1 || r.left < lb.left - 1) return no(1);
       if (s[i].hasAttribute('data-day')) continue;
       n = textBox(s[i]).lines;
-      max = s[i].hasAttribute('data-label') ? (row && strict ? 1 : 2) : s[i].hasAttribute('data-museum') ? 2 : (s[i].hasAttribute('data-event-title') || s[i].hasAttribute('data-who')) && !row ? 2 : 1;
+      max = s[i].hasAttribute('data-label') ? (row && strict ? 1 : tl) : s[i].hasAttribute('data-museum') ? 2 : (s[i].hasAttribute('data-event-title') || s[i].hasAttribute('data-who')) && !row ? 2 : 1;
       if (n > max || (s[i].clientWidth && s[i].scrollWidth > s[i].clientWidth + 1)) { culprit = s[i]; return no(2); }
     }
     if (row) {
@@ -382,12 +383,24 @@
   // the column takes d cqw more and the work gets as much smaller (its shape kept); false when the work would get too small
   function widen(blk, lay, d) {
     var pc = lay.querySelector('[data-picture][data-adj]'), asp = +lay.getAttribute('data-aspect'), lb = rect(lay), cw = (pc.className.match(/w--\[(\d+)cqw\]/) || [])[1], cb = (blk.className.match(/w--\[(\d+)cqw\]/) || [])[1], w, h, x, done = false;
-    if (!pc || !cw || !cb || !asp || +cw - d < 28) return false;
+    if (!pc || !cw || !cb || !asp || +cw - d < Math.max(28, +lay.getAttribute('data-floor') || 0)) return false; // never below the row-under size
     w = +cw - d;
     for (h = Math.ceil(w * lb.width / asp / lb.height) + 1; h >= 10 && !done; h--) {
       [w, w - 1].forEach(function (x) { if (!done && Math.abs(Math.log(x * lb.width / (h * lb.height) / asp)) <= 0.012) { setCls(pc, /^w--\[/, 'w--[' + x + 'cqw]'); setCls(pc, /^h--\[/, 'h--[' + h + 'cqh]'); setCls(blk, /^w--\[/, 'w--[' + (+cb + (+cw - x)) + 'cqw]'); done = true; } });
     }
     return done;
+  }
+  // every info block of this layout is hidden: the work takes the whole mat (the no-info box), never the size planned for blocks that are gone
+  function regrow(lay) {
+    var pic = lay.querySelector('[data-picture][data-adj]'), lb = rect(lay), m = (+lay.getAttribute('data-m') || 0) * S, asp = +lay.getAttribute('data-aspect'), bw = +lay.getAttribute('data-bandw') || 96, h, w, best = null;
+    if (!pic || !asp) return;
+    for (h = Math.floor((lb.height - 2 * m) / lb.height * 100); h >= 10 && !best; h--) {
+      w = Math.round(h * lb.height * asp / lb.width);
+      [w, w - 1, w + 1].forEach(function (x) { if (!best && x <= bw && Math.abs(Math.log(x * lb.width / (h * lb.height) / asp)) <= 0.012) best = [x, h]; });
+    }
+    if (!best) return;
+    setCls(pic, /^w--\[/, 'w--[' + best[0] + 'cqw]'); setCls(pic, /^h--\[/, 'h--[' + best[1] + 'cqh]');
+    [].forEach.call(lay.querySelectorAll('[data-padtop],[data-padbot]'), function (e) { setH(e, 0, lay); });
   }
   function fit() {
     if (document.fonts && document.fonts.status && document.fonts.status !== 'loaded') return; // before the fonts are in, every text is the wrong size
@@ -404,6 +417,7 @@
       if (kind === 'column') { var dcell = blk.querySelector('[data-cell="date"]'), dw = dcell ? rect(dcell).width : 0; if (dw > rect(blk).width + 0.5) setCls(blk, /^w--\[/, 'w--[' + Math.ceil(dw / rect(lay).width * 100) + 'cqw]'); } // a long weekday or month (Wednesday, September) is wider than the column: the column takes the date's width, the date is never dropped
       if (kind === 'stack') { var t = blk.querySelector('[data-label]'); if (t) setH(blk.querySelector('[data-labelgap]'), 2 * met(t).lh, lay); }
       // passes: the title on one line, then on two; a row under a whole work that is too narrow for it tries the full width as well
+      tl = 2;
       var pass, fits = false, rowp = blk.querySelector('[data-row]'), wide = false, rep = 0, wasW, ex = 0, again = false;
       do { fits = false; wide = false; again = false; wasW = rect(blk).width;
       for (pass = rowp ? 0 : 1; pass < (kind === 'below' ? 4 : 2) && !fits; pass++) {
@@ -420,8 +434,9 @@
         fits = !bad(blk, lay, kind);
       }
       strict = false;
+      if (!fits && (kind === 'below' || kind === 'stack') && tl < 9) { tl++; again = true; continue; } // a very long title: one more line in the row (the work grows back into what the row leaves)
       if (!fits && kind === 'column' && ex < 24) { ex += 3; again = widen(blk, lay, 3); if (again) continue; } // a title too long for the column: the column takes more width, the work gets smaller
-      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind === 'splitL' || kind === 'splitR') [].forEach.call(lay.querySelectorAll('[data-info-block]'), mark); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
+      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind === 'splitL' || kind === 'splitR') [].forEach.call(lay.querySelectorAll('[data-info-block]'), mark); if (kind !== 'below') regrow(lay); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
       align(blk, lay);
       if (kind === 'below') grow(blk, lay, wide, rep === 2 ? Math.round(wasW / rect(lay).width * 100) : 0);
       } while (again || kind === 'below' && fits && !wide && Math.abs(rect(blk).width - wasW) > 2 && ++rep < 3); // the row is fitted again at the work's width
