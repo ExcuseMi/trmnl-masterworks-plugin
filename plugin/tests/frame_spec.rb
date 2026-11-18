@@ -49,6 +49,17 @@ RSpec.describe 'Masterworks Frame layouts' do
     page.evaluate("(() => { const e = document.querySelector('#{selector}'); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")
   end
 
+  # visible text in the info block that is cut (taller or wider than its box): nothing may be
+  def cut_text(page)
+    page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] span')].filter(e => e.offsetParent && !e.hasAttribute('data-day') && (e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2)).map(e => e.innerText)")
+  end
+
+  # the label's last line (museum, else artist) hangs on the picture's bottom edge: its box ends at most half a font size below it (the line's descent)
+  def tail_ok(page, pic)
+    bottom, fs = page.evaluate("(() => { const e = [...document.querySelectorAll('#{P} [data-museum], #{P} [data-who]')].filter(x => x.offsetParent).pop(); return [e.getBoundingClientRect().bottom, parseFloat(getComputedStyle(e).fontSize) * (e.getBoundingClientRect().width / e.offsetWidth)]; })()")
+    (bottom - pic[3]).between?(-4, 0.55 * fs)
+  end
+
   def all_on = { 'show_date' => 'true', 'show_weather' => 'true', 'show_agenda' => 'true', 'label' => 'true' }
   P = '[data-block="primary"]'
 
@@ -68,10 +79,9 @@ RSpec.describe 'Masterworks Frame layouts' do
       expect(strip[0]).to be_within(2).of(pic[0])
       expect(strip[2]).to be_within(2).of(pic[2])
       expect(page.evaluate("getComputedStyle(document.querySelector('#{P} [data-picture] img')).objectFit")).to eq('cover')
-      cols = page.evaluate("[...document.querySelectorAll('#{P} [data-col]')].map(e => e.getBoundingClientRect().width)")
-      expect(cols.size).to eq(4), 'weather, two events, the label'
-      expect(cols.max - cols.min).to be <= 2, 'equal widths'
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(cols.size), 'one rule on top of every column'
+      cells = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].map(e => e.getAttribute('data-cell'))")
+      expect(cells).to eq(%w[date w e e l]), 'date, weather, two events, the label: one row, in this order'
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0), 'no rules'
     end
   end
 
@@ -84,12 +94,11 @@ RSpec.describe 'Masterworks Frame layouts' do
       col = box(page, "#{P} [data-info-block]")
       expect(pic[0] - lay[0]).to be_within(4).of(lay[2] - col[2]), "equal outer margins of the group: #{lay} #{pic} #{col}"
       expect(col[0]).to be > pic[2], 'the column is on the right of the picture'
-      expect(col[0] - pic[2]).to be_within(3).of(lay[2] * 0.03), 'a fixed gutter'
-      expect(col[1]).to be_within(2).of(pic[1]), 'the column top is the picture top'
+      gutter = page.evaluate("(() => { const g = document.querySelector('#{P} [data-group]').children[1]; return g.getBoundingClientRect().width; })()")
+      expect(col[0] - pic[2]).to be_within(3).of(gutter), 'the planned gutter'
+      expect(col[1]).to be <= pic[1] + 2, "the picture stands inside the column's height: #{pic} #{col}"
       label = box(page, "#{P} [data-slot=\"label\"]")
-      expect(label[3]).to be_within(2).of(pic[3]), "the label's bottom is the picture's bottom: #{label} #{pic}"
-      last = page.evaluate("(() => { const r = document.querySelector('#{P} [data-museum]').getBoundingClientRect(); return r.bottom; })()")
-      expect(last).to be_within(4).of(pic[3]), "the label's last line is on the picture's bottom edge"
+      expect(tail_ok(page, pic)).to be(true), "the label's last line is on the picture's bottom edge: #{label} #{pic}"
       events = box(page, "#{P} [data-event]:last-of-type") || box(page, "#{P} [data-event]")
       expect(events[3]).to be < label[1], 'the top block never meets the label'
       expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0), 'no rules in the column'
@@ -115,7 +124,7 @@ RSpec.describe 'Masterworks Frame layouts' do
       [2.0, 1.0].each do |aspect|
         page = frame(all_on, aspect, fx)
         expect(page.evaluate("getComputedStyle(document.querySelector('#{P} [data-day]')).color")).to eq(ink)
-        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        cut = cut_text(page)
         expect(cut).to eq([])
       end
     end
@@ -142,24 +151,22 @@ RSpec.describe 'Masterworks Frame layouts' do
           expect(page.has_css?("#{P} [data-info=\"#{part}\"]")).to eq(on.include?(key)), part
         end
         expect(page.has_css?("#{P} [data-slot=\"label\"]")).to eq(on.include?('label')), 'the label'
-        texts = page.evaluate("[...document.querySelectorAll('#{P} [data-col]')].map(e => e.innerText.trim())")
-        expect(texts).to all(satisfy { |t| !t.empty? }), 'no empty column'
-        cols = page.evaluate("[...document.querySelectorAll('#{P} [data-col]')].map(e => e.getBoundingClientRect().width)")
-        rules = page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")
+        cells = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].filter(e => e.offsetParent).map(e => [e.getAttribute('data-cell'), e.innerText.trim(), e.getBoundingClientRect().left, e.getBoundingClientRect().top])")
+        expect(cells.map { |c| c[1] }).to all(satisfy { |t| !t.empty? }), 'no empty cell'
+        expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0), 'no rules'
         if layout == 'band'
-          expect(rules).to eq(cols.size), 'a rule on every column, none elsewhere'
-          expect(cols.max - cols.min).to be <= 2, 'equal widths' unless cols.empty?
-          lefts = page.evaluate("[...document.querySelectorAll('#{P} [data-col]')].map(e => e.getBoundingClientRect().left)")
-          expect(lefts).to eq(lefts.sort)
-          expect(page.evaluate("document.querySelector('#{P} [data-slot=\"label\"]') === document.querySelector('#{P} [data-col]:last-of-type')")).to be(true) if on.include?('label')
+          lefts = cells.map { |c| c[2] }
+          expect(lefts).to eq(lefts.sort), 'one row, left to right'
+          expect(cells.last[0]).to eq('l') if on.include?('label')
         else
-          expect(rules).to eq(0)
+          tops = cells.map { |c| c[3] }
+          expect(tops).to eq(tops.sort), 'one column, top to bottom'
           if on.include?('label')
             pic = box(page, "#{P} [data-picture]")
-            expect(box(page, "#{P} [data-slot=\"label\"]")[3]).to be_within(2).of(pic[3]), 'the label stays at the bottom'
+            expect(tail_ok(page, pic)).to be(true), 'the label stays at the bottom'
           end
         end
-        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        cut = cut_text(page)
         expect(cut).to eq([])
       end
     end
@@ -174,17 +181,17 @@ RSpec.describe 'Masterworks Frame layouts' do
         lay = box(page, P)
         pic = box(page, "#{P} [data-picture]")
         col = box(page, "#{P} [data-info-block]")
-        expect(pic[0] - lay[0]).to be_within(6).of(lay[2] - col[2]), 'one centred group'
+        expect(pic[0] - lay[0]).to be_within(6).of(lay[2] - col[2]), "one centred group: #{lay} #{pic} #{col}"
         expect(col[0]).to be > pic[2]
-        expect(col[1]).to be_within(2).of(pic[1])
-        expect(box(page, "#{P} [data-slot=\"label\"]")[3]).to be_within(3).of(pic[3])
+        expect(col[1]).to be <= pic[1] + 2, "the picture stands inside the column's height: #{pic} #{col}"
+        expect(tail_ok(page, pic)).to be(true), "the label's last line is on the picture's bottom: #{pic}"
         expect(page).to have_css("#{P} [data-day]")
         expect(page).to have_css("#{P} [data-label]")
-        events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
-        forecast = page.has_css?("#{P} [data-weather]")
+        events = page.evaluate("[...document.querySelectorAll('#{P} [data-event]')].filter(e => e.offsetParent).length")
+        forecast = page.evaluate("[...document.querySelectorAll('#{P} [data-weather]')].some(e => e.offsetParent)")
         expect(events).to be <= 2
         expect(events).to eq(0) unless forecast # the forecast line goes only after every event
-        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        cut = cut_text(page)
         expect(cut).to eq([])
         expect(page).to have_no_overflow
       end
@@ -196,7 +203,7 @@ RSpec.describe 'Masterworks Frame layouts' do
       pic = box(page, "#{P} [data-picture]")
       strip = box(page, "#{P} [data-info-block]")
       expect(strip[1]).to be >= pic[3] - 1
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(page.evaluate("document.querySelectorAll('#{P} [data-col]').length"))
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0), 'no rules'
     end
   end
 
@@ -206,13 +213,13 @@ RSpec.describe 'Masterworks Frame layouts' do
       expect(page).to have_css("#{P}[data-layout=\"band\"]")
       events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
       expect(events).to eq(device == 'frame' ? 2 : 1), device
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-slot=\"label\"] [data-clamp]').length")).to eq(0), "#{device}: no clamp (ellipsis) in the label"
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-clamp]').length")).to eq(0), "#{device}: no clamp (ellipsis) in the info"
       cut = page.evaluate("[...document.querySelectorAll('#{P} [data-slot=\"label\"] span')].filter(e => e.scrollHeight > e.clientHeight + 2).map(e => e.innerText)")
       expect(cut).to eq([]), "#{device}: the label is whole"
     end
     [['v2', 'x'], ['og_png', 'o']].each do |device, _|
       page = frame(all_on, 2.2, device:)
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-col]').length")).to eq(3), 'weather, the next event, the label beside the date'
+      expect(page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].map(e => e.getAttribute('data-cell'))")).to eq(%w[date w e l]), 'date, weather, the next event, the label'
     end
   end
 
@@ -224,16 +231,16 @@ RSpec.describe 'Masterworks Frame layouts' do
     expect((pic[3] - pic[1]) / (lay[3] - lay[1])).to be >= 0.55
     expect(page.evaluate("document.querySelectorAll('#{P} [data-row]').length")).to eq(1), 'one row of date and columns'
     day = box(page, "#{P} [data-day]")
-    col = box(page, "#{P} [data-col]")
-    expect(col[0]).to be > day[2], 'the columns stand beside the date'
+    col = page.evaluate("(() => { const e = [...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].filter(x => x.offsetParent && x.getAttribute('data-cell') !== 'date')[0]; return e.getBoundingClientRect().left; })()")
+    expect(col).to be > day[2], 'the cells stand beside the date'
   end
 
   # portrait screens: the work on top, the strip below (a work a fill would crop too much hangs whole in the band area)
   [['frame', 'fp'], ['v2', 'x'], ['og_png', 'o']].each do |device, profile|
     { '3:4' => 0.75, '16:9' => 16.0 / 9 }.each do |name, aspect|
-      it "#{device} portrait, #{name}: the band layout, the picture on top, the strip under it in the same width, nothing cut" do
+      it "#{device} portrait, #{name}: the work on top, the info under it (a row under a narrow work, the column under a wide one), nothing cut" do
         page = frame(all_on, aspect, device:, orientation: 'portrait')
-        expect(page).to have_css("#{P}[data-layout=\"band\"][data-profile=\"#{profile}\"]")
+        expect(page).to have_css("#{P}[data-layout=\"#{aspect > 1.4 ? 'stack' : 'below'}\"][data-profile=\"#{profile}\"]")
         lay = box(page, P)
         pic = box(page, "#{P} [data-picture]")
         strip = box(page, "#{P} [data-info-block]")
@@ -244,10 +251,11 @@ RSpec.describe 'Masterworks Frame layouts' do
         expect(page).to have_css("#{P} [data-day]")
         gap = strip[1] - pic[3]
         expect(gap).to be <= lay[2] * 0.06, "no gap between the work and the strip: #{gap}"
-        expect((pic[1] - lay[1]) - (lay[3] - strip[3])).to be_within(0.06 * (lay[3] - lay[1])).of(0), 'the group is centred vertically'
+        # a row under a narrow work is centred with it; the column under a wide work hangs from the top margin
+        expect((pic[1] - lay[1]) - (lay[3] - strip[3])).to be_within(0.06 * (lay[3] - lay[1])).of(0), 'the group is centred vertically' if aspect < 1.4
         ratio = ((pic[2] - pic[0]) / (pic[3] - pic[1])) / aspect
         expect((ratio - 1).abs < 0.03 || (pic[2] - pic[0]) >= 0.9 * (lay[2] - lay[0])).to be(true), "the whole work (its shape) or a cover across the band: #{ratio}"
-        cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
+        cut = cut_text(page)
         expect(cut).to eq([])
       end
     end
@@ -293,7 +301,7 @@ RSpec.describe 'Masterworks Frame layouts' do
           if visible
             expect(page).to have_css("#{P} [data-day]")
             expect(page).to have_css("#{P} [data-label]")
-            col = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit') === 'column'")
+            col = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')") != 'below' && page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')") != 'band'
             lay = box(page, P)
             blk = box(page, block)
             limit = col ? blk[3] : lay[3]
@@ -305,22 +313,100 @@ RSpec.describe 'Masterworks Frame layouts' do
               }).map(e => e.innerText)
             JS
             expect(bad).to eq([]), 'nothing overflows or is cut'
-            # one row (the tops of the parts agree) or one column (their left edges agree)
-            parts = page.evaluate("[...document.querySelectorAll('#{block} [data-info]')].filter(e => e.offsetParent).map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top]; })")
-            if parts.size > 1
-              axis = col ? 0 : 1
-              spread = parts.map { |q| q[axis] }.minmax.then { |lo, hi| hi - lo }
-              expect(spread).to be <= 3, "#{col ? 'one column' : 'one row'}: #{parts}"
-            end
+            expect(single_axis(page, block, col)).to eq([]), "#{col ? 'one column' : 'one row'}"
           end
-          flags = page.evaluate("[1, 2, 3, 4, 5, 6].map(d => [...document.querySelectorAll('#{P} [data-drop=\"' + d + '\"]')].some(e => e.offsetParent !== null))")
-          seen = false
-          flags.each_with_index do |on, i|
-            expect(!seen || on).to be(true), "dropped out of order: #{DROP_ORDER[i + 1]} is gone but an earlier drop is still shown #{flags}" if seen && !on
-            seen ||= on
-          end
+          expect(drop_order_violations(page)).to eq([]), 'dropped out of order'
         end
       end
     end
+  end
+
+  # the owner's rules for the info block (2026-11-18), on every screen and orientation, wide and narrow, normal and long text
+  # one row or one column: every cell is a child of one flex container with the axis the layout names, no wrap, never a grid
+  def single_axis(page, block, col)
+    page.evaluate(<<~JS)
+      (() => {
+        const b = document.querySelector('#{block}'), cells = [...b.querySelectorAll('[data-cell]')], out = [];
+        const parents = new Set(cells.map(c => c.parentElement));
+        if (parents.size > 1) out.push('cells in ' + parents.size + ' containers');
+        parents.forEach((p) => { const cs = getComputedStyle(p);
+          if (cs.display !== 'flex') out.push('display ' + cs.display);
+          if (cs.flexDirection !== '#{col ? 'column' : 'row'}') out.push('direction ' + cs.flexDirection);
+          if (cs.flexWrap !== 'nowrap') out.push('wrap ' + cs.flexWrap); });
+        const vis = cells.filter(c => c.offsetParent).map(c => c.getBoundingClientRect());
+        vis.forEach((r, i) => { if (i && #{col ? 'r.top < vis[i - 1].bottom - 1' : 'r.left < vis[i - 1].right - 1'}) out.push('cells overlap on the axis'); });
+        return out;
+      })()
+    JS
+  end
+
+  # the drops that exist, in the owner's order (the lower number goes first, 0 is never dropped): a hidden element needs every lower one hidden
+  def drop_order_violations(page)
+    page.evaluate(<<~JS)
+      (() => {
+        const els = [...document.querySelectorAll('#{P} [data-drop]')].map(e => [Number(e.getAttribute('data-drop')), !e.offsetParent, e.closest('.hidden') !== null]).filter(x => x[0] > 0);
+        const out = [];
+        els.forEach(([d, gone]) => { if (gone) els.forEach(([d2, gone2]) => { if (d2 < d && !gone2 && !els.some(([d3, g3]) => d3 === d2 && g3)) out.push('drop ' + d + ' is gone but drop ' + d2 + ' is shown'); }); });
+        return out;
+      })()
+    JS
+  end
+
+  SCREENS = [['frame', 'landscape'], ['frame', 'portrait'], ['v2', 'landscape'], ['v2', 'portrait'], ['og_png', 'landscape'], ['og_png', 'portrait']].freeze
+
+  def long_frame(device, orientation, aspect)
+    mocks = long_shards(aspect).merge(services).merge('https://calendar.example.org/*' => { body: long_ics })
+    page = trmnl.render(view: 'full', device:, orientation:, mocks:, custom_fields: { 'weather_location' => 'Paris', 'ics_url' => LINK_FRAME }.merge(all_on))
+    page.has_css?('img.image')
+    page
+  end
+
+  SCREENS.each do |device, orientation|
+    [2.4, 1.0, 0.75].each do |aspect|
+      it "#{device} #{orientation} #{aspect}: no rules, no borders, no grid, no truncation classes, hidden parts are absent (display none)" do
+        page = frame(all_on, aspect, device:, orientation:)
+        bad = page.evaluate(<<~JS)
+          (() => {
+            const out = [];
+            document.querySelectorAll('#{P} *').forEach((e) => {
+              const cs = getComputedStyle(e), cl = String(e.getAttribute('class') || '');
+              if (/(^| )border--h-/.test(cl) || /(^| )border(--|$)/.test(cl) || e.hasAttribute('data-rule')) out.push('border class on ' + e.tagName + ' ' + cl);
+              if (['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'].some(k => parseFloat(cs[k]) > 0)) out.push('drawn border on ' + e.tagName + ' ' + cl);
+              if (/grid/.test(cs.display)) out.push('grid on ' + cl);
+              if (e.hasAttribute('data-clamp') || /(^| )(line-clamp|truncate|text--ellipsis)/.test(cl) || cs.textOverflow === 'ellipsis') out.push('truncation on ' + cl);
+              if ((e.hasAttribute('data-fitted') || e.classList.contains('hidden')) && cs.display !== 'none') out.push('dropped but displayed: ' + cl);
+            });
+            return out;
+          })()
+        JS
+        expect(bad).to eq([])
+      end
+    end
+  end
+
+  SCREENS.each do |device, orientation|
+    [1.0, 0.75].each do |aspect|
+      it "#{device} #{orientation} #{aspect}: the date number and the label title are never dropped; what is dropped is a prefix of the drop order" do
+        page = frame(all_on, aspect, device:, orientation:)
+        expect(page.evaluate("[...document.querySelectorAll('#{P} [data-day], #{P} [data-label]')].map(e => !!e.offsetParent)")).to eq([true, true]), 'day number and label title stay'
+        expect(page.evaluate("document.querySelectorAll('#{P} [data-day][data-drop], #{P} [data-label][data-drop], #{P} [data-day] [data-drop], #{P} [data-label] [data-drop]').length")).to eq(0), 'they carry no drop number'
+        expect(drop_order_violations(page)).to eq([])
+      end
+    end
+  end
+
+  it 'a narrow case drops in the owner order: the Frame in portrait with a 3:4 work loses the second event, then the first, then the forecast, and nothing else' do
+    page = frame(all_on, 0.75, device: 'frame', orientation: 'portrait')
+    dropped = page.evaluate("[...document.querySelectorAll('#{P} [data-drop]')].filter(e => !e.offsetParent).map(e => Number(e.getAttribute('data-drop'))).sort()")
+    expect(dropped).to eq([1, 2, 3])
+    expect(drop_order_violations(page)).to eq([])
+  end
+
+  it 'the OG with a 3:2 work shows no events (owner decision A): the weather and the label are what the row keeps' do
+    page = frame(all_on, 1.5, device: 'og_png')
+    shown = page.evaluate("[...document.querySelectorAll('#{P} [data-event]')].filter(e => e.offsetParent).length")
+    expect(shown).to eq(0)
+    expect(page).to have_css("#{P} [data-day]")
+    expect(page).to have_css("#{P} [data-label]")
   end
 end

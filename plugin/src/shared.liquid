@@ -269,7 +269,7 @@
       var cells = [].filter.call(row.children, function (k) { return k.hasAttribute('data-cell') && vis(k); }), rr = rect(row);
       if (cells.length && rect(cells[cells.length - 1]).right > rr.right + 1) return no(4);
       lab = row.querySelector('[data-cell="l"]');
-      if (lab && vis(lab) && cells.length > 1 && rect(lab).width < 0.4 * rr.width) return no(5);
+      if (lab && vis(lab) && cells.length > 2 && rect(lab).width < 0.4 * rr.width) return no(5); // the label's 40 % share is claimed against the weather and the events; with only the date beside it, it gets what is left (the date is never dropped)
       if (kind === 'below' ? lb.height - 3 * m - bb.height < 0.45 * lb.height : bb.bottom > lb.bottom - m + 1) return no(6);
       var band = lay.querySelector('[data-band]');
       if (band && rect(band).height < 0.45 * lb.height) return no(7);
@@ -343,6 +343,7 @@
       if (!lay || !lay.offsetParent) continue;
       S = rect(lay).width / (lay.offsetWidth || 1) || 1;
       if (kind === 'below') { var pc = lay.querySelector('[data-picture][data-adj]'); setCls(pc, /^h--\[/, 'h--[10cqh]'); setCls(pc, /^w--\[/, 'w--[10cqw]'); }
+      if (kind === 'column') { var dcell = blk.querySelector('[data-cell="date"]'), dw = dcell ? rect(dcell).width : 0; if (dw > rect(blk).width + 0.5) setCls(blk, /^w--\[/, 'w--[' + Math.ceil(dw / rect(lay).width * 100) + 'cqw]'); } // a long weekday or month (Wednesday, September) is wider than the column: the column takes the date's width, the date is never dropped
       if (kind === 'stack') { var t = blk.querySelector('[data-label]'); if (t) setH(blk.querySelector('[data-labelgap]'), 2 * met(t).lh, lay); }
       // passes: the title on one line, then on two; a row under a whole work that is too narrow for it tries the full width as well
       var pass, fits = false, rowp = blk.querySelector('[data-row]'), wide = false;
