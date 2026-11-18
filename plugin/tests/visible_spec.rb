@@ -19,7 +19,7 @@ RSpec.describe 'Masterworks title and day number are always shown' do
     doc['w'][0]['t'] = title if title
     doc['w'][0]['w'] = (aspect * 1000).round
     doc['w'][0]['h'] = 1000
-    shards = BASES_VIS.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_VIS.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     page = trmnl.render(view:, device:, orientation:, mocks: shards, custom_fields: fields)
     page.has_css?('img.image')
     page

@@ -19,7 +19,7 @@ RSpec.describe 'Masterworks label and info never overflow a small screen' do
 
   def shards(landscape, portrait)
     BASES.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
         m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
       end

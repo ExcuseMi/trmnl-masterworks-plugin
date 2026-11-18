@@ -182,7 +182,7 @@ test('run: picks a work, builds the thumbnail URL at a standard width, saves the
   let asked;
   globalThis.fetch = async (url) => { asked = url; return answer(sh)(); };
   const out = await t.run(input());
-  assert.match(asked, /\/data\/landscape-\d\.json$/);
+  assert.match(asked, /\/data\/landscape-\d+\.json$/);
   assert.strictEqual(out.art.id, 'Q1');
   assert.strictEqual(out.art.year, '1503');
   assert.strictEqual(out.art.collection, 'Louvre');
@@ -200,7 +200,7 @@ test('run: a portrait screen reads the portrait shard and decides by the portrai
   globalThis.fetch = async (url) => { asked = url; return answer(shard([{ w: 1440, h: 2560 }]))(); };
   const NOLABEL = { label: 'false' }; // only with the label off does a work fill the screen
   const out = await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: NOLABEL } }));
-  assert.match(asked, /\/data\/portrait-\d\.json$/);
+  assert.match(asked, /\/data\/portrait-\d+\.json$/);
   assert.strictEqual(out.geo.full.mode, 'full', 'a 9:16 work fills a 9:16 screen');
   globalThis.fetch = answer(shard([{ w: 3000, h: 2000 }]));
   assert.strictEqual((await t.run(input({ device: { width: 1440, height: 2560, orientation: 'portrait' }, plugin_settings: { custom_fields_values: NOLABEL } }))).geo.full.mode, 'gallery');

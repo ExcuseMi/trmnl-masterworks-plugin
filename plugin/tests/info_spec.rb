@@ -18,7 +18,7 @@ RSpec.describe 'Masterworks info strip' do
   # the same document for every part of an orientation and every mirror
   def shards(landscape = 'one-landscape', portrait = 'one-portrait')
     MIRRORS_INFO.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
         m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
       end
@@ -197,7 +197,7 @@ RSpec.describe 'Masterworks info strip' do
     doc['w'][0]['w'] = (aspect * 1000).round
     doc['w'][0]['h'] = 1000
     MIRRORS_INFO.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: doc }
         m["#{base}/portrait-#{k}.json"] = { json: doc }
       end
@@ -352,7 +352,7 @@ RSpec.describe 'Masterworks info strip' do
       doc = fixture(fixture_name)
       doc['w'][0].merge!(extra)
       MIRRORS_INFO.each_with_object({}) do |base, m|
-        (0..7).each do |k|
+        (0..15).each do |k|
           m["#{base}/landscape-#{k}.json"] = { json: doc }
           m["#{base}/portrait-#{k}.json"] = { json: doc }
         end

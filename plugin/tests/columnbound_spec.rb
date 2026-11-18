@@ -28,7 +28,7 @@ RSpec.describe 'Masterworks column bounds' do
       doc['col'][doc['w'][0]['c']] = 'Hermitage Museum'
       doc['med'][doc['w'][0]['e']] = 'Oil on canvas'
     end
-    shards = BASES_CB.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_CB.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') }, 'https://calendar.example.org/*' => { body: ics } }
     page = trmnl.render(view: 'full', device:, orientation:, mocks: shards.merge(services), custom_fields: fields)
     page.has_css?('img.image')
