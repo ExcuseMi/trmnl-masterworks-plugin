@@ -45,4 +45,44 @@ RSpec.describe 'Masterworks label-only type sizes' do
       end
     end
   end
+
+  # the three sizes on the X and the OG are one Framework step smaller than before (owner decision 2026-11-18); the Frame is unchanged
+  CLASSES = {
+    'v2' => { 'day' => 'value--xlarge', 'title' => 'label--xxlarge', 'who' => 'label--xlarge' },
+    'og_png' => { 'day' => 'value--large', 'title' => 'label--large', 'who' => 'value--xsmall' },
+    'frame' => { 'day' => 'value--mega', 'title' => 'value--large', 'who' => 'title--xxlarge' }
+  }.freeze
+
+  CLASSES.each do |device, want|
+    it "#{device}: day number, title and artist line use #{want.values.join(' / ')}" do
+      page = render_ls(device, 16.0 / 9, ON)
+      got = page.evaluate("(() => { const c = (s) => { const e = [...document.querySelectorAll('[data-block=\"primary\"] ' + s)].find(x => x.offsetParent); return e ? e.className : ''; }; return { day: c('[data-day]'), title: c('span[data-label]'), who: c('[data-who]') }; })()")
+      want.each { |k, cls| expect(got[k].split).to include(cls), "#{k}: #{got[k]}" }
+      expect(got['day'].split).not_to include('value--xxlarge') if device == 'v2'
+    end
+  end
+
+  # the OG draws every info and label line in Inter, never in TRMNL's bitmap label font (owner 2026-11-18: bold, wide tracking, "10: 30")
+  { 'date' => ON, 'label only' => OFF, 'date and weather' => { 'show_date' => 'true', 'show_weather' => 'true', 'weather_location' => 'Paris' } }.each do |name, fields|
+    [16.0 / 9, 1.0].each do |aspect|
+      it "og_png #{aspect.round(2)} #{name}: every line is set in Inter" do
+        page = render_ls('og_png', aspect, fields)
+        fams = page.evaluate("[...document.querySelectorAll('[data-block=\"primary\"] span')].filter(e => e.offsetParent && !e.classList.contains('hidden') && e.innerText.trim()).map(e => [e.innerText.trim(), getComputedStyle(e).fontFamily])")
+        expect(fams).not_to be_empty
+        bad = fams.reject { |_, f| f.include?('Inter') }
+        expect(bad).to eq([]), "lines not in Inter: #{bad.first(4)}"
+      end
+    end
+  end
+
+  # the title leads: the secondary lines (artist, museum, medium, forecast, times) are never heavier than the title, and on the OG they are regular weight (owner 2026-11-18)
+  %w[v2 og_png frame].each do |device|
+    it "#{device}: the secondary lines are not heavier than the painting's title" do
+      page = render_ls(device, 16.0 / 9, ON)
+      w = page.evaluate("(() => { const q = (s) => [...document.querySelectorAll('[data-block=\"primary\"] ' + s)].filter(e => e.offsetParent && !e.classList.contains('hidden')).map(e => +getComputedStyle(e).fontWeight); return { title: q('span[data-label]'), who: q('[data-who]'), museum: q('[data-museum]') }; })()")
+      title = w['title'].max
+      (w['who'] + w['museum']).each { |x| expect(x).to be <= title, "secondary weight #{x} over the title's #{title}" }
+      (w['who'] + w['museum']).each { |x| expect(x).to be <= 450, "OG secondary weight #{x} is not regular" } if device == 'og_png'
+    end
+  end
 end

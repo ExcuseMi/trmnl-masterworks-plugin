@@ -52,6 +52,9 @@
     $('unit-name').textContent = f.temperature_unit.name;
     f.temperature_unit.options.forEach(function (o) { var p = opt(o), el = document.createElement('option'); el.value = p[1]; el.textContent = p[0]; $('temperature_unit').appendChild(el); });
     $('temperature_unit').value = String(f.temperature_unit.default);
+    $('time-name').textContent = f.time_format.name;
+    f.time_format.options.forEach(function (o) { var p = opt(o), el = document.createElement('option'); el.value = p[1]; el.textContent = p[0]; $('time_format').appendChild(el); });
+    $('time_format').value = String(f.time_format.default);
     $('family-name').textContent = f.family_friendly.name;
     $('family_friendly').checked = f.family_friendly.default === 'true';
     $('genres-name').textContent = f.genres.name;
@@ -71,7 +74,7 @@
   function fields() {
     return {
       label: String($('label').checked), fill: String($('fill').checked), show_date: String($('show_date').checked),
-      show_weather: String($('show_weather').checked), show_agenda: String($('show_agenda').checked), temperature_unit: $('temperature_unit').value,
+      show_weather: String($('show_weather').checked), show_agenda: String($('show_agenda').checked), temperature_unit: $('temperature_unit').value, time_format: $('time_format').value,
       weather_location: 'Paris', ics_url: SAMPLE_ICS, family_friendly: String($('family_friendly').checked),
       genres: [].filter.call($('genres').querySelectorAll('input'), function (i) { return i.checked; }).map(function (i) { return i.value; }),
       movement: $('movement').value
@@ -177,7 +180,7 @@
     });
     $('zoomclose').addEventListener('click', function () { $('zoomdlg').close(); });
     $('look').addEventListener('change', function () { S.look = $('look').checked; if (S.markup) load($('frame')); });
-    ['label', 'fill', 'show_date', 'show_weather', 'show_agenda', 'temperature_unit', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { syncVisible(); show(); }); });
+    ['label', 'fill', 'show_date', 'show_weather', 'show_agenda', 'temperature_unit', 'time_format', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { syncVisible(); show(); }); });
     syncVisible();
     var go = function () { show(); };
     if (window.customElements && customElements.get('trmnl-frame')) go(); else customElements.whenDefined('trmnl-frame').then(go);

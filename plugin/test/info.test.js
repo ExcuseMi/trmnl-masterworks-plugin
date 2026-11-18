@@ -237,9 +237,24 @@ test('info place: the groups keep their places when one is off (the strip does n
 test('agenda: tomorrow\'s events say so in the time (weekday short), no heading, no venue shown; weather and agenda: the next single event', async () => {
   const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART;TZID=Europe/Brussels:20261118T083000', 'DTEND;TZID=Europe/Brussels:20261118T090000', 'SUMMARY:Early', 'LOCATION:Room 1', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
-  const a = await t.fetchAgenda('https://calendar.example.org/x.ics', 'en', { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T19:00:00+01:00'), { iso: '2026-11-17T19:00', hour: 19 });
+  const a = await t.fetchAgenda('https://calendar.example.org/x.ics', 'en', { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T19:00:00+01:00'), { iso: '2026-11-17T19:00', hour: 19 }, '12h');
   assert.strictEqual(a.day, 'tomorrow');
   assert.strictEqual(a.items[0].time, 'Wed 8:30 AM');
+});
+
+test('time_format: 24-hour by default, exactly 12h gives 1:30 PM, empty or unknown is 24-hour', async () => {
+  const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART;TZID=Europe/Brussels:20261117T133000', 'DTEND;TZID=Europe/Brussels:20261117T140000', 'SUMMARY:Lunch', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
+  const timeOf = async (fmt, locale = 'en') => (await t.fetchAgenda('https://calendar.example.org/x.ics', locale, { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T09:00:00+01:00'), { iso: '2026-11-17T09:00', hour: 9 }, fmt)).items[0].time;
+  const setOf = (v) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: v === undefined ? {} : { time_format: v } } } }).time_format;
+  assert.strictEqual(await timeOf(setOf(undefined)), '13:30', 'not saved');
+  assert.strictEqual(await timeOf('24h'), '13:30');
+  assert.strictEqual(await timeOf('12h'), '1:30 PM');
+  assert.strictEqual(await timeOf('12h', 'de'), '1:30 PM', 'the setting, not the account language');
+  assert.strictEqual(await timeOf(setOf('')), '13:30');
+  assert.strictEqual(await timeOf(setOf('12H')), '13:30', 'only exactly 12h');
+  assert.strictEqual(setOf('12h'), '12h');
+  assert.strictEqual(setOf('auto'), '24h');
 });
 
 // fill on / off x info on / off
@@ -300,17 +315,17 @@ const FRAME_SET = { strip: true, blocks: { date: true, weather: true, agenda: tr
 const framePlan = (aspect, set = FRAME_SET) => t.framePlan({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 2560, 1440, set);
 
 test('Frame: a band for 16:9 and wider, the column layout for every other shape', () => {
-  for (const a of [2.5, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`);
-  for (const a of [1.5, 4 / 3, 1]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`);
-  for (const a of [3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'split', `${a}`); // tall: the split costs no image size
+  for (const a of [2.5, 2.4, 2.2]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`); // a band only when it crops at most 15 % (owner rule): 2:1, 16:9 and 3:1 keep the whole work on the Frame
+  for (const a of [3, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'below', `${a}`);
+  for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`); // tall too: the split layout is gone (owner 2026-11-18)
 });
 
-test('Frame split: not on the X or the OG', () => {
-  for (const key of ['x', 'o']) for (const a of [1, 3 / 4, 0.4]) assert.notStrictEqual(t.framePlan({ w: Math.round(a * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 1872, 1404, FRAME_SET, key).layout, 'split', `${key} ${a}`);
+test('Frame: no layout is ever a split (blocks on both sides of the work)', () => {
+  for (const key of ['f', 'x', 'o']) for (const a of [1, 3 / 4, 0.4]) assert.notStrictEqual(t.framePlan({ w: Math.round(a * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 1872, 1404, FRAME_SET, key).layout, 'split', `${key} ${a}`);
 });
 
 test('Frame band: equal margins on three sides, the strip as wide as the band, no columns or rules in the plan (one row)', () => {
-  const p = framePlan(2);
+  const p = framePlan(2.4);
   assert.strictEqual(p.bandPx[0], 2560 - 2 * 51.2);
   assert.strictEqual(p.margin, 51);
   assert.strictEqual(p.events, 2);

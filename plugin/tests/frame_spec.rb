@@ -51,7 +51,7 @@ RSpec.describe 'Masterworks Frame layouts' do
 
   # visible text in the info block that is cut (taller or wider than its box): nothing may be
   def cut_text(page)
-    page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] span')].filter(e => e.offsetParent && !e.hasAttribute('data-day') && (e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2)).map(e => e.innerText)")
+    page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] span')].filter(e => e.offsetParent && !e.hasAttribute('data-day') && !e.hasAttribute('data-temp') && (e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2)).map(e => e.innerText)")
   end
 
   # the label's last line (museum, else artist) hangs on the picture's bottom edge: its box ends at most half a font size below it (the line's descent)
@@ -63,10 +63,12 @@ RSpec.describe 'Masterworks Frame layouts' do
   def all_on = { 'show_date' => 'true', 'show_weather' => 'true', 'show_agenda' => 'true', 'label' => 'true' }
   P = '[data-block="primary"]'
 
-  BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2:1' => 2.0, '16:9' => 16.0 / 9 }.freeze
+  # a band only when it crops at most 15 % (FILL_CROP_MAX): on the Frame these shapes; 2:1 and 16:9 keep the whole work there
+  BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2.4:1' => 2.4, '2.2:1' => 2.2 }.freeze
+  BAND_ASPECT = { 'frame' => 2.4, 'v2' => 2.0, 'og_png' => 2.2 }.freeze # a shape each device takes as a band
   COLUMN_SHAPES = { '3:2' => 1.5, '4:3' => 4.0 / 3, 'square' => 1.0 }.freeze
-  # tall works on the Frame: the split costs no image size, so it is used (info left, work centred, label right)
-  SPLIT_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4 }.freeze
+  # tall works on the Frame: the single right-hand column (info on top, label at the bottom); the owner reversed the split layout 2026-11-18
+  TALL_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4, 'dark 3:4' => 0.75 }.freeze
 
   BAND_SHAPES.each do |name, aspect|
     it "#{name}: the band layout, the picture covers a band inside equal margins, the strip is as wide as the band" do
@@ -109,25 +111,28 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
   end
 
-  SPLIT_SHAPES.merge('dark 3:4' => 0.75).each do |name, aspect|
-    it "#{name}: the split layout on the Frame, the info left of the work, the work centred on the screen, the label right of it" do
+  TALL_SHAPES.each do |name, aspect|
+    it "#{name}: no layout puts blocks on both sides of the work (the info is one column on the right)" do
       page = frame(all_on, aspect, name.start_with?('dark') ? 'one-dark-landscape' : 'one-landscape')
-      expect(page).to have_css("#{P}[data-layout=\"split\"]")
-      lay = box(page, P)
+      expect(page).to have_no_css("#{P}[data-layout=\"split\"]")
       pic = box(page, "#{P} [data-picture]")
-      left, right = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })")
-      expect(left[2]).to be <= pic[0] + 1, 'the date, weather and events are left of the work'
-      expect(right[0]).to be >= pic[2] - 1, 'the label column is right of the work'
-      expect(pic[0] - lay[0]).to be_within(3).of(lay[2] - pic[2]), 'the work is horizontally centred on the screen'
-      expect(box(page, "#{P} [data-slot=\"label\"]")[0]).to be >= pic[2]
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0)
+      page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect().left)").each do |l|
+        expect(l).to be >= pic[2] - 1, 'every info block is right of the work, none left of it'
+      end
       expect(cut_text(page)).to eq([])
     end
   end
 
-  it 'the split is only for tall works on the Frame: square, 3:2, the X and the OG never use it' do
-    [1.0, 1.5].each { |a| expect(frame(all_on, a)).to have_no_css("#{P}[data-layout=\"split\"]") }
-    %w[v2 og_png].each { |d| [1.0, 0.75, 1.5].each { |a| expect(frame(all_on, a, device: d)).to have_no_css("#{P}[data-layout=\"split\"]") } }
+  it 'no layout, device or shape ever has an info block left of the work' do
+    %w[frame v2 og_png].each do |d|
+      [2.5, 1.5, 1.0, 0.75, 0.4].each do |a|
+        page = frame(all_on, a, device: d)
+        pic = box(page, "#{P} [data-picture]")
+        lefts = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect().right)")
+        lay = page.evaluate("document.querySelector('#{P}').getAttribute('data-layout')")
+        expect(lefts.none? { |r| r <= pic[0] + 1 }).to be(true), "#{d} #{a} #{lay}: a block sits left of the work"
+      end
+    end
   end
 
   # the label is the last element and ends at the work's right edge in every row (under a band or under a whole work)
@@ -175,7 +180,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     on = KEYS_FRAME.each_with_index.select { |_, i| mask[i] == 1 }.map(&:first)
     fields = KEYS_FRAME.to_h { |k| [k, on.include?(k) ? 'true' : 'false'] }
     strip = (on & %w[show_date show_weather show_agenda]).any?
-    { 'band' => 2.0, 'column' => 1.5 }.each do |layout, aspect|
+    { 'band' => 2.4, 'column' => 1.5 }.each do |layout, aspect|
       it "#{layout}, on: #{on.empty? ? 'nothing' : on.join(' ')}: only the parts that are on, no empty column, no stray rule" do
         page = frame(fields, aspect)
         unless strip
@@ -237,7 +242,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
 
     it "#{device}: a work 16:9 and wider gets the band when its fill crops little, whole otherwise; nothing overlaps" do
-      page = frame(all_on, 2.4, device:)
+      page = frame(all_on, BAND_ASPECT[device], device:)
       expect(page).to have_css("#{P}[data-layout=\"band\"]")
       pic = box(page, "#{P} [data-picture]")
       strip = box(page, "#{P} [data-info-block]")
@@ -247,7 +252,7 @@ RSpec.describe 'Masterworks Frame layouts' do
   end
 
   it 'the X and the OG band: at most one event (date, weather, next event, label), and the painting label is never cut with an ellipsis, on every device' do
-    { 'v2' => 2.2, 'og_png' => 2.2, 'frame' => 2.2 }.each do |device, aspect|
+    BAND_ASPECT.each do |device, aspect|
       page = frame(all_on, aspect, device:)
       expect(page).to have_css("#{P}[data-layout=\"band\"]")
       events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
@@ -257,7 +262,7 @@ RSpec.describe 'Masterworks Frame layouts' do
       expect(cut).to eq([]), "#{device}: the label is whole"
     end
     [['v2', 'x'], ['og_png', 'o']].each do |device, _|
-      page = frame(all_on, 2.2, device:)
+      page = frame(all_on, BAND_ASPECT[device], device:)
       expect(page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].map(e => e.getAttribute('data-cell'))")).to eq(%w[date w e l]), 'date, weather, the next event, the label'
     end
   end
@@ -343,7 +348,6 @@ RSpec.describe 'Masterworks Frame layouts' do
             fit = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')")
             col = fit != 'below' && fit != 'band'
             lay = box(page, P)
-            # the split has two blocks (left: date, weather, events; right: the label): each is checked against its own box
             page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map((_, i) => i)").each do |i|
               sel = "#{P} [data-info-block]"
               blk = page.evaluate("(() => { const r = document.querySelectorAll('#{sel}')[#{i}].getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")
@@ -352,7 +356,7 @@ RSpec.describe 'Masterworks Frame layouts' do
                 [...document.querySelectorAll('#{sel}')[#{i}].querySelectorAll('span')].filter(e => e.offsetParent).filter((e) => {
                   const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
                   return r.bottom > #{limit} + 1 || r.right > #{col ? blk[2] : lay[2]} + 1 || cs.textOverflow === 'ellipsis' || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none') ||
-                    (!e.hasAttribute('data-day') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
+                    (!e.hasAttribute('data-day') && !e.hasAttribute('data-temp') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
                 }).map(e => e.innerText)
               JS
               expect(bad).to eq([]), 'nothing overflows or is cut'

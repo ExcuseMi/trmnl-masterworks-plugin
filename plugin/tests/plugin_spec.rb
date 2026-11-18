@@ -90,7 +90,7 @@ RSpec.describe 'Masterworks' do
           [light, wide].each do |m|
             on = screen(view, device, mocks: m)
             wait(on)
-            expect(on).to have_css('[data-label] .title, [data-placard] .title')
+            expect(on).to have_css('[data-label] [data-title], [data-placard] .title')
             off = screen(view, device, { 'label' => 'false' }, mocks: m)
             wait(off)
             expect(off).to have_no_css('[data-label], [data-placard]')
@@ -109,7 +109,7 @@ RSpec.describe 'Masterworks' do
           column = page.has_css?('[data-label-column]')
           expect(lab[2]).to be_within(3).of(edge[2]) unless column
           # the text itself is right-aligned, so it ends on the picture's right edge
-          expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] .title')).textAlign")).to eq('right') unless column
+          expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] [data-title]')).textAlign")).to eq('right') unless column
           expect(lab[2]).to be <= lay[2] + 3
           expect(lab[3]).to be <= lay[3] + 3
           # a wide work may take up to 0.92 of the width (GALLERY_WIDE_MAX), others up to 0.75
@@ -164,11 +164,11 @@ RSpec.describe 'Masterworks' do
       it "draws the gallery title and the placard title at least #{min_px} px high on #{device}" do
         gal = screen('full', device, mocks: shard_mocks('one-landscape', 'one-portrait'))
         wait(gal)
-        expect(gal.evaluate("document.querySelector('[data-label] .title').getBoundingClientRect().height")).to be >= min_px
+        expect(gal.evaluate("document.querySelector('[data-label] [data-title]').getBoundingClientRect().height")).to be >= min_px
         full = screen('full', device, mocks: shard_mocks('one-wide-landscape', 'one-portrait'))
         wait(full)
         expect(full).to have_no_css('[data-placard]'), 'no placard over the art, ever'
-        expect(full.evaluate("document.querySelector('[data-label] .title').getBoundingClientRect().height")).to be >= min_px
+        expect(full.evaluate("document.querySelector('[data-label] [data-title]').getBoundingClientRect().height")).to be >= min_px
       end
     end
   end
@@ -361,7 +361,7 @@ RSpec.describe 'Masterworks' do
           # every line of text stays inside its block (the Framework clamps what is too long)
           out = page.evaluate(<<~JS)
             (() => { const box = document.querySelector('#{sel}').getBoundingClientRect();
-              return [...document.querySelectorAll('#{sel} .title, #{sel} .label')].filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5 || t.scrollWidth > t.clientWidth + 1; }).map((t) => [t.textContent, t.scrollWidth, t.clientWidth]); })()
+              return [...document.querySelectorAll('#{sel} .title, #{sel} .label, #{sel} [data-title]')].filter((t) => { const r = t.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5 || t.scrollWidth > t.clientWidth + 1; }).map((t) => [t.textContent, t.scrollWidth, t.clientWidth]); })()
           JS
           expect(out).to eq([])
         end

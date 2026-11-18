@@ -110,12 +110,12 @@ var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most
 // first line's cap top, its baseline on the second's), the primary lines (weekday, month, temperature, event and painting titles) and the
 // secondary lines one step below (forecast, time, place, artist and year, museum); lh the primary line height (the gap between cells is 1.5 of it); their CSS px (z: the screen's CSS scale, the X draws 1040 CSS px on 1872) for the estimates, the vertical gap between column parts (sep), the column's widest share (infow, %)
 var FRAME_PROFILES = {
-  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 58, ev: 58, title: 58, small: 40, lh: 70,
-    cls: { num: 'value--mega', words: 'value value--large', temp: 'value value--large', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge' } },
-  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 96, words: 38, temp: 38, ev: 38, title: 38, small: 30, lh: 42,
-    cls: { num: 'value--xxlarge', words: 'value value--base', temp: 'value value--base', ev: 'value value--base', title: 'value value--base', small: 'label label--xxlarge' } },
-  o: { infow: 34, sep: 12, bandEv: 1, num: 74, words: 26, temp: 26, ev: 26, title: 26, small: 21, lh: 31.2,
-    cls: { num: 'value--xlarge', words: 'label label--xlarge', temp: 'label label--xlarge', ev: 'label label--xlarge', title: 'label label--xlarge', small: 'label label--large' } },
+  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 170, ev: 58, title: 58, small: 40, lh: 70,
+    cls: { num: 'value--mega', words: 'value value--large', temp: 'value--mega', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge text--regular' } },
+  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 74, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
+    cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'value--xlarge', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge text--regular' } },
+  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 58, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
+    cls: { num: 'value--large', words: 'label label--large', temp: 'value--large', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall text--regular' } },
 };
 FRAME_PROFILES.fp = FRAME_PROFILES.f;
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
@@ -231,6 +231,7 @@ function settingsOf(input) {
     genres: genres, movement: movement, family_friendly: flag(c.family_friendly, true),
     show_date: flag(c.show_date, false), show_weather: flag(c.show_weather, false), show_agenda: flag(c.show_agenda, false), // the info strip's three parts, each off by default
     weather_location: String(c.weather_location === undefined || c.weather_location === null ? '' : c.weather_location).trim().slice(0, 80),
+    time_format: c.time_format === '12h' ? '12h' : '24h', // anything but exactly 12h (empty, unknown, not saved yet) is 24-hour
     temperature_unit: unit === 'f' ? 'f' : 'c', // anything but Fahrenheit (an old saved "auto", empty) is Celsius
   };
 }
@@ -882,12 +883,12 @@ async function fetchIcs(url) {
 }
 
 /** { day, label, items } for the strip, or null (no link, a failure, too big): never throws. */
-async function fetchAgenda(url, locale, userZ, nowMs, local) {
+async function fetchAgenda(url, locale, userZ, nowMs, local, timeFormat) {
   if (!url) return null;
   var text = await fetchIcs(url);
   if (!text) return null;
-  var h24 = /h2[34]/.test(new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle || ''); // the account language's own clock: 9:00 AM or 09:00
-  var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', timeZone: userZ.zone });
+  var h24 = timeFormat !== '12h'; // the time_format setting decides, not the account language: 09:00 or 9:00 AM; anything but exactly 12h is 24-hour
+  var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hourCycle: h24 ? 'h23' : 'h12', timeZone: userZ.zone });
   var a = pickAgenda(text, userZ, nowMs, local, function (ms) { return tf.format(new Date(ms)); });
   if (!a.items.length) return null; // nothing relevant, nothing shown
   var label = '';
@@ -924,7 +925,7 @@ function frameProfileOf(scr) {
   return null;
 }
 
-/** The layout of the info on a Frame, X or OG screen (see FRAME_ constants): { layout: "band" | "below" | "column" | "split" | "stack", ... }. The sizes are a first plan; the browser measures, drops and grows. */
+/** The layout of the info on a Frame, X or OG screen (see FRAME_ constants): { layout: "band" | "below" | "column" | "stack", ... }. The sizes are a first plan; the browser measures, drops and grows. */
 function framePlan(art, sw, sh, set, key) {
   key = key || 'f';
   var P = FRAME_PROFILES[key], b = set.blocks, aspect = art.w / art.h, label = !!set.label, events = b.agenda ? Math.min(b.events, AGENDA_ITEMS) : 0;
@@ -936,22 +937,24 @@ function framePlan(art, sw, sh, set, key) {
   var base = { frame: true, tier: key, fit: 'cover', cls: P.cls, label: label, who: whoLine(art).replace(/ \u00b7 /g, '\u00a0\u00b7\u00a0'), coll: art.collection || '', fill: false,
     margin: m, numgap: Math.round(P.words * 0.4), gappx: Math.round(1.5 * P.lh), gap: FRAME_GAP_PCT, sepv: P.sep, bandw: bandW, aspect: Math.round(aspect * 10000) / 10000, portrait: portrait };
   var put = function (o) { for (var k in base) o[k] = base[k]; return o; };
-  if (!portrait && aspect >= FRAME_BAND_ASPECT) {
+  // the band covers its box: only when that crops at most FILL_CROP_MAX of the work, else the whole work (row under it, or column)
+  if (!portrait && aspect >= FRAME_BAND_ASPECT && cropShare(aspect, (bandW * sw) / (restPct * sh)) <= FILL_CROP_MAX) {
     out = { layout: 'band', artw: bandW, arth: restPct, events: evB };
   } else if (portrait && aspect >= FRAME_STACK_ASPECT) {
     var full = frameBox(aspect, sw, sh, bandW, 60);
     out = { layout: 'stack', artw: full.w, arth: full.h, events: events };
   } else {
     var below = frameBox(aspect, sw, sh, bandW, restPct), box = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
-    var split = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - 2 * FRAME_COL_GUTTER - 2 * P.infow, FRAME_COL_H_MAX);
+    // the title on two lines needs this much width (cqw); the work may give up width to the column only down to the width the row-under layout gives it (the floor, owner 2026-11-18)
+    var titleW = 0.275 * P.title * String(art.title).length / cw * 100, colRoom = 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - below.w;
+    if (box && titleW > colRoom) box = null; // a title too long for a column at the floor: the row under the work, the title wraps in the full width
     var best = box && box.w * box.h >= below.w * below.h ? box : below;
-    // the split (date, weather, events left of the work, the work centred, the label right) only when the work is shown as large as the best other layout gives; Frame only
-    if (split && key === 'f' && split.w * split.h >= best.w * best.h) out = { layout: 'split', artw: split.w, arth: split.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
-    else if (box && box.w * box.h >= below.w * below.h) out = { layout: 'column', artw: box.w, arth: box.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
+    if (box && box.w * box.h >= below.w * below.h) out = { layout: 'column', artw: box.w, arth: box.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
     else out = { layout: 'below', artw: below.w, arth: below.h, rowpct: below.w >= 60 ? below.w : bandW, events: evB };
   }
   out = put(out);
-  out.gap = out.layout === 'column' || out.layout === 'split' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
+  out.gap = out.layout === 'column' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
+  out.floorw = out.layout === 'column' ? below.w : 0; // the narrowest the work may get when the column widens for a long title
   out.bandPx = [sw * out.artw / 100, sh * out.arth / 100];
   return out;
 }
@@ -1086,7 +1089,7 @@ async function run(input) {
   var locale = userLocale(input), zone = userZone(input), nowMs = Date.now(), local = dayInfo(nowMs, locale, zone), url = set.show_agenda ? icsUrl(input) : '';
   // the weather and the agenda are asked while the data is fetched; a failure, a missing location or link, or the deadline leave them out
   var wxP = set.show_weather ? withDeadline(fetchWeather(set, locale, zone, local.iso, state.loc), WEATHER_DEADLINE_MS) : Promise.resolve(null);
-  var agP = url ? withDeadline(fetchAgenda(url, locale, zone, nowMs, local), ICS_DEADLINE_MS) : Promise.resolve(null);
+  var agP = url ? withDeadline(fetchAgenda(url, locale, zone, nowMs, local, set.time_format), ICS_DEADLINE_MS) : Promise.resolve(null);
   var shard;
   try {
     shard = await fetchShard(scr.o, Math.random);

@@ -138,16 +138,16 @@ test('agenda: from 18:00, or when nothing is left today, tomorrow\'s', () => {
 // the fetch: limits and failures
 const bodyOf = (chunks) => ({ getReader: () => { let i = 0; return { read: async () => (i < chunks.length ? { done: false, value: chunks[i++] } : { done: true }), cancel: async () => { chunks.cancelled = true; } }; } });
 const ICSURL = 'https://calendar.example.org/private/SECRET-TOKEN-123/basic.ics';
-const fa = (text) => t.fetchAgenda(ICSURL, 'en', { zone: Z, shift: 0 }, nowAt('2026-11-17T08:00'), local('2026-11-17T08:00'));
+const fa = (text) => t.fetchAgenda(ICSURL, 'en', { zone: Z, shift: 0 }, nowAt('2026-11-17T08:00'), local('2026-11-17T08:00'), '12h');
 
 test('fetchAgenda: a calendar is read, shown with the user\'s time format; tomorrow labelled', async () => {
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => DAYCAL });
   const a = await fa();
-  assert.deepStrictEqual(a.items.map((i) => i.time), ['All day', '9:00 AM'], 'en: 12-hour');
+  assert.deepStrictEqual(a.items.map((i) => i.time), ['All day', '9:00 AM'], '12h setting');
   assert.strictEqual(a.label, '');
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => DAYCAL });
-  const b = await t.fetchAgenda(ICSURL, 'de', { zone: Z, shift: 0 }, nowAt('2026-11-17T19:00'), local('2026-11-17T19:00'));
-  assert.strictEqual(b.items[0].time, 'Mi 08:30', 'tomorrow in the account language: the weekday short, de: 24-hour');
+  const b = await t.fetchAgenda(ICSURL, 'de', { zone: Z, shift: 0 }, nowAt('2026-11-17T19:00'), local('2026-11-17T19:00'), '24h');
+  assert.strictEqual(b.items[0].time, 'Mi 08:30', 'tomorrow in the account language: the weekday short, 24h setting');
 });
 
 test('fetchAgenda: the byte cap (stream and text), a failed or refused fetch, not a calendar: null', async () => {

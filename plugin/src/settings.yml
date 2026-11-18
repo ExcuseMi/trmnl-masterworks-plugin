@@ -145,6 +145,16 @@ custom_fields:
   options:
   - Celsius: c
   - Fahrenheit: f
+- keyname: time_format
+  group: Info
+  field_type: select
+  name: Time format
+  default: 24h
+  optional: true
+  help_text: "<p>How the times of the agenda events are written. 24-hour by default.</p>"
+  options:
+  - "24-hour (13:30)": 24h
+  - "12-hour (1:30 PM)": 12h
 name: Masterworks
 description: A new famous artwork each refresh
 refresh_interval: 60
