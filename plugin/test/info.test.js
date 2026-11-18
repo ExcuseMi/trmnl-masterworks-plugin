@@ -237,9 +237,24 @@ test('info place: the groups keep their places when one is off (the strip does n
 test('agenda: tomorrow\'s events say so in the time (weekday short), no heading, no venue shown; weather and agenda: the next single event', async () => {
   const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART;TZID=Europe/Brussels:20261118T083000', 'DTEND;TZID=Europe/Brussels:20261118T090000', 'SUMMARY:Early', 'LOCATION:Room 1', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
-  const a = await t.fetchAgenda('https://calendar.example.org/x.ics', 'en', { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T19:00:00+01:00'), { iso: '2026-11-17T19:00', hour: 19 });
+  const a = await t.fetchAgenda('https://calendar.example.org/x.ics', 'en', { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T19:00:00+01:00'), { iso: '2026-11-17T19:00', hour: 19 }, '12h');
   assert.strictEqual(a.day, 'tomorrow');
   assert.strictEqual(a.items[0].time, 'Wed 8:30 AM');
+});
+
+test('time_format: 24-hour by default, exactly 12h gives 1:30 PM, empty or unknown is 24-hour', async () => {
+  const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART;TZID=Europe/Brussels:20261117T133000', 'DTEND;TZID=Europe/Brussels:20261117T140000', 'SUMMARY:Lunch', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
+  const timeOf = async (fmt, locale = 'en') => (await t.fetchAgenda('https://calendar.example.org/x.ics', locale, { zone: 'Europe/Brussels', shift: 0 }, Date.parse('2026-11-17T09:00:00+01:00'), { iso: '2026-11-17T09:00', hour: 9 }, fmt)).items[0].time;
+  const setOf = (v) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: v === undefined ? {} : { time_format: v } } } }).time_format;
+  assert.strictEqual(await timeOf(setOf(undefined)), '13:30', 'not saved');
+  assert.strictEqual(await timeOf('24h'), '13:30');
+  assert.strictEqual(await timeOf('12h'), '1:30 PM');
+  assert.strictEqual(await timeOf('12h', 'de'), '1:30 PM', 'the setting, not the account language');
+  assert.strictEqual(await timeOf(setOf('')), '13:30');
+  assert.strictEqual(await timeOf(setOf('12H')), '13:30', 'only exactly 12h');
+  assert.strictEqual(setOf('12h'), '12h');
+  assert.strictEqual(setOf('auto'), '24h');
 });
 
 // fill on / off x info on / off
