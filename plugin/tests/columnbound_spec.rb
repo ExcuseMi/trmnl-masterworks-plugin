@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # In every column layout the column is exactly as high as the work: the first line's cap top (the day number, or the title in label-only)
-# is level with the image's top edge and the last line's baseline with the image's bottom edge (within 2 px; owner 2026-11-18, the OG Great
+# is level with the image's top edge (label only: the label is one compact block at the bottom, empty above) and the last line's baseline with the image's bottom edge (within 2 px; owner 2026-11-18, the OG Great
 # Wave column started 16 px above the image and ended 15 px below it).
 require 'json'
 
@@ -24,6 +24,10 @@ RSpec.describe 'Masterworks column bounds' do
   def render_cb(device, orientation, w, h, title, fields)
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => w, 'h' => h, 't' => title)
+    if title == 'Alba Madonna'
+      doc['col'][doc['w'][0]['c']] = 'Hermitage Museum'
+      doc['med'][doc['w'][0]['e']] = 'Oil on canvas'
+    end
     shards = BASES_CB.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') }, 'https://calendar.example.org/*' => { body: ics } }
     page = trmnl.render(view: 'full', device:, orientation:, mocks: shards.merge(services), custom_fields: fields)
@@ -47,7 +51,9 @@ RSpec.describe 'Masterworks column bounds' do
           const t = cv.measureText(e.innerText.trim().charAt(0)), lh = parseFloat(st.lineHeight) || parseFloat(st.fontSize) * 1.2, A = t.fontBoundingBoxAscent, D = t.fontBoundingBoxDescent, hl = (lh - A - D) / 2;
           return { cap: (hl + A - t.actualBoundingBoxAscent) * S, base: (hl + A) * S, lh: lh * S }; };
         const f = sp[0], l = sp[sp.length - 1], rf = f.getBoundingClientRect(), rl = l.getBoundingClientRect(), ml = met(l);
-        return [rf.top + met(f).cap - img.top, rl.bottom - ml.lh + ml.base - img.bottom];
+        const lab = sp.filter(e => e.hasAttribute('data-label') || e.hasAttribute('data-title') || e.hasAttribute('data-who') || e.hasAttribute('data-museum') || e.closest('[data-label-col-text]'));
+        const gaps = lab.slice(1).map((e, i) => (e.getBoundingClientRect().top - lab[i].getBoundingClientRect().bottom) / met(e).lh);
+        return [rf.top + met(f).cap - img.top, rl.bottom - ml.lh + ml.base - img.bottom, Math.max(0, ...gaps), lab.length];
       })()
     JS
   end
@@ -69,8 +75,17 @@ RSpec.describe 'Masterworks column bounds' do
       page = render_cb(device, orientation, w, h, title, fields)
       b = bounds(page)
       skip 'no column layout' unless b
-      expect(b[0].abs).to be <= 2, "the first cap top is #{b[0].round(1)} px from the image's top edge"
+      expect(b[0].abs).to be <= 2, "the first cap top is #{b[0].round(1)} px from the image's top edge" if fields.key?('show_date')
+      expect(b[2]).to be <= 1.5, "the label lines are #{b[2].round(1)} line heights apart (one compact block)"
       expect(b[1].abs).to be <= 2, "the last baseline is #{b[1].round(1)} px from the image's bottom edge"
     end
+  end
+
+  # label only with room: the OG shows the title, the artist line and the museum line (it once kept only the title)
+  it 'og_png label only, square work: all three label lines are shown' do
+    page = render_cb('og_png', 'landscape', 1000, 1000, 'Alba Madonna', LO)
+    b = bounds(page)
+    skip 'no column layout' unless b
+    expect(b[3]).to eq(3), "#{b[3]} label lines shown"
   end
 end

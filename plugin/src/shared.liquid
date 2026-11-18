@@ -120,11 +120,11 @@
   {% elsif gl.col %}
   {% comment %} label only, near-square or tall work: the whole work with the label in a column on its right, its last line level with the work's bottom (the group is centred on the mat) {% endcomment %}
   <div class="flex flex--row flex--stretch-y gap--none" data-label-column="1">
-    <div class="flex flex--col gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-lpt="1" data-adj="1"></div>{{ bevel }}<div class="w--full h--[0px] shrink-0" data-lpb="1" data-adj="1"></div></div>
+    <div class="flex flex--col gap--none shrink-0">{{ bevel }}<div class="w--full h--[0px] shrink-0" data-lpb="1" data-adj="1"></div></div>
     <div class="w--[{{ gl.col.gap }}cqw] shrink-0"></div>
     <div class="flex flex--col flex--left gap--none w--[{{ gl.col.w }}cqw] shrink-0" data-label="1" data-label-col-text="1" data-adj="1">
-      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--left" data-title="1">{{ art.title | escape }}</span>
       <div class="w--full grow"></div>
+      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--left" data-title="1">{{ art.title | escape }}</span>
       {% if gl.label.who != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ acls }}{% endif %} {{ ink }} block w--full text--left">{{ gl.label.who | escape }}</span>{% endif %}
       {% if gl.label.detail != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ dcls }}{% endif %} {{ ink }} block w--full text--left">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>
@@ -346,21 +346,22 @@
   }
   // label only, column: the column narrows to its widest text, so the group (work, gutter, column) is centred with equal outer margins
   function labelColumns() {
-    var els = document.querySelectorAll('[data-label-col-text]'), i, j, el, lay, sp, w, need = 0;
+    var els = document.querySelectorAll('[data-label-col-text]'), i, j, el, lay, sp, w;
     for (i = 0; i < els.length; i++) {
       el = els[i]; lay = el.closest('[data-block]'); if (!lay || !lay.offsetParent) continue;
       S = rect(lay).width / (lay.offsetWidth || 1) || 1;
       sp = el.querySelectorAll('span'); w = 0;
       [].forEach.call(sp, function (e) { e.classList.remove('hidden'); });
-      // the column is exactly the work's height: the title's cap top level with the work's top edge, the last line's baseline with its bottom edge (the work's box is padded by the cap offset above and the descent under, as in the info column)
+      // the label is one compact block at the bottom of a column as high as the work: its last baseline level with the work's bottom edge (the work's box is padded by the last line's descent, as in the info column); the top of the column is empty. Lines drop (detail, then artist) only when they are more than the work is high
       var place = function () {
-        var vs = [].filter.call(sp, vis), f = vs[0], l = vs[vs.length - 1], pt = lay.querySelector('[data-lpt]'), pb = lay.querySelector('[data-lpb]'), bv = lay.querySelector('[data-bevel]'), a, b;
-        if (!f || !pt || !pb || !bv) return;
-        a = met(f).cap; b = met(l).lh - met(l).base;
-        setH(pt, a, lay); setH(pb, b, lay); need = rect(bv).height + a + b; // the column then stretches to the row, whose height is the padded work
+        var vs = [].filter.call(sp, vis), l = vs[vs.length - 1], pb = lay.querySelector('[data-lpb]'), bv = lay.querySelector('[data-bevel]'), tot = 0;
+        if (!l || !pb || !bv) return true;
+        setH(pb, met(l).lh - met(l).base, lay);
+        vs.forEach(function (e) { tot += rect(e).height; });
+        return tot <= rect(bv).height + 1;
       };
+      for (j = sp.length - 1; j > 0 && !place(); j--) sp[j].classList.add('hidden'); // never an ellipsis, the title stays
       place();
-      for (j = sp.length - 1; j > 0; j--) { if (el.scrollHeight > need + 1) { sp[j].classList.add('hidden'); place(); } } // when the lines are more than the work is high, the detail line goes whole, then the artist line (never an ellipsis, the title stays)
       for (j = 0; j < sp.length; j++) w = Math.max(w, textBox(sp[j]).w);
       if (w > 0) setCls(el, /^w--\[/, 'w--[' + Math.min(Math.ceil(w / rect(lay).width * 100) + 0, Math.round(rect(el).width / rect(lay).width * 100)) + 'cqw]');
     }
