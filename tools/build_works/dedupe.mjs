@@ -24,3 +24,19 @@ export function dedupe(items) {
   }
   return { keep, reasons };
 }
+
+export const SAME_PICTURE = 0.985; // curator cosine: the painter's own versions of a subject sit at 0.95 to 0.98 and stay (owner 2026-11-18)
+
+/**
+ * pairs: [[a, b, cosine]] from the curator (curator_pairs.py); works: [{ id, sl }]. The id of the lesser work of each
+ * same-picture pair that has both in `works` (more sitelinks stays, then the lower Q number); a chain drops all but one.
+ */
+export function samePictureDrops(pairs, works) {
+  const by = new Map(works.map((w) => [w.id, w])), drop = new Set();
+  const better = (a, b) => b.sl - a.sl || Number(a.id.slice(1)) - Number(b.id.slice(1));
+  for (const [x, y, cos] of [...pairs].sort((p, q) => q[2] - p[2])) {
+    if (cos < SAME_PICTURE || !by.has(x) || !by.has(y) || drop.has(x) || drop.has(y)) continue;
+    drop.add(better(by.get(x), by.get(y)) <= 0 ? y : x);
+  }
+  return drop;
+}

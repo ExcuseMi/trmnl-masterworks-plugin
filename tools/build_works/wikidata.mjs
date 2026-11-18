@@ -16,7 +16,7 @@ export const ROOT_CLASSES = {
 };
 // Classes taken as they are, without subclasses (their subclasses include sculpture and furniture).
 export const EXACT_CLASSES = { Q79218: 'triptych', Q15711026: 'altarpiece' };
-export const MIN_SITELINKS = 7;
+export const MIN_SITELINKS = Number(process.env.MIN_SITELINKS || 7); // the next-set build lowers it to reach more works
 
 async function sparql(query) {
   let lastErr;

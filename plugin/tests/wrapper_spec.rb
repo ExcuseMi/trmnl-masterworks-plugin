@@ -17,7 +17,7 @@ RSpec.describe 'Masterworks one wrapper per layout' do
   def render_wr(device, orientation, w, h, fields)
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => w, 'h' => h)
-    shards = BASES_WR.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_WR.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     page = trmnl.render(view: 'full', device:, orientation:, mocks: shards, custom_fields: fields)
     page.has_css?('img.image')
     page
