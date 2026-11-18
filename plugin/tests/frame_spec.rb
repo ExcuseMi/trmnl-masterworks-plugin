@@ -65,8 +65,8 @@ RSpec.describe 'Masterworks Frame layouts' do
 
   BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2:1' => 2.0, '16:9' => 16.0 / 9 }.freeze
   COLUMN_SHAPES = { '3:2' => 1.5, '4:3' => 4.0 / 3, 'square' => 1.0 }.freeze
-  # tall works on the Frame: the split costs no image size, so it is used (info left, work centred, label right)
-  SPLIT_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4 }.freeze
+  # tall works on the Frame: the single right-hand column (info on top, label at the bottom); the owner reversed the split layout 2026-11-18
+  TALL_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4, 'dark 3:4' => 0.75 }.freeze
 
   BAND_SHAPES.each do |name, aspect|
     it "#{name}: the band layout, the picture covers a band inside equal margins, the strip is as wide as the band" do
@@ -109,25 +109,28 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
   end
 
-  SPLIT_SHAPES.merge('dark 3:4' => 0.75).each do |name, aspect|
-    it "#{name}: the split layout on the Frame, the info left of the work, the work centred on the screen, the label right of it" do
+  TALL_SHAPES.each do |name, aspect|
+    it "#{name}: no layout puts blocks on both sides of the work (the info is one column on the right)" do
       page = frame(all_on, aspect, name.start_with?('dark') ? 'one-dark-landscape' : 'one-landscape')
-      expect(page).to have_css("#{P}[data-layout=\"split\"]")
-      lay = box(page, P)
+      expect(page).to have_no_css("#{P}[data-layout=\"split\"]")
       pic = box(page, "#{P} [data-picture]")
-      left, right = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })")
-      expect(left[2]).to be <= pic[0] + 1, 'the date, weather and events are left of the work'
-      expect(right[0]).to be >= pic[2] - 1, 'the label column is right of the work'
-      expect(pic[0] - lay[0]).to be_within(3).of(lay[2] - pic[2]), 'the work is horizontally centred on the screen'
-      expect(box(page, "#{P} [data-slot=\"label\"]")[0]).to be >= pic[2]
-      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0)
+      page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect().left)").each do |l|
+        expect(l).to be >= pic[2] - 1, 'every info block is right of the work, none left of it'
+      end
       expect(cut_text(page)).to eq([])
     end
   end
 
-  it 'the split is only for tall works on the Frame: square, 3:2, the X and the OG never use it' do
-    [1.0, 1.5].each { |a| expect(frame(all_on, a)).to have_no_css("#{P}[data-layout=\"split\"]") }
-    %w[v2 og_png].each { |d| [1.0, 0.75, 1.5].each { |a| expect(frame(all_on, a, device: d)).to have_no_css("#{P}[data-layout=\"split\"]") } }
+  it 'no layout, device or shape ever has an info block left of the work' do
+    %w[frame v2 og_png].each do |d|
+      [2.5, 1.5, 1.0, 0.75, 0.4].each do |a|
+        page = frame(all_on, a, device: d)
+        pic = box(page, "#{P} [data-picture]")
+        lefts = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect().right)")
+        lay = page.evaluate("document.querySelector('#{P}').getAttribute('data-layout')")
+        expect(lefts.none? { |r| r <= pic[0] + 1 }).to be(true), "#{d} #{a} #{lay}: a block sits left of the work"
+      end
+    end
   end
 
   # the label is the last element and ends at the work's right edge in every row (under a band or under a whole work)
@@ -343,7 +346,6 @@ RSpec.describe 'Masterworks Frame layouts' do
             fit = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')")
             col = fit != 'below' && fit != 'band'
             lay = box(page, P)
-            # the split has two blocks (left: date, weather, events; right: the label): each is checked against its own box
             page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map((_, i) => i)").each do |i|
               sel = "#{P} [data-info-block]"
               blk = page.evaluate("(() => { const r = document.querySelectorAll('#{sel}')[#{i}].getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")

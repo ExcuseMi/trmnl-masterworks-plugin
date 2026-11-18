@@ -61,17 +61,6 @@
   {{ mgap }}{{ picture }}{{ mgap }}
   <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.artw }}cqw] shrink-0" data-info-block="column" data-fit="stack">{{ d_p }}{{ w_p }}{{ e_p }}<div class="w--full h--[0px] shrink-0" data-labelgap="1" data-adj="1"></div>{{ l_p }}</div>
 </div>
-{% elsif lay == "split" %}
-<div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
-  {% comment %} try-split: the date, weather and events on the left, the work in the middle, the label on the right, equal widths, the work exactly centred {% endcomment %}
-  <div class="flex gap--none" data-group="1">
-    <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.infow }}cqw] shrink-0" data-info-block="column" data-fit="splitL" data-adj="1">{{ d_p }}{{ w_p }}{{ e_p }}</div>
-    <div class="w--[{{ inf.gap }}cqw] shrink-0"></div>
-    <div class="flex flex--col flex--left gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-padtop="1" data-adj="1"></div>{{ picture }}<div class="w--full h--[0px] shrink-0" data-padbot="1" data-adj="1"></div></div>
-    <div class="w--[{{ inf.gap }}cqw] shrink-0"></div>
-    <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.infow }}cqw] shrink-0" data-info-block="column" data-fit="splitR" data-adj="1"><div class="w--full grow"></div>{{ l_p }}</div>
-  </div>
-</div>
 {% else %}
 <div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
   <div class="flex gap--none" data-group="1">
@@ -299,9 +288,6 @@
       if (band && rect(band).height < 0.45 * lb.height) return no(7);
     } else if (kind === 'stack') {
       if (bb.bottom > lb.bottom - m + 1) return no(8);
-    } else if (kind === 'splitL' || kind === 'splitR') {
-      var spic = lay.querySelector('[data-picture]');
-      if (last && rect(last).bottom > rect(spic).bottom + 1) return no(9);
     } else {
       var pic = lay.querySelector('[data-picture]'), lg = blk.querySelector('[data-labelgap]'), t = blk.querySelector('[data-label]');
       if (last && rect(last).bottom > rect(pic).bottom + 1) return no(9);
@@ -371,15 +357,6 @@
       if (w > 0) setCls(el, /^w--\[/, 'w--[' + Math.min(Math.ceil(w / rect(lay).width * 100) + 0, Math.round(rect(el).width / rect(lay).width * 100)) + 'cqw]');
     }
   }
-  // try-split: the left block's first ink on the work's top (the work moves down by the cap offset), the right block's last baseline on the work's bottom
-  function split(blk, lay, kind) {
-    var sp = [].filter.call(blk.querySelectorAll('span'), vis), br = rect(blk), top = 1e9, last = sp[sp.length - 1];
-    if (!sp.length) return;
-    if (kind === 'splitL') {
-      sp.forEach(function (e) { var r = rect(e), mt = met(e); if (!e.closest('[data-cell="date"]') || e.hasAttribute('data-day') || e.hasAttribute('data-weekday')) top = Math.min(top, r.top + mt.cap); });
-      setH(lay.querySelector('[data-padtop]'), Math.max(0, top - br.top), lay);
-    } else setH(lay.querySelector('[data-padbot]'), met(last).lh - met(last).base, lay);
-  }
   // the column takes d cqw more and the work gets as much smaller (its shape kept); false when the work would get too small
   function widen(blk, lay, d) {
     var pc = lay.querySelector('[data-picture][data-adj]'), asp = +lay.getAttribute('data-aspect'), lb = rect(lay), cw = (pc.className.match(/w--\[(\d+)cqw\]/) || [])[1], cb = (blk.className.match(/w--\[(\d+)cqw\]/) || [])[1], w, h, x, done = false;
@@ -436,13 +413,12 @@
       strict = false;
       if (!fits && (kind === 'below' || kind === 'stack') && tl < 9) { tl++; again = true; continue; } // a very long title: one more line in the row (the work grows back into what the row leaves)
       if (!fits && kind === 'column' && ex < 24) { ex += 3; again = widen(blk, lay, 3); if (again) continue; } // a title too long for the column: the column takes more width, the work gets smaller
-      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind === 'splitL' || kind === 'splitR') [].forEach.call(lay.querySelectorAll('[data-info-block]'), mark); if (kind !== 'below') regrow(lay); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
+      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind !== 'below') regrow(lay); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
       align(blk, lay);
       if (kind === 'below') grow(blk, lay, wide, rep === 2 ? Math.round(wasW / rect(lay).width * 100) : 0);
       } while (again || kind === 'below' && fits && !wide && Math.abs(rect(blk).width - wasW) > 2 && ++rep < 3); // the row is fitted again at the work's width
       if (!fits) continue;
       if (kind === 'column') column(blk, lay);
-      if (kind === 'splitL' || kind === 'splitR') split(blk, lay, kind);
     }
   }
   window.mwFit = fit;

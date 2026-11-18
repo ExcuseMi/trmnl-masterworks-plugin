@@ -45,4 +45,20 @@ RSpec.describe 'Masterworks label-only type sizes' do
       end
     end
   end
+
+  # the three sizes on the X and the OG are one Framework step smaller than before (owner decision 2026-11-18); the Frame is unchanged
+  CLASSES = {
+    'v2' => { 'day' => 'value--xlarge', 'title' => 'label--xxlarge', 'who' => 'label--xlarge' },
+    'og_png' => { 'day' => 'value--large', 'title' => 'label--large', 'who' => 'label' },
+    'frame' => { 'day' => 'value--mega', 'title' => 'value--large', 'who' => 'title--xxlarge' }
+  }.freeze
+
+  CLASSES.each do |device, want|
+    it "#{device}: day number, title and artist line use #{want.values.join(' / ')}" do
+      page = render_ls(device, 16.0 / 9, ON)
+      got = page.evaluate("(() => { const c = (s) => { const e = [...document.querySelectorAll('[data-block=\"primary\"] ' + s)].find(x => x.offsetParent); return e ? e.className : ''; }; return { day: c('[data-day]'), title: c('span[data-label]'), who: c('[data-who]') }; })()")
+      want.each { |k, cls| expect(got[k].split).to include(cls), "#{k}: #{got[k]}" }
+      expect(got['day'].split).not_to include('value--xxlarge') if device == 'v2'
+    end
+  end
 end
