@@ -88,3 +88,37 @@ test('the suspect rule: a flag or a safety doubt, nothing else; an override that
   assert.strictEqual(suspectOf(undefined), null);
   assert.deepStrictEqual(suspects([{ qid: 'Q2', cur: { flag: 'violence', doubt: [] } }, { qid: 'Q1', cur: { flag: null, doubt: [] } }]), { Q2: 'flag' });
 });
+
+// Owner 2026-11-18, generic rules for old and new works: the curator's sure quality exclusions, what is no picture, and
+// the same picture twice leave the data; every work in the data was judged by the curator (a rebuild must not pull in an
+// unjudged work from the overshoot).
+import { exclusions, loadExclusions } from '../curator_exclude.mjs';
+import { isNotAPicture } from '../classify.mjs';
+import { SAME_PICTURE, samePictureDrops } from '../dedupe.mjs';
+
+test('no work the curator surely excludes is in the data (museum photo, chart or label, blur)', () => {
+  const ex = loadExclusions();
+  assert.ok(Object.keys(ex).length > 200, `${Object.keys(ex).length} exclusions`);
+  assert.deepStrictEqual(works.filter((w) => ex[w.i]).map((w) => `${w.i} ${ex[w.i]}`), []);
+});
+
+test('the exclusion rule takes the sure set only, not the doubtful', () => {
+  assert.deepStrictEqual(exclusions([{ qid: 'Q2', cur: { exclude: 'chart/label 0.8', doubt: [] } }, { qid: 'Q1', cur: { exclude: null, doubt: ['quality'] } }, { qid: 'Q3' }]), { Q2: 'chart/label 0.8' });
+});
+
+test('maps, plans, banknotes, ostraca and objects are no pictures; paintings and prints stay', () => {
+  for (const c of [['print', 'map'], ['plan', 'manuscript'], ['banknote'], ['ostracon', 'drawing'], ['engraving', 'lacquerware'], ['Fabergé egg', 'triptych']]) assert.ok(isNotAPicture(c), c.join());
+  for (const c of [['painting'], ['woodcut print', 'series of prints'], ['drawing'], ['fresco', 'tomb'], ['painting', 'mummy']]) assert.ok(!isNotAPicture(c), c.join());
+});
+
+test('an identical or same-picture pair keeps one work (more sitelinks); the painter\'s own versions stay', () => {
+  const w = [{ id: 'Q1', sl: 10 }, { id: 'Q2', sl: 50 }, { id: 'Q3', sl: 5 }, { id: 'Q4', sl: 5 }];
+  assert.deepStrictEqual([...samePictureDrops([['Q1', 'Q2', 1], ['Q3', 'Q4', 0.97], ['Q1', 'Q9', 1]], w)], ['Q1']);
+  assert.ok(SAME_PICTURE > 0.98 && SAME_PICTURE < 1);
+});
+
+test('the same picture is in the data once (curator pairs)', () => {
+  const ids = new Set(works.map((w) => w.i));
+  const both = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../curator-pairs.json'), 'utf8')).filter(([a, b, c]) => c >= SAME_PICTURE && ids.has(a) && ids.has(b));
+  assert.deepStrictEqual(both, []);
+});

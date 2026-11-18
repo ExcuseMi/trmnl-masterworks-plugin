@@ -6,17 +6,18 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_SITELINKS, ROOT_CLASSES, EXACT_CLASSES, cutoffs, fetchCandidates, fetchDetails, fetchExtra, fetchTags, fetchTierCandidates, fetchSeries, isPublicDomain, TIERS, CURATED_SERIES, SERIES_CAP, SERIES_INFO } from './wikidata.mjs';
-import { dedupe, titleKey } from './dedupe.mjs';
+import { dedupe, samePictureDrops, titleKey } from './dedupe.mjs';
 import { PNG_STEPS as PNG_STEPS_TRY } from './commons.mjs';
 import { MIN_LONG_SIDE_PRINT, fetchImageInfo, isPng, pngStepFor, preferNonPng, thumbBytes, usable } from './commons.mjs';
 import { DARK_MAT_BELOW, PALETTE_ID, cornerBrightness, fetchThumb, loadPalette, meanBrightness, scoreFile } from './palette.mjs';
 import { createHash } from 'node:crypto';
 import { pickMovement } from './movements.mjs';
-import { DEPICTS_RE, SERIES_GENRE, genreOf, is2dArtwork, unfriendlyReasons } from './classify.mjs';
+import { DEPICTS_RE, SERIES_GENRE, genreOf, is2dArtwork, isNotAPicture, unfriendlyReasons } from './classify.mjs';
 import { latestYear, yearInfo } from './dates.mjs';
 import { venueOf } from './names.mjs';
 import { normalizeMedium } from './media.mjs';
 import { loadSuspects } from './curator_safety.mjs';
+import { loadExclusions } from './curator_exclude.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -175,6 +176,15 @@ for (const p of picked) {
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
 }
+// Owner 2026-11-18, after the list is cut (so no work the curator has not judged moves in): the curator's sure quality
+// exclusions, what is no picture (map, plan, banknote, ostracon, object) and the lesser of two same-picture works leave
+const curatorOut = loadExclusions(), gone = { quality: [], notAPicture: [], samePicture: [] };
+const kept1 = works.filter((w) => { if (curatorOut[w.id]) { gone.quality.push(w.id); return false; } if (isNotAPicture(tags[w.id].classes)) { gone.notAPicture.push(w.id); return false; } return true; });
+const samePic = samePictureDrops(JSON.parse(readFileSync(join(here, 'curator-pairs.json'), 'utf8')), kept1);
+gone.samePicture = [...samePic];
+works.splice(0, works.length, ...kept1.filter((w) => !samePic.has(w.id)));
+log(`left out by the curator rules: ${Object.entries(gone).map(([k, v]) => `${k} ${v.length}`).join(', ')}`);
+writeCache('left-out.json', gone);
 // a member of a famous series is as famous as the series (its own sitelinks when higher)
 let boosted = 0;
 for (const w of works) { const f = seriesFame.get(w.id); if (f && f > w.sl) { w.sl = f; boosted++; } }

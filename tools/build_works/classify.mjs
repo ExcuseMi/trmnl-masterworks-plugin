@@ -127,3 +127,12 @@ const NOT_2D = /petroglyph|rock (art|carving|engraving)|sculpt|relief|statue|ins
 export function is2dArtwork(classes) {
   return !classes.some((c) => NOT_2D.test(c));
 }
+
+// Owner 2026-11-18: no map, plan, diagram, banknote, ostracon or small object (lacquerware, a carving, a Fabergé egg) among the
+// works, old or new. A class label of the item says it (Wikidata instance of); a painting that merely hangs in a church stays.
+const NOT_A_PICTURE = /(^|\s)(maps?|plans?|diagrams?|banknotes?|ostracon|ostraca|lacquerware|carvings?|fabergé egg)$/i;
+
+/** True when one of the item's classes says it is a map, plan, diagram, banknote, ostracon or an object, not a picture. */
+export function isNotAPicture(classes) {
+  return classes.some((c) => NOT_A_PICTURE.test(c));
+}

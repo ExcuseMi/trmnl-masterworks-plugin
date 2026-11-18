@@ -23,7 +23,7 @@ var DATA_BASES = [
 var MIRROR_GRACE_MS = 400; // after the first valid answer, wait this long for a newer one from another mirror
 var BACKUP_TOP = 5; // the backup work is one of this many most famous candidates (likely cached at its thumbnail width)
 var FETCH_MS = 3500; // the run has 5 s in all
-var SHARDS = { landscape: 8, portrait: 6 }; // parts per orientation in data/ (a test compares this with the files)
+var SHARDS = { landscape: 12, portrait: 13 }; // parts per orientation in data/ (a test compares this with the files)
 var HISTORY = 50; // never one of the last HISTORY works shown
 // Weight of a work = fame ^ FAME_EXP x colour factor x dark factor x shape factor. Fame is the main factor.
 var FAME_EXP = 0.8; // fame = sitelink count; 0 = all alike, 1 = in proportion to fame
