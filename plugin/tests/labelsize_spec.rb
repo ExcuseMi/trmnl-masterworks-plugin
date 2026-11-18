@@ -49,7 +49,7 @@ RSpec.describe 'Masterworks label-only type sizes' do
   # the three sizes on the X and the OG are one Framework step smaller than before (owner decision 2026-11-18); the Frame is unchanged
   CLASSES = {
     'v2' => { 'day' => 'value--xlarge', 'title' => 'label--xxlarge', 'who' => 'label--xlarge' },
-    'og_png' => { 'day' => 'value--large', 'title' => 'label--large', 'who' => 'label' },
+    'og_png' => { 'day' => 'value--large', 'title' => 'label--large', 'who' => 'value--xsmall' },
     'frame' => { 'day' => 'value--mega', 'title' => 'value--large', 'who' => 'title--xxlarge' }
   }.freeze
 
@@ -59,6 +59,19 @@ RSpec.describe 'Masterworks label-only type sizes' do
       got = page.evaluate("(() => { const c = (s) => { const e = [...document.querySelectorAll('[data-block=\"primary\"] ' + s)].find(x => x.offsetParent); return e ? e.className : ''; }; return { day: c('[data-day]'), title: c('span[data-label]'), who: c('[data-who]') }; })()")
       want.each { |k, cls| expect(got[k].split).to include(cls), "#{k}: #{got[k]}" }
       expect(got['day'].split).not_to include('value--xxlarge') if device == 'v2'
+    end
+  end
+
+  # the OG draws every info and label line in Inter, never in TRMNL's bitmap label font (owner 2026-11-18: bold, wide tracking, "10: 30")
+  { 'date' => ON, 'label only' => OFF, 'date and weather' => { 'show_date' => 'true', 'show_weather' => 'true', 'weather_location' => 'Paris' } }.each do |name, fields|
+    [16.0 / 9, 1.0].each do |aspect|
+      it "og_png #{aspect.round(2)} #{name}: every line is set in Inter" do
+        page = render_ls('og_png', aspect, fields)
+        fams = page.evaluate("[...document.querySelectorAll('[data-block=\"primary\"] span')].filter(e => e.offsetParent && !e.classList.contains('hidden') && e.innerText.trim()).map(e => [e.innerText.trim(), getComputedStyle(e).fontFamily])")
+        expect(fams).not_to be_empty
+        bad = fams.reject { |_, f| f.include?('Inter') }
+        expect(bad).to eq([]), "lines not in Inter: #{bad.first(4)}"
+      end
     end
   end
 end

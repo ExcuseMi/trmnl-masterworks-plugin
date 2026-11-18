@@ -114,8 +114,8 @@ var FRAME_PROFILES = {
     cls: { num: 'value--mega', words: 'value value--large', temp: 'value value--large', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge' } },
   x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 30, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
     cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'label label--xxlarge', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge' } },
-  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 21, ev: 21, title: 21, small: 16, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
-    cls: { num: 'value--large', words: 'label label--large', temp: 'label label--large', ev: 'label label--large', title: 'label label--large', small: 'label' } },
+  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 21, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
+    cls: { num: 'value--large', words: 'label label--large', temp: 'label label--large', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall' } },
 };
 FRAME_PROFILES.fp = FRAME_PROFILES.f;
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
