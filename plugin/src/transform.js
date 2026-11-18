@@ -123,7 +123,6 @@ var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INF
 var INFO_MIN_SLOT_W = 380;
 var WEATHER_MS = 1800; // one request; the whole weather step has WEATHER_DEADLINE_MS, parallel to the data fetch (the run has 5 s)
 var WEATHER_DEADLINE_MS = 3200;
-var FAHRENHEIT_REGION = /[-_](US|LR|BS|BZ|KY|PW|FM|MH)$/i; // the account has a language, not a unit: these regions use Fahrenheit
 var VIEWS = { full: [1, 1], half_horizontal: [1, 0.5], half_vertical: [0.5, 1], quadrant: [0.5, 0.5] }; // slot size as a share of the screen
 
 /** MD5 as lowercase hex of a UTF-8 string, in plain JS: Commons paths are built from it and a sandbox may lack `crypto`. */
@@ -232,7 +231,7 @@ function settingsOf(input) {
     genres: genres, movement: movement, family_friendly: flag(c.family_friendly, true),
     show_date: flag(c.show_date, false), show_weather: flag(c.show_weather, false), show_agenda: flag(c.show_agenda, false), // the info strip's three parts, each off by default
     weather_location: String(c.weather_location === undefined || c.weather_location === null ? '' : c.weather_location).trim().slice(0, 80),
-    temperature_unit: unit === 'c' || unit === 'f' ? unit : 'auto',
+    temperature_unit: unit === 'f' ? 'f' : 'c', // anything but Fahrenheit (an old saved "auto", empty) is Celsius
   };
 }
 
@@ -506,7 +505,7 @@ function dayInfo(nowMs, locale, z) {
   };
 }
 
-var unitOf = function (set, locale) { return set.temperature_unit === 'f' || (set.temperature_unit === 'auto' && FAHRENHEIT_REGION.test(locale)) ? 'fahrenheit' : 'celsius'; };
+var unitOf = function (set) { return set.temperature_unit === 'f' ? 'fahrenheit' : 'celsius'; };
 
 /** "lat,lon" -> { lat, lon }, else null. */
 function latLon(text) {

@@ -75,15 +75,6 @@ footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
 <section class="opts" aria-label="Plugin settings">
   <h2>Plugin settings</h2>
   <div class="grid">
-    <fieldset><legend>Display</legend>
-      <label class="one"><input type="checkbox" id="label" checked> <span id="label-name">Museum label</span></label>
-      <label class="one"><input type="checkbox" id="show_date"> <span id="show_date-name">Show the date</span></label>
-      <label class="one"><input type="checkbox" id="show_weather"> <span id="show_weather-name">Show the weather</span></label>
-      <label class="one"><input type="checkbox" id="show_agenda"> <span id="show_agenda-name">Show the agenda</span></label>
-      <label class="one" id="fill-row"><input type="checkbox" id="fill" checked> <span id="fill-name">Fill the screen</span></label>
-      <label class="one" id="unit-row" hidden><span id="unit-name">Temperature unit</span> <select id="temperature_unit" aria-labelledby="unit-name"></select></label>
-      <p class="hint">Weather and agenda show sample data here (Paris, 8:00; two events), as there is no location or calendar link on this page.</p>
-    </fieldset>
     <fieldset><legend>Selection</legend>
       <label class="one"><input type="checkbox" id="family_friendly" checked> <span id="family-name">Family friendly</span></label>
     </fieldset>
@@ -91,10 +82,21 @@ footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
       <select id="movement" aria-labelledby="movement-name"></select>
     </fieldset>
   </div>
-  <fieldset style="margin-top:16px"><legend id="genres-name">Genres</legend>
+  <fieldset style="margin-top:16px;margin-bottom:16px"><legend id="genres-name">Genres</legend>
     <div class="checks" id="genres"></div>
     <p class="hint">Nothing ticked gives the default mix.</p>
   </fieldset>
+  <div class="grid">
+    <fieldset><legend>Display</legend>
+      <label class="one"><input type="checkbox" id="show_date"> <span id="show_date-name">Show the date</span></label>
+      <label class="one"><input type="checkbox" id="show_weather"> <span id="show_weather-name">Show the weather</span></label>
+      <label class="one"><input type="checkbox" id="show_agenda"> <span id="show_agenda-name">Show the agenda</span></label>
+      <label class="one"><input type="checkbox" id="label" checked> <span id="label-name">Museum label</span></label>
+      <label class="one" id="fill-row"><input type="checkbox" id="fill" checked> <span id="fill-name">Fill the screen</span></label>
+      <label class="one" id="unit-row" hidden><span id="unit-name">Temperature unit</span> <select id="temperature_unit" aria-labelledby="unit-name"></select></label>
+      <p class="hint">Weather and agenda show sample data here (Paris, 8:00; two events), as there is no location or calendar link on this page.</p>
+    </fieldset>
+  </div>
 </section>
 
 <footer>

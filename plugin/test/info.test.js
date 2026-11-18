@@ -73,13 +73,12 @@ test('day: number, weekday and month in the account language and zone', () => {
   assert.strictEqual(t.userLocale({}), 'en');
 });
 
-test('units: Fahrenheit for a US account language unless the setting says', () => {
-  const u = (set, loc) => t.unitOf({ temperature_unit: 'auto', ...set }, loc);
-  assert.strictEqual(u({}, 'en-US'), 'fahrenheit');
-  assert.strictEqual(u({}, 'en-GB'), 'celsius');
-  assert.strictEqual(u({}, 'en'), 'celsius');
-  assert.strictEqual(u({ temperature_unit: 'c' }, 'en-US'), 'celsius');
-  assert.strictEqual(u({ temperature_unit: 'f' }, 'nl'), 'fahrenheit');
+test('units: Celsius unless the setting is Fahrenheit; a saved "auto" or empty value is Celsius', () => {
+  assert.strictEqual(t.unitOf({ temperature_unit: 'f' }), 'fahrenheit');
+  assert.strictEqual(t.unitOf({ temperature_unit: 'c' }, 'en-US'), 'celsius');
+  assert.strictEqual(t.unitOf(t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: { temperature_unit: 'auto' } } } }), 'en-US'), 'celsius', 'a saved auto, US account');
+  assert.strictEqual(t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: { temperature_unit: '' } } } }).temperature_unit, 'c');
+  assert.strictEqual(t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: {} } } }).temperature_unit, 'c');
 });
 
 test('location: "lat,lon" is used as given, anything else is a place name', () => {
@@ -91,7 +90,7 @@ test('location: "lat,lon" is used as given, anything else is a place name', () =
 
 const FORECAST = { daily: { temperature_2m_max: [11.2], temperature_2m_min: [4.4] }, current: { time: '2026-11-17T08:00', temperature_2m: 7.6, weather_code: 3 }, hourly: { time: day(Array(24).fill(0)), weather_code: Array.from({ length: 24 }, (_, h) => (h === 11 ? 61 : 3)) } };
 const reply = (j) => async () => ({ ok: true, status: 200, json: async () => j });
-const SET = { weather_location: 'Paris', temperature_unit: 'auto' };
+const SET = { weather_location: 'Paris', temperature_unit: 'f' };
 
 test('fetchWeather: a place name is geocoded once, the forecast asked in the unit, the temperature rounded', async () => {
   const asked = [];

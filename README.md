@@ -56,7 +56,7 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |
 | Selection | Period | All | Ten movements, such as Renaissance, Baroque, Impressionism |
 | Info | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the info appears when any part has something to show; each one on hides Fill the screen |
-| Info | Weather location, Temperature unit | Empty, Auto | Appear only with Show the weather on. A place name or `lat, lon` (TRMNL does not share a location); Auto is Fahrenheit for a US account language |
+| Info | Weather location, Temperature unit | Empty, Celsius | Appear only with Show the weather on. A place name or `lat, lon` (TRMNL does not share a location); Celsius or Fahrenheit |
 | Info | Calendar (ICS link) | Empty | Appears only with Show the agenda on. A private ICS address; a secret: never shown, logged or put in the output |
 
 ## The info (date, weather, agenda)

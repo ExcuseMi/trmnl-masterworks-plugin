@@ -78,7 +78,7 @@ test('screen: portrait and landscape from the device, long side across for lands
 
 test('settings: label, genres (a multiple choice), period and family friendly; unknown values mean the default; Presentation, Fit and Skip portraits are gone', () => {
   const s = (c) => t.settingsOf({ trmnl: { plugin_settings: { custom_fields_values: c } } });
-  const D = { fill: true, label: true, genres: [], movement: '', family_friendly: true, show_date: false, show_weather: false, show_agenda: false, weather_location: '', temperature_unit: 'auto' };
+  const D = { fill: true, label: true, genres: [], movement: '', family_friendly: true, show_date: false, show_weather: false, show_agenda: false, weather_location: '', temperature_unit: 'c' };
   assert.deepStrictEqual(s({}), D);
   assert.deepStrictEqual(s({ label: 'false', movement: 'Baroque', genres: ['cities'], family_friendly: 'false' }),
     { ...D, label: false, genres: ['cities'], movement: 'Baroque', family_friendly: false });
