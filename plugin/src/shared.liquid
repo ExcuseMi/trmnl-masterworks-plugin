@@ -1,6 +1,12 @@
 {% comment %} Masterworks. No title bar. The "work" template draws one work; "main" draws the primary and, when there is one, a hidden backup (see main). Each work is drawn per view as "gallery" or "full" (geo[view].mode: the plugin's choice by how much a fill would crop). Gallery: the work on a pure white or black mat with no outline and a museum label (title, ARTIST and year, technique and where it hangs); full: the work fills the view with a small placard in its bottom-left corner. All text is Framework classes (title, label, size utilities, data-clamp) with the text colour on every element. The picture's width is the browser's choice (srcset and sizes): the renderer knows its viewport, the transform only the reported device. {% endcomment %}
 {% template work %}
 {% assign gv = geo[vname] %}
+{% comment %} A cropped work (art.crop, transform.js cropPlan: the curator found a scanner bed or a paper margin round the print). The picture's box is the print; inside it a nested layout is the window (a layout clips, and cqw and cqh inside it are percent of the box). The picture is an absolute image in a box of 100 + ew by 100 + eh percent, sized by empty flex boxes because one class holds 100 at most; the window centres it and the spacers before or after it push it by half their width. {% endcomment %}
+{% assign czk = 100 %}{% assign czo = "" %}{% assign czc = "" %}{% assign cza = "" %}
+{% if art.crop %}{% assign cz = art.crop %}{% assign czk = cz.kw %}{% assign cza = " absolute top--0 left--0" %}
+{% capture czo %}<div class="layout layout--row layout--center gap--none p--0 w--full h--full{% if gv.mode == "frame" and gv.info.layout == "band" %} absolute top--0 left--0{% endif %}" data-crop="1"><div class="flex flex--col gap--none shrink-0"><div class="w--full h--[{{ cz.t }}cqh] shrink-0"></div><div class="flex flex--row gap--none shrink-0"><div class="w--[{{ cz.l }}cqw] shrink-0"></div><div class="relative flex flex--row gap--none shrink-0" data-crop-picture="1"><div class="flex flex--col gap--none shrink-0"><div class="w--[100cqw] h--[100cqh] shrink-0"></div><div class="w--full h--[{{ cz.eh }}cqh] shrink-0"></div></div><div class="w--[{{ cz.ew }}cqw] shrink-0"></div>{% endcapture %}
+{% capture czc %}</div><div class="w--[{{ cz.r }}cqw] shrink-0"></div></div><div class="w--full h--[{{ cz.b }}cqh] shrink-0"></div></div></div>{% endcapture %}
+{% endif %}
 {% comment %} THE ONE PLACE that sizes text by screen. Known TRMNL bug: the Frame (2560 px, screen--frame) carries screen--md, not screen--lg, so lg: prefixes never apply to it and its Framework text is OG-sized on a 2560 px canvas. Until TRMNL fixes the class, a Frame (trmnl.device.model, or art.kind from the reported size) gets the largest Framework sizes; the X is lg and uses lg: prefixes. When the class is fixed, replace this branch with lg: prefixes and delete it. {% endcomment %}
 {% if art.kind == "big" or trmnl.device.model == "frame" %}
   {% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign dcls = "label--large" %}{% assign lpad = "pt--4" %}{% assign ppad = "px--6 py--4" %}
@@ -43,7 +49,7 @@
       <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-who="1" data-drop="6">{{ inf.who | escape }}</span>
       {% if inf.coll != blank %}<span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-museum="1" data-drop="{% if inrow %}4{% else %}0{% endif %}">{{ inf.coll | escape }}</span>{% endif %}
     {% if inrow %}</div>{% endif %}</div>{% endif %}{% endcapture %}
-{% capture img %}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{% if lay == "band" %} absolute top--0 left--0{% endif %} w--full h--full" alt="" />{% endcapture %}
+{% capture img %}{{ czo }}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw | times: czk | divided_by: 100 }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{{ cza }}{% if lay == "band" %}{% unless art.crop %} absolute top--0 left--0{% endunless %}{% endif %} w--full h--full" alt="" />{{ czc }}{% endcapture %}
 {% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink-0 {{ mat }}" data-picture="1" data-adj="1">{{ img }}</div>{% endcapture %}
 {% capture picture2 %}<div class="relative w--full h--[{{ inf.arth }}cqh] shrink-0 {{ mat }}" data-picture="1" data-adj="1">{{ img }}</div>{% endcapture %}
 {% capture mgap %}<div class="w--full h--[{{ inf.margin }}px] shrink-0"></div>{% endcapture %}
@@ -84,7 +90,7 @@
 {% comment %} fill on and info on: the work fills the band above the strip edge to edge, from the top of the screen; the strip is full width under it on the mat's colour, its text inside the margins {% endcomment %}
 <div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}"{% if art.kind == "big" or trmnl.device.model == "frame" %} data-frame="1"{% endif %}>
   <div class="relative w--full h--[{{ inf.band }}cqh]" data-fill-band="1">
-    <img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="100vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+    {{ czo }}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ czk }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block{{ cza }} w--full h--full" alt="" />{{ czc }}
   </div>
   <div class="flex flex--col flex--bottom flex--center-x w--full h--[{{ 100 | minus: inf.band }}cqh] {{ mat }}">
     <div class="w--[{{ inf.stripw }}cqw]" data-info-block="below">
@@ -96,7 +102,7 @@
 {% elsif gv.mode == "full" %}
 <div class="layout layout--center p--0{% if block == "backup" %} hidden{% endif %}" data-mode="full" data-block="{{ block }}">
   <div class="relative w--full h--full bg--white">
-    <img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="100vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block w--full h--full" alt="" />
+    {{ czo }}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ czk }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--{{ gv.fit }} image-dither block{{ cza }} w--full h--full" alt="" />{{ czc }}
   </div>
 </div>
 {% else %}
@@ -107,7 +113,7 @@
 {% capture bevel %}
     {% comment %} the picture in a whole-percent sized box on the mat: no outline, the mat alone frames the work (owner 2026-11-17); the picture covers its box {% endcomment %}
     <div class="relative {{ mat }} {% if inf or gl.col %}w--[{{ gl.a }}cqw]{% else %}w--full{% endif %} h--[{{ gl.b }}cqh]" data-bevel="1"{% if art.line %} data-keyline="1"{% endif %}>
-      <img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ gl.a }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
+      {{ czo }}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ gl.a | times: czk | divided_by: 100 }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{{ cza }} w--full h--full" alt="" />{{ czc }}
       {% if art.line %}
       <div class="absolute top--0 left--0 z--2 w--full h--[1px] {{ keyline }}" data-keyline-edge="1"></div>
       <div class="absolute bottom--0 left--0 z--2 w--full h--[1px] {{ keyline }}" data-keyline-edge="1"></div>

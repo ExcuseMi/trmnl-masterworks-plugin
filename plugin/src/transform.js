@@ -1032,6 +1032,34 @@ function labelColumn(art, sw, sh, key, g) {
   return { a: box.w, b: box.h, pw: Math.round(box.w * sw / 100), ph: Math.round(box.h * sh / 100), label: g.label, col: { w: colw, gap: FRAME_COL_GUTTER } };
 }
 
+// The curator's crop (work.x: [x, y, w, h] in 1/CROP_UNIT of the picture; build tool curator_crops.mjs): a scanner bed or a
+// pale paper margin round the print is not shown, so the work's box and the text beside it start at the print. The markup has
+// only whole-percent sizes (Framework classes, no styles): the picture is drawn (100 + e) % of its box wide and pushed by
+// whole-percent spacers, so each axis hides the margin and at most CROP_OVER more of the print's side.
+var CROP_UNIT = 10000;
+var CROP_MIN_SIDE = 0.5; // a box under half of a side is not a margin: the work is shown whole
+var CROP_SLIVER = 0.15; // % of the box: a strip of margin this thin may stay (under 1 px on the OG)
+/** One axis: before and after are the hidden shares of the picture, len the shown one. { e, a, z }: extra size, spacer before, spacer after (whole %). */
+function cropAxis(before, after, len) {
+  var hb = 100 * before / len, ha = 100 * after / len, e = Math.ceil(hb + ha - CROP_SLIVER), want = hb - ha, d;
+  if (e <= 0) return { e: 0, a: 0, z: 0 };
+  d = Math.round(want);
+  if (Math.abs(d - want) > e - (hb + ha) + CROP_SLIVER) e += 1; // the spacers move the picture by half a percent: one more percent hides the rest
+  d = Math.max(-e, Math.min(e, d));
+  return { e: e, a: d < 0 ? -d : 0, z: d > 0 ? d : 0 }; // hidden before: (e + z - a) / 2, after: (e + a - z) / 2
+}
+/** The crop of one work as the markup draws it, or null (no box, or a box out of bounds: the whole work). */
+function cropPlan(work) {
+  var c = work.x, i;
+  if (!c || c.length !== 4) return null;
+  for (i = 0; i < 4; i++) if (typeof c[i] !== 'number' || !isFinite(c[i]) || c[i] < 0) return null;
+  var x = c[0] / CROP_UNIT, y = c[1] / CROP_UNIT, w = c[2] / CROP_UNIT, h = c[3] / CROP_UNIT;
+  if (w < CROP_MIN_SIDE || h < CROP_MIN_SIDE || x + w > 1 + 1e-9 || y + h > 1 + 1e-9) return null;
+  var ax = cropAxis(x, Math.max(0, 1 - x - w), w), ay = cropAxis(y, Math.max(0, 1 - y - h), h);
+  if (!ax.e && !ay.e) return null;
+  return { ew: ax.e, eh: ay.e, l: ax.a, r: ax.z, t: ay.a, b: ay.z, kw: 100 + ax.e, kh: 100 + ay.e };
+}
+
 function artOf(work, shard, set, scr) {
   var art = {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
@@ -1039,6 +1067,8 @@ function artOf(work, shard, set, scr) {
     genre: genreOfWork(shard, work), medium: work.e === undefined || !shard.med ? '' : shard.med[work.e], size: work.z || null,
     mat: work.n ? 'black' : 'white', line: work.n ? work.lb === 1 : work.lw === 1, /* a fine keyline around the work on its mat only when the curator's flag for that mat (lw white, lb black) is 1 */ corner: work.q ? 'black' : 'white', kind: scr.frame ? 'big' : 'normal', lg: !scr.frame && Math.min(scr.w, scr.h) > 500, zoom: scr.frame ? 1 : Math.max(1, Math.max(scr.w, scr.h) / CSS_BASE_PX), w: work.w, h: work.h, link: 'https://www.wikidata.org/wiki/' + work.i,
   };
+  var crop = cropPlan(work), kw = crop ? crop.kw / 100 : 1, kh = crop ? crop.kh / 100 : 1;
+  if (crop) { art.crop = crop; art.w = work.w / kw; art.h = work.h / kh; } // the shown part is the work: every layout is planned on it
   var geo = {}, v;
   for (v in VIEWS) {
     var sw = Math.round(scr.w * VIEWS[v][0]), sh = Math.round(scr.h * VIEWS[v][1]);
@@ -1060,8 +1090,8 @@ function artOf(work, shard, set, scr) {
   }
   // the thumbnail is sized for the whole screen view (the slots need less)
   var fullInf = geo.full.info, bandFull = fullInf && fullInf.fill ? scr.h * fullInf.band / 100 : scr.h;
-  art.width = geo.full.mode === 'frame' ? thumbWidth(work.w, work.h, fullInf.bandPx[0], fullInf.bandPx[1], 'fill') : geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw, geo.full.gallery.ph, 'fill') :
-    thumbWidth(work.w, work.h, scr.w, bandFull, 'fill');
+  art.width = geo.full.mode === 'frame' ? thumbWidth(work.w, work.h, fullInf.bandPx[0] * kw, fullInf.bandPx[1] * kh, 'fill') : geo.full.mode === 'gallery' ? thumbWidth(work.w, work.h, geo.full.gallery.pw * kw, geo.full.gallery.ph * kh, 'fill') :
+    thumbWidth(work.w, work.h, scr.w * kw, bandFull * kh, 'fill'); // a cropped work is drawn larger than its box
   if (work.r && art.width > work.r) art.width = capStep(work.r); // a PNG-only work: its thumbnail is a PNG, many MB at the wide steps (the build measured and set r)
   art.url = thumbUrl(work.f, art.width);
   art.srcset = srcsetOf(work.f, work.w, work.r);
@@ -1130,6 +1160,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, labelColumn: labelColumn, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, cropPlan: cropPlan, cropAxis: cropAxis, artOf: artOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }

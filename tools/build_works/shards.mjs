@@ -4,7 +4,7 @@ import { GENRES } from './classify.mjs';
 export const LANDSCAPE_MIN_ASPECT = 0.9; // width / height; near-square works are in both shards
 export const PORTRAIT_MAX_ASPECT = 1.1;
 
-/** works: [{ id, title, artist, year, yearLabel, genre, reasons, coll, mov, medium, size, dm, dc, file, w, h, sl, score, dark }] -> one packed document. */
+/** works: [{ id, title, artist, year, yearLabel, genre, reasons, coll, mov, medium, size, dm, dc, file, w, h, sl, score, dark, crop }] -> one packed document. */
 export function pack(works, meta) {
   const col = [], mov = [], med = [];
   const idx = (table, v) => {
@@ -30,6 +30,7 @@ export function pack(works, meta) {
     const c = idx(col, x.coll), m = idx(mov, x.mov);
     if (c >= 0) o.c = c;
     if (m >= 0) o.m = m;
+    if (x.crop) o.x = x.crop; // the curator's crop [x, y, w, h] in 1/10000 of the picture: the plugin shows only this box (curator_crops.mjs)
     return o;
   });
   return { ...meta, n: w.length, gen: GENRES, col, mov, med, w };
