@@ -340,18 +340,23 @@ RSpec.describe 'Masterworks Frame layouts' do
           if visible
             expect(page).to have_css("#{P} [data-day]")
             expect(page).to have_css("#{P} [data-label]")
-            col = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')") != 'below' && page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')") != 'band'
+            fit = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit')")
+            col = fit != 'below' && fit != 'band'
             lay = box(page, P)
-            blk = box(page, block)
-            limit = col ? blk[3] : lay[3]
-            bad = page.evaluate(<<~JS)
-              [...document.querySelectorAll('#{block} span')].filter(e => e.offsetParent).filter((e) => {
-                const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
-                return r.bottom > #{limit} + 1 || r.right > #{col ? blk[2] : lay[2]} + 1 || cs.textOverflow === 'ellipsis' || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none') ||
-                  (!e.hasAttribute('data-day') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
-              }).map(e => e.innerText)
-            JS
-            expect(bad).to eq([]), 'nothing overflows or is cut'
+            # the split has two blocks (left: date, weather, events; right: the label): each is checked against its own box
+            page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map((_, i) => i)").each do |i|
+              sel = "#{P} [data-info-block]"
+              blk = page.evaluate("(() => { const r = document.querySelectorAll('#{sel}')[#{i}].getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })()")
+              limit = col ? blk[3] : lay[3]
+              bad = page.evaluate(<<~JS)
+                [...document.querySelectorAll('#{sel}')[#{i}].querySelectorAll('span')].filter(e => e.offsetParent).filter((e) => {
+                  const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+                  return r.bottom > #{limit} + 1 || r.right > #{col ? blk[2] : lay[2]} + 1 || cs.textOverflow === 'ellipsis' || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none') ||
+                    (!e.hasAttribute('data-day') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
+                }).map(e => e.innerText)
+              JS
+              expect(bad).to eq([]), 'nothing overflows or is cut'
+            end
             expect(single_axis(page, block, col)).to eq([]), "#{col ? 'one column' : 'one row'}"
           end
           expect(drop_order_violations(page)).to eq([]), 'dropped out of order'

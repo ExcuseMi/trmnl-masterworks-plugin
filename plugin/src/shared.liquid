@@ -408,7 +408,7 @@
         fits = !bad(blk, lay, kind);
       }
       strict = false;
-      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); continue; }
+      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind === 'splitL' || kind === 'splitR') [].forEach.call(lay.querySelectorAll('[data-info-block]'), mark); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
       align(blk, lay);
       if (kind === 'below') grow(blk, lay, wide);
       if (kind === 'column') column(blk, lay);

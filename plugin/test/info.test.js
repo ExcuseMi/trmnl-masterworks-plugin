@@ -302,7 +302,12 @@ const framePlan = (aspect, set = FRAME_SET) => t.framePlan({ w: Math.round(aspec
 
 test('Frame: a band for 16:9 and wider, the column layout for every other shape', () => {
   for (const a of [2.5, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`);
-  for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`);
+  for (const a of [1.5, 4 / 3, 1]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`);
+  for (const a of [3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'split', `${a}`); // tall: the split costs no image size
+});
+
+test('Frame split: not on the X or the OG', () => {
+  for (const key of ['x', 'o']) for (const a of [1, 3 / 4, 0.4]) assert.notStrictEqual(t.framePlan({ w: Math.round(a * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 1872, 1404, FRAME_SET, key).layout, 'split', `${key} ${a}`);
 });
 
 test('Frame band: equal margins on three sides, the strip as wide as the band, no columns or rules in the plan (one row)', () => {
