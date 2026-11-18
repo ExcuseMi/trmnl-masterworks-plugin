@@ -15,85 +15,58 @@
   {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
 {% if gv.mode == "frame" %}
-{% comment %} Frame, X and OG with info on (layouts and sizes in transform.js: FRAME_ constants, FRAME_PROFILES). Band: the work covers a band (or, in portrait, hangs whole centred in it), the strip under it in the band's width; the columns have a rule on top and wrap into rows when narrow. Column (landscape): the whole work on the mat, the info column directly to its right, the painting's label at the column's bottom on the work's bottom edge; work and column are one group centred on the screen. The events are bold, the painting's label is regular weight. {% endcomment %}
-{% if art.mat == "black" %}{% assign rule = "border--h-white dark:border--h-black" %}{% else %}{% assign rule = "border--h-black dark:border--h-white" %}{% endif %}
+{% comment %} Frame, X and OG with info on (layouts in transform.js, FRAME_ constants and FRAME_PROFILES): band (a wide work covers a band, the row under it), below (the whole work, the row under it in its width), column (the whole work, the column on its right, the label at the bottom on the work's bottom edge), stack (portrait screen, wide work: the work in the full width, the column under it). One row or one column, no rules; three sizes (the day number, primary and secondary lines), the events bold, the painting's title regular weight. The fit script in main measures, drops, aligns the baselines and grows the work. {% endcomment %}
 {% assign c = inf.cls %}
-{% if inf.layout == "band" %}{% assign cw = "w--[" | append: inf.colw | append: "cqw] shrink--0" %}{% else %}{% assign cw = "w--full shrink--0" %}{% endif %}
-{% capture sep %}{% if inf.layout == "band" %}<div class="w--full h--[{{ inf.rowgap }}px] shrink--0"></div>{% else %}<div class="w--full h--[{{ inf.sepv }}px] shrink--0"></div>{% endif %}{% endcapture %}
-{% capture gapx %}<div class="w--[{{ inf.gap }}cqw] shrink--0"></div>{% endcapture %}
-{% capture d_p %}{% if info.has_date %}
-    {% if inf.layout == "band" and inf.datein > 0 %}<div class="flex flex--row flex--left flex--top w--[{{ inf.datein }}cqw] shrink--0" data-info="date">{% else %}<div class="flex flex--row flex--left flex--top w--full" data-info="date">{% endif %}
-      <span class="value {{ inf.numcls }} text--bold {{ ink }} value--tnums" data-day="1">{{ info.day }}</span>
-      <div class="w--[28px] shrink--0"></div>
-      <div class="flex flex--col flex--left gap--none">
-        <div class="w--full h--[{{ inf.wdrop }}px]"></div>
-        <span class="{{ c.words }} {{ ink }}" data-weekday="1">{{ info.weekday | escape }}</span>
-        <span class="{{ c.words }} {{ ink }}" data-month="1">{{ info.month | escape }}</span>
+{% assign lay = inf.layout %}
+{% assign inrow = false %}{% if lay == "band" or lay == "below" %}{% assign inrow = true %}{% endif %}
+{% if inrow %}{% assign cell = "flex flex--col flex--left gap--none shrink-0" %}{% assign lcell = "flex flex--col flex--left gap--none grow basis--0" %}{% else %}{% assign cell = "flex flex--col flex--left gap--none w--full shrink-0" %}{% assign lcell = cell %}{% endif %}
+{% capture lift %}<div class="w--full h--[0px] shrink-0" data-lift="1" data-adj="1"></div>{% endcapture %}
+{% capture gap %}{% if inrow %}<div class="w--[{{ inf.gappx }}px] shrink-0" data-gap="1"></div>{% else %}<div class="w--full h--[{{ inf.sepv }}px] shrink-0" data-gap="1"></div>{% endif %}{% endcapture %}
+{% capture d_p %}{% if info.has_date %}<div class="flex flex--row flex--left flex--top gap--none shrink-0" data-info="date" data-cell="date">
+      <div class="flex flex--col flex--left gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-lift="num" data-adj="1"></div><span class="value {{ c.num }} {{ ink }} value--tnums text--bold block shrink-0" data-day="1">{{ info.day }}</span></div>
+      <div class="w--[{{ inf.numgap }}px] shrink-0"></div>
+      <div class="flex flex--col flex--left gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-lift="words" data-adj="1"></div>
+        <span class="{{ c.words }} {{ ink }} block shrink-0" data-weekday="1">{{ info.weekday | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift="mid" data-adj="1"></div>
+        <span class="{{ c.words }} {{ ink }} block shrink-0" data-month="1">{{ info.month | escape }}</span>
       </div>
-    </div>
-{% endif %}{% endcapture %}
-{% capture rule_p %}{% if inf.layout == "band" %}<div class="w--full h--[{{ inf.drop }}px]"></div><div class="w--full h--[1px] {{ rule }}" data-rule="1"></div>{% endif %}{% endcapture %}
-{% capture tail_p %}{% if inf.layout != "band" %}<div class="w--full h--[{{ inf.sepv }}px] shrink--0"></div>{% endif %}{% endcapture %}
-{% capture w_p %}{% if info.has_weather %}
-    <div class="flex flex--col flex--left gap--none {{ cw }}" data-info="weather" data-col="1">
-      {{ rule_p }}
-      <div class="w--full h--[{{ inf.lead }}px]"></div>
-      <span class="{{ c.temp }} {{ ink }} block text--left" data-temp="1">{{ info.temp | escape }}</span>
-      {% unless inf.noForecast %}<span class="{{ c.small }} {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-weather="1">{{ info.weather | escape }}</span>{% endunless %}
-    </div>
-{{ tail_p }}{% endif %}{% endcapture %}
-{% capture ev0_p %}{% if info.has_agenda and inf.events > 0 and info.agenda.items.size > 0 %}{% assign ev = info.agenda.items[0] %}{% render "event", ev:ev, inf:inf, c:c, ink:ink, cw:cw, rule_p:rule_p, tail_p:tail_p, agenda_day:info.agenda.day %}{% endif %}{% endcapture %}
-{% capture ev1_p %}{% if info.has_agenda and inf.events > 1 and info.agenda.items.size > 1 %}{% assign ev = info.agenda.items[1] %}{% render "event", ev:ev, inf:inf, c:c, ink:ink, cw:cw, rule_p:rule_p, tail_p:tail_p, agenda_day:info.agenda.day %}{% endif %}{% endcapture %}
-{% capture e_p %}{{ ev0_p }}{{ ev1_p }}{% endcapture %}
-{% capture l_p %}{% if inf.label %}
-    <div class="flex flex--col flex--left gap--none {{ cw }}" data-col="1" data-slot="label">
-      {{ rule_p }}
-      <div class="w--full h--[{{ inf.lead }}px]"></div>
-      <span class="{{ c.med }} {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-label="1">{{ art.title | escape }}</span>
-      <span class="{{ c.small }} {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-who="1">{{ inf.who | escape }}</span>
-      {% if inf.coll != blank %}<span class="{{ c.small }} {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-museum="1">{{ inf.coll | escape }}</span>{% endif %}
-    </div>
-{% endif %}{% endcapture %}
-{% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink--0 {{ mat }}" data-picture="1">
-    <img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block w--full h--full" alt="" />
-  </div>{% endcapture %}
-{% capture strip_p %}
-    {% if inf.datein == 0 %}{{ d_p }}{% if info.has_date %}<div class="w--full h--[{{ inf.sepv }}px] shrink--0"></div>{% endif %}{% endif %}
-    {% for row in inf.rows %}
-    {% unless forloop.first %}<div class="w--full h--[{{ inf.rowgap }}px] shrink--0"></div>{% endunless %}
-    <div class="flex flex--row flex--left flex--top w--full" data-row="1">
-      {% if forloop.first and inf.datein > 0 %}{{ d_p }}{{ gapx }}{% endif %}
-      {% for cell in row %}
-      {% unless forloop.first %}{{ gapx }}{% endunless %}
-      {% case cell %}{% when "w" %}{{ w_p }}{% when "e0" %}{{ ev0_p }}{% when "e1" %}{{ ev1_p }}{% when "l" %}{{ l_p }}{% endcase %}
-      {% endfor %}
-    </div>
-    {% endfor %}
-    {% if inf.rows.size == 0 and inf.datein > 0 %}<div class="flex flex--row flex--left flex--top w--full">{{ d_p }}</div>{% endif %}
-{% endcapture %}
-{% if inf.layout == "band" and inf.portrait %}
-<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
-  <div class="flex flex--col flex--center-x gap--none w--full">
-    {{ picture }}
-    <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
-    <div class="w--[{{ inf.bandw }}cqw]" data-info-block="below">{{ strip_p }}</div>
+    </div>{{ gap }}{% endif %}{% endcapture %}
+{% capture w_p %}{% if info.has_weather %}<div class="{{ cell }}" data-info="weather" data-cell="w" data-drop="{% if inrow %}3{% else %}5{% endif %}">{{ lift }}
+      <span class="{{ c.temp }} {{ ink }} block text--left shrink-0" data-temp="1">{{ info.temp | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
+      <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-weather="1"{% unless inrow %} data-drop="3"{% endunless %}>{{ info.weather | escape }}</span>
+    </div>{{ gap }}{% endif %}{% endcapture %}
+{% capture e_p %}{% if info.has_agenda %}{% for ev in info.agenda.items limit: inf.events %}<div class="{{ cell }}" data-info="agenda" data-event="1" data-cell="e" data-agenda="{{ info.agenda.day }}" data-drop="{% if forloop.first %}2{% else %}1{% endif %}">{{ lift }}
+      <span class="{{ c.ev }} text--bold {{ ink }} block text--left shrink-0" data-event-title="1">{{ ev.title | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
+      <span class="{{ c.small }} {{ ink }} block text--left value--tnums shrink-0" data-event-time="1">{{ ev.time | escape }}{% if ev.loc != blank %} · {{ ev.loc | escape }}{% endif %}</span>
+    </div>{{ gap }}{% endfor %}{% endif %}{% endcapture %}
+{% capture l_p %}{% if inf.label %}<div class="{{ lcell }}" data-cell="l" data-slot="label">{{ lift }}
+      <span class="{{ c.title }} {{ ink }} block text--left shrink-0" data-label="1">{{ art.title | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
+      <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-who="1" data-drop="6">{{ inf.who | escape }}</span>
+      {% if inf.coll != blank %}<span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-museum="1" data-drop="{% if inrow %}4{% else %}0{% endif %}">{{ inf.coll | escape }}</span>{% endif %}
+    </div>{% endif %}{% endcapture %}
+{% capture img %}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{% if lay == "band" %} absolute top--0 left--0{% endif %} w--full h--full" alt="" />{% endcapture %}
+{% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink-0 {{ mat }}" data-picture="1" data-adj="1">{{ img }}</div>{% endcapture %}
+{% capture mgap %}<div class="w--full h--[{{ inf.margin }}px] shrink-0"></div>{% endcapture %}
+{% capture attrs %}data-mode="frame" data-layout="{{ lay }}" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}" data-m="{{ inf.margin }}" data-aspect="{{ inf.aspect }}" data-bandw="{{ inf.bandw }}"{% endcapture %}
+{% if inrow %}
+<div class="layout layout--col layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
+  {% if lay == "band" %}{{ mgap }}<div class="relative grow basis--0 w--[{{ inf.bandw }}cqw] {{ mat }}" data-picture="1" data-band="1">{{ img }}</div>{% else %}{{ picture }}{% endif %}
+  {{ mgap }}
+  <div class="w--[{% if lay == "band" %}{{ inf.bandw }}{% else %}{{ inf.rowpct }}{% endif %}cqw] shrink-0" data-info-block="below" data-fit="{{ lay }}" data-adj="1">
+    <div class="flex flex--row flex--left flex--top gap--none w--full" data-row="1">{{ d_p }}{{ w_p }}{{ e_p }}{{ l_p }}</div>
   </div>
+  {% if lay == "band" %}{{ mgap }}{% endif %}
 </div>
-{% elsif inf.layout == "band" %}
-<div class="layout layout--col gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="band" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
-  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
-  <div class="flex flex--row flex--center flex--center-y w--[{{ inf.bandw }}cqw] h--[{{ inf.band }}cqh] shrink--0 {{ mat }}" data-band="1">{{ picture }}</div>
-  <div class="w--full h--[{{ inf.margin }}px] shrink--0"></div>
-  <div class="w--[{{ inf.bandw }}cqw] grow" data-info-block="below">{{ strip_p }}</div>
+{% elsif lay == "stack" %}
+<div class="layout layout--col layout--top gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
+  {{ mgap }}{{ picture }}{{ mgap }}
+  <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.artw }}cqw] shrink-0" data-info-block="column" data-fit="stack">{{ d_p }}{{ w_p }}{{ e_p }}<div class="w--full h--[0px] shrink-0" data-labelgap="1" data-adj="1"></div>{{ l_p }}</div>
 </div>
 {% else %}
-<div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" data-mode="frame" data-layout="column" data-block="{{ block }}" data-frame="1" data-profile="{{ inf.tier }}">
-  {{ picture }}
-  <div class="w--[{{ inf.gap }}cqw] shrink--0"></div>
-  <div class="flex flex--col flex--top w--[{{ inf.infow }}cqw] h--[{{ inf.arth }}cqh] shrink--0" data-info-block="column">
-    {{ d_p }}{% if info.has_date %}{{ sep }}{% endif %}{{ w_p }}{{ e_p }}
-    <div class="w--full grow"></div>
-    {{ l_p }}
+<div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
+  <div class="flex gap--none" data-group="1">
+    <div class="flex flex--col flex--left gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-padtop="1" data-adj="1"></div>{{ picture }}<div class="w--full h--[0px] shrink-0" data-padbot="1" data-adj="1"></div></div>
+    <div class="w--[{{ inf.gap }}cqw] shrink-0"></div>
+    <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.infow }}cqw] shrink-0" data-info-block="column" data-fit="column" data-adj="1">{{ d_p }}{{ w_p }}{{ e_p }}<div class="w--full grow" data-labelgap="1"></div>{{ l_p }}</div>
   </div>
 </div>
 {% endif %}
@@ -242,24 +215,164 @@
 {% endif %}
 {% endtemplate %}
 
-{% template event %}
-<div class="flex flex--col flex--left gap--none {{ cw }}" data-info="agenda" data-event="1" data-col="1" data-agenda="{{ agenda_day }}">
-  {{ rule_p }}
-  <div class="w--full h--[{{ inf.lead }}px]"></div>
-  <span class="{{ c.small }} {{ ink }} block text--left value--tnums" data-clamp="1" data-clamp-lg="2" data-event-time="1">{{ ev.time | escape }}</span>
-  <span class="{{ c.med }} text--bold {{ ink }} block text--left" data-clamp="2" data-clamp-lg="2" data-event-title="1">{{ ev.title | escape }}</span>
-  {% if ev.loc != blank %}<span class="{{ c.small }} {{ ink }} block text--left" data-clamp="1" data-clamp-lg="2" data-event-place="1">{{ ev.loc | escape }}</span>{% endif %}
-</div>
-{{ tail_p }}
-{% endtemplate %}
-
 {% template main %}
 {% if art.url %}
 {% comment %} The primary block is shown; when its picture fails to load, its onerror hides it and shows the backup block (a second, famous work with its own label, look and mat). If the backup's picture fails too, its mat and label stay: the clean fallback. The swap uses Framework classes only (hidden); no style=. {% endcomment %}
 {% assign swap = "" %}
-{% if backup.art.url %}{% assign swap = "var v=this.closest('.view')||document,b=v.querySelector('[data-block=backup]'),p=v.querySelector('[data-block=primary]');if(b&&p){var i=b.querySelector('img[data-src]');if(i){i.srcset=i.dataset.srcset||'';i.src=i.dataset.src;}p.classList.add('hidden');b.classList.remove('hidden');}" %}{% endif %}
+{% if backup.art.url %}{% assign swap = "var v=this.closest('.view')||document,b=v.querySelector('[data-block=backup]'),p=v.querySelector('[data-block=primary]');if(b&&p){var i=b.querySelector('img[data-src]');if(i){i.srcset=i.dataset.srcset||'';i.src=i.dataset.src;}p.classList.add('hidden');b.classList.remove('hidden');window.mwFit&&window.mwFit();}" %}{% endif %}
 {% render "work", trmnl:trmnl, art:art, geo:geo, info:info, vname:vname, block:"primary", swap:swap %}
 {% if backup.art.url %}{% render "work", trmnl:trmnl, art:backup.art, geo:backup.geo, info:info, vname:vname, block:"backup", swap:"" %}{% endif %}
+{% comment %} FIT_ORDER. The info block of the Frame, X and OG layouts is fitted by measuring at the device's fixed type sizes: while it does not fit, the next element in data-drop order is hidden (Framework class hidden): 1 the second event, 2 the first, 3 the forecast line, 4 the museum line, 5 the weather, 6 the artist line (in a row the weather goes whole at 3: no temperature without its forecast; in a column the museum line goes first). Does not fit: a text wider than its box or on more lines than allowed (label title 2, artist line 1, museum 2, event title 1 in a row and 2 in a column, all others 1), a row wider than its box or a label under 40 % of the row, a block out of the screen's margins, a column whose label has less than two title lines of space above it. The day number and the label title are never dropped; if even they do not fit, the whole block is hidden and the art stands alone. Nothing is shrunk or cut with an ellipsis. Then: every first line of a row on the weekday's baseline, the column's ink level with the work's top and bottom, the column as wide as its text, a whole work grown into the height the row leaves. {% endcomment %}
+<script>
+(function () {
+  var ASC = 0.96875, DESC = 0.2412, CAP = 0.727; // Inter's ascent, descent and cap height (em)
+  var S = 1; // screen px per CSS px (the X's screen is scaled)
+  function cs(e) { return getComputedStyle(e); }
+  var CV = document.createElement('canvas').getContext('2d');
+  // a span's first line from the loaded font's own metrics (canvas): line height, baseline and the top of its first glyph, screen px from the span's top
+  function met(e) { var st = cs(e), fs = parseFloat(st.fontSize), lh = parseFloat(st.lineHeight), t = (e.textContent || '').trim(), A = ASC * fs, D = DESC * fs, top = CAP * fs, m;
+    if (CV) { CV.font = st.fontStyle + ' ' + st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily; m = CV.measureText(t.charAt(0) || 'H'); if (m.fontBoundingBoxAscent) { A = m.fontBoundingBoxAscent; D = m.fontBoundingBoxDescent; } if (m.actualBoundingBoxAscent) top = m.actualBoundingBoxAscent; }
+    if (!(lh > 0)) lh = A + D; var hl = (lh - A - D) / 2; return { lh: lh * S, base: (hl + A) * S, cap: (hl + A - top) * S }; }
+  function rect(e) { return e.getBoundingClientRect(); }
+  function vis(e) { return !!e.offsetParent && !e.classList.contains('hidden'); }
+  function baseY(e) { return rect(e).top + met(e).base; }
+  function textBox(e) { var r = document.createRange(), rs, i, l = 1e9, rt = -1e9, tops = []; r.selectNodeContents(e); rs = r.getClientRects();
+    for (i = 0; i < rs.length; i++) { if (rs[i].width < 1) continue; l = Math.min(l, rs[i].left); rt = Math.max(rt, rs[i].right); if (tops.every(function (t) { return Math.abs(t - rs[i].top) > 2; })) tops.push(rs[i].top); }
+    return { w: rt > l ? rt - l : 0, lines: tops.length || 1 }; }
+  function setCls(e, re, c) { var k = e.className.split(' ').filter(function (x) { return x && !re.test(x); }); k.push(c); e.className = k.join(' '); }
+  function setH(e, v, lay) { v = Math.max(0, Math.round(v / S)); setCls(e, /^h--\[/, v <= 128 ? 'h--[' + v + 'px]' : 'h--[' + Math.round(v * S / rect(lay).height * 100) + 'cqh]'); }
+  function mark(e) { e.classList.add('hidden'); e.setAttribute('data-fitted', '1'); }
+  function kids(blk) { var row = blk.querySelector('[data-row]'); return [].slice.call((row || blk).children); }
+  // a gap shows only between two cells that are shown
+  function gaps(blk) { var pend = null, seen = false;
+    kids(blk).forEach(function (k) {
+      if (k.hasAttribute('data-gap')) { if (!k.classList.contains('hidden')) mark(k); if (seen && !pend) pend = k; }
+      else if (k.hasAttribute('data-labelgap')) { pend = null; seen = false; }
+      else if (!k.classList.contains('hidden')) { if (pend) { pend.classList.remove('hidden'); pend.removeAttribute('data-fitted'); pend = null; } seen = true; }
+    }); }
+  function no(r) { (window.mwLog = window.mwLog || []).push(r); return true; }
+  var culprit = null; // a text too wide for its column: in a column, dropping other parts gives it no width, so it (or its part) goes first
+  var strict = false; // a row first tries the painting's title on one line (then all second lines share one baseline), else allows two
+  function bad(blk, lay, kind) {
+    culprit = null;
+    var lb = rect(lay), bb = rect(blk), m = (+lay.getAttribute('data-m') || 0) * S, row = blk.querySelector('[data-row]'), s = blk.querySelectorAll('span'), i, r, n, max, lab, last = null;
+    for (i = 0; i < s.length; i++) {
+      if (!vis(s[i])) continue;
+      r = rect(s[i]); last = s[i];
+      if (r.right > lb.right + 1 || r.bottom > lb.bottom + 1 || r.left < lb.left - 1) return no(1);
+      if (s[i].hasAttribute('data-day')) continue;
+      n = textBox(s[i]).lines;
+      max = s[i].hasAttribute('data-label') ? (row && strict ? 1 : 2) : s[i].hasAttribute('data-museum') ? 2 : (s[i].hasAttribute('data-event-title') || s[i].hasAttribute('data-who')) && !row ? 2 : 1;
+      if (n > max || (s[i].clientWidth && s[i].scrollWidth > s[i].clientWidth + 1)) { culprit = s[i]; return no(2); }
+    }
+    if (row) {
+      var cells = [].filter.call(row.children, function (k) { return k.hasAttribute('data-cell') && vis(k); }), rr = rect(row);
+      if (cells.length && rect(cells[cells.length - 1]).right > rr.right + 1) return no(4);
+      lab = row.querySelector('[data-cell="l"]');
+      if (lab && vis(lab) && cells.length > 1 && rect(lab).width < 0.4 * rr.width) return no(5);
+      if (kind === 'below' ? lb.height - 3 * m - bb.height < 0.45 * lb.height : bb.bottom > lb.bottom - m + 1) return no(6);
+      var band = lay.querySelector('[data-band]');
+      if (band && rect(band).height < 0.45 * lb.height) return no(7);
+    } else if (kind === 'stack') {
+      if (bb.bottom > lb.bottom - m + 1) return no(8);
+    } else {
+      var pic = lay.querySelector('[data-picture]'), lg = blk.querySelector('[data-labelgap]'), t = blk.querySelector('[data-label]');
+      if (last && rect(last).bottom > rect(pic).bottom + 1) return no(9);
+      if (t && rect(lg).height < 2 * met(t).lh) return no(10);
+    }
+    return false;
+  }
+  // the day number's baseline on the month's; then every row cell's first line on the weekday's baseline
+  function firstVis(k) { return [].filter.call(k.querySelectorAll('span'), vis)[0] || null; }
+  // the date: the number's top on the weekday's cap top, its baseline on the month's (a spacer between weekday and month); a row: every
+  // first line on the weekday's baseline, every second line on the month's (the museum line and an event's place hang below)
+  function align(blk, lay) {
+    var d = blk.querySelector('[data-cell="date"]'), row = blk.querySelector('[data-row]'), wk = null, mo = null, cells, T, N, dd;
+    var o = row || d || blk, topOf = function (e) { return rect(e).top + met(e).cap - rect(o).top; }, by = function (e) { return baseY(e) - rect(o).top; }; // relative to the row: a taller row moves up (the band takes the rest)
+    if (d && vis(d)) {
+      var num = d.querySelector('[data-day]'); wk = d.querySelector('[data-weekday]'); mo = d.querySelector('[data-month]');
+      var x = topOf(num) - topOf(wk);
+      setH(d.querySelector('[data-lift="' + (x > 0 ? 'words' : 'num') + '"]'), Math.abs(x), lay);
+      setH(d.querySelector('[data-lift="mid"]'), by(num) - by(mo), lay);
+    }
+    if (!row) return;
+    cells = [].filter.call(row.children, function (k) { return k.hasAttribute('data-cell') && k.getAttribute('data-cell') !== 'date' && vis(k); });
+    var bs = cells.map(function (k) { var sp = firstVis(k); return sp ? by(sp) : null; });
+    T = Math.max.apply(null, [wk ? by(wk) : -1e9].concat(bs.filter(function (b) { return b !== null; })));
+    cells.forEach(function (k, i) { if (bs[i] !== null) setH(k.querySelector('[data-lift="1"]'), T - bs[i], lay); });
+    if (wk && T > by(wk) + 0.5) { dd = T - by(wk); ['num', 'words'].forEach(function (n) { var l = d.querySelector('[data-lift="' + n + '"]'); setH(l, rect(l).height + dd, lay); }); }
+    if (!mo) return;
+    N = by(mo);
+    cells.forEach(function (k) {
+      var sp = [].filter.call(k.querySelectorAll('span'), vis), l2 = k.querySelector('[data-lift2]');
+      if (sp.length < 2 || !l2 || textBox(sp[0]).lines > 1) return;
+      setH(l2, N - by(sp[1]), lay);
+    });
+  }
+  // a whole work grows into the height the row leaves (whole-percent box nearest its shape); the row takes the work's width
+  function grow(blk, lay, wide) {
+    var pic = lay.querySelector('[data-picture][data-adj]'), lb = rect(lay), m = (+lay.getAttribute('data-m') || 0) * S, asp = +lay.getAttribute('data-aspect'), bw = +lay.getAttribute('data-bandw') || 96;
+    var avail = lb.height - (vis(blk) ? 3 * m + rect(blk).height : 2 * m), h, w, best = null;
+    for (h = Math.floor(avail / lb.height * 100); h >= 10 && !best; h--) {
+      w = Math.round(h * lb.height * asp / lb.width);
+      [w, w - 1, w + 1].forEach(function (x) { if (!best && x <= bw && Math.abs(Math.log(x * lb.width / (h * lb.height) / asp)) <= 0.012) best = [x, h]; });
+    }
+    if (!best || best[1] * best[0] <= rect(pic).width * rect(pic).height / lb.width / lb.height * 10000) return;
+    setCls(pic, /^w--\[/, 'w--[' + best[0] + 'cqw]'); setCls(pic, /^h--\[/, 'h--[' + best[1] + 'cqh]');
+    var cur = Math.round(rect(blk).width / lb.width * 100); // the row was fitted at cur: it may widen to the work's edges, never narrow
+    if (!wide && best[0] > cur) setCls(blk, /^w--\[/, 'w--[' + best[0] + 'cqw]');
+  }
+  // the column: its ink level with the work's top and bottom, its width the width of its text (the group stays centred)
+  function column(blk, lay) {
+    var pic = lay.querySelector('[data-picture]'), sp = [].filter.call(blk.querySelectorAll('span'), vis), top = 1e9, w = 0, br = rect(blk);
+    sp.forEach(function (e) { var r = rect(e), mt = met(e); if (!e.closest('[data-cell="date"]') || e.hasAttribute('data-day') || e.hasAttribute('data-weekday')) top = Math.min(top, r.top + mt.cap); w = Math.max(w, e.hasAttribute('data-day') || e.closest('[data-cell="date"]') ? 0 : textBox(e).w); });
+    var d = blk.querySelector('[data-cell="date"]'); if (d && vis(d)) w = Math.max(w, rect(d).width);
+    var last = sp[sp.length - 1];
+    setH(lay.querySelector('[data-padtop]'), Math.max(0, top - br.top), lay);
+    if (last) setH(lay.querySelector('[data-padbot]'), met(last).lh - met(last).base, lay);
+    setCls(blk, /^w--\[/, 'w--[' + Math.min(Math.ceil(w / rect(lay).width * 100), Math.round(br.width / rect(lay).width * 100)) + 'cqw]');
+  }
+  function fit() {
+    if (document.fonts && document.fonts.status && document.fonts.status !== 'loaded') return; // before the fonts are in, every text is the wrong size
+    var blocks = document.querySelectorAll('[data-info-block][data-fit]'), k, items, i, blk, lay, kind, was = document.querySelectorAll('[data-fitted]'), adj = document.querySelectorAll('[data-adj]');
+    window.mwLog = [];
+    for (i = 0; i < was.length; i++) { was[i].classList.remove('hidden'); was[i].removeAttribute('data-fitted'); } // measured again from the full block
+    for (i = 0; i < adj.length; i++) { if (adj[i].hasAttribute('data-c0')) adj[i].className = adj[i].getAttribute('data-c0'); else adj[i].setAttribute('data-c0', adj[i].className); }
+    for (k = 0; k < blocks.length; k++) {
+      blk = blocks[k]; lay = blk.closest('[data-block]'); kind = blk.getAttribute('data-fit');
+      if (!lay || !lay.offsetParent) continue;
+      S = rect(lay).width / (lay.offsetWidth || 1) || 1;
+      if (kind === 'below') { var pc = lay.querySelector('[data-picture][data-adj]'); setCls(pc, /^h--\[/, 'h--[10cqh]'); setCls(pc, /^w--\[/, 'w--[10cqw]'); }
+      if (kind === 'stack') { var t = blk.querySelector('[data-label]'); if (t) setH(blk.querySelector('[data-labelgap]'), 2 * met(t).lh, lay); }
+      // passes: the title on one line, then on two; a row under a whole work that is too narrow for it tries the full width as well
+      var pass, fits = false, rowp = blk.querySelector('[data-row]'), wide = false;
+      for (pass = rowp ? 0 : 1; pass < (kind === 'below' ? 4 : 2) && !fits; pass++) {
+        strict = pass % 2 === 0;
+        if (pass === 2) { wide = true; setCls(blk, /^w--\[/, 'w--[' + (+lay.getAttribute('data-bandw') || 96) + 'cqw]'); }
+        [].forEach.call(blk.querySelectorAll('[data-fitted]'), function (e) { e.classList.remove('hidden'); e.removeAttribute('data-fitted'); });
+        gaps(blk);
+        items = [].slice.call(blk.querySelectorAll('[data-drop]')).filter(function (e) { return !strict || !/^[46]$/.test(e.getAttribute('data-drop')); }).sort(function (a, b) { return a.getAttribute('data-drop') - b.getAttribute('data-drop'); });
+        for (i = 0; i < items.length + 6 && bad(blk, lay, kind); i++) {
+          var own = culprit && !blk.querySelector('[data-row]') ? culprit.closest('[data-drop]') : null, next = items.filter(function (e) { return !e.hasAttribute('data-fitted'); })[0];
+          if (own && blk.contains(own)) mark(own); else if (next) mark(next); else break;
+          gaps(blk);
+        }
+        fits = !bad(blk, lay, kind);
+      }
+      strict = false;
+      if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); continue; }
+      align(blk, lay);
+      if (kind === 'below') grow(blk, lay, wide);
+      if (kind === 'column') column(blk, lay);
+    }
+  }
+  window.mwFit = fit;
+  // TRMNL waits for its own pass (trmnl:terminalize:stats, then TRMNL_PLUGINS_READY) before it captures; the timers are frozen then, so the fit runs inside that pass
+  window.addEventListener('trmnl:terminalize:stats', fit);
+  window.addEventListener('load', fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+})();
+</script>
 {% else %}
 <div class="layout layout--col layout--center">
   <span class="title title--small">Masterworks</span>

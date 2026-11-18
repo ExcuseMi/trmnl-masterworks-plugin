@@ -86,34 +86,36 @@ var INFO_SIZES = { // CSS px: strip height, gap from the work to the strip's cap
 };
 var INFO_TEXT_PX = { f: [58, 32], g: [38, 26], xl: [40, 26], l: [35, 21], m: [30, 18], s: [24, 16] }; // medium and small text size in CSS px per tier: the label's width is estimated from its text
 var INFO_NARROW = 0.55;
-// The Frame, the X and the OG with info on (full view), two layouts (the info sits exactly under or beside the work, never across the screen):
-// BAND (a work a fill crops at most FRAME_BAND_CROP_MAX of): the work covers a band inside equal margins, the strip under it in the band's
-// width: the day number, then equal columns with a rule on top (weather, up to two events, the museum label in regular weight); the columns
-// wrap into rows when they would get too narrow. COLUMN (landscape screens, any other shape): the whole work on the mat with the info column
-// directly to its right (a wall label): date, weather and events at the top, the label at the bottom on the work's bottom edge; work and
-// column are one group centred on the screen. PORTRAIT screens always use the band layout (work on top, strip below); a work a fill would
-// crop too much is shown whole, centred in the band area.
-// Sizes are CSS px of the device (FRAME_PROFILES); the Framework has whole-percent sizes of the screen (cqw, cqh) and pixel sizes up to 128,
-// so widths and heights are whole percents; a work's box is the whole-percent pair nearest its shape (the picture covers it: a crop of about
-// 1 %, never a gap). On a small screen what does not fit is dropped: first the agenda, then the forecast line, never the date or the label.
-var FRAME_MARGIN_PCT = 2; // left and right margin, % of the width; the margin above the band and between band and strip is the same in px
-var FRAME_BAND_CROP_MAX = 0.38; // a fill that would crop more of the work than this share gives the column (landscape) or the whole work (portrait); 16:9 on the Frame crops 32 %, 3:2 43 %
-var FRAME_GAP_PCT = 2; // between columns and after the date block, % of the width
+// The Frame, the X and the OG with info on (full view). The info is ONE row or ONE column, never a grid, no rules:
+// BAND (landscape screen, a work 16:9 or wider): the work covers a band inside equal margins that takes all height the row leaves; the row under
+// it in the band's width: the day number with the weekday over the month, then weather, events and the museum label (regular weight, the rest
+// of the width, at least 40 %); all first lines on the weekday's baseline. BELOW (landscape screens, other shapes, when it gives the larger
+// picture; portrait screens, works narrower than FRAME_STACK_ASPECT): the whole work, the same row under it in the work's width; the browser
+// grows the work into the height the row leaves. COLUMN (landscape, other shapes): the whole work with the column to its right (date,
+// weather, events at the top, the label at the bottom on the work's bottom edge); work and column one group centred. STACK (portrait screens,
+// wide works): the work in the full width at the top, the column under it.
+// What does not fit is dropped in the browser, never shrunk or cut (FIT_ORDER in shared.liquid): the second event, the first, the forecast
+// line, the museum line, the weather, the artist line; never the day number or the label title (then the art is shown alone).
+var FRAME_MARGIN_PCT = 2; // the margin round the group, % of the width (the same in px vertically)
+var FRAME_BAND_CROP_MAX = 0.4; // kept for the tests' import: portrait screens never crop
+var FRAME_BAND_ASPECT = 1.74; // landscape screens: works at least this wide (16:9 and wider) get the band
+var FRAME_STACK_ASPECT = 1.4; // portrait screens: works at least this wide get the full-width work with the column under it
+var FRAME_GAP_PCT = 2; // between the cells of a row, and between the work and the column, % of the width
 var FRAME_COL_H_MAX = 92; // column layout: the work's box height at most, % of the screen's
-var FRAME_COL_W_MAX = 67; // column layout: the work's box width at most (the rest is the gutter and the column), %
-var FRAME_COL_INFO_W = 26; // column layout: the column's width, %
-var FRAME_COL_GUTTER = 3; // column layout: between the work and the column, %
+var FRAME_COL_GUTTER = 2;
 var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most this (log ratio)
-var FRAME_MIN_BAND = 32; // a band lower than this share of the screen drops events (two, one, none), then the forecast line
-// per device class: text classes with their CSS px (for height estimates), spacings in CSS px, the width of the date block when it shares the first row
+// per device class: three sizes in the info (owner 2026-11-18): the day number (sized to the two primary lines beside it: its top on the
+// first line's cap top, its baseline on the second's), the primary lines (weekday, month, temperature, event and painting titles) and the
+// secondary lines one step below (forecast, time, place, artist and year, museum); lh the primary line height (the gap between cells is 1.5 of it); their CSS px (z: the screen's CSS scale, the X draws 1040 CSS px on 1872) for the estimates, the vertical gap between column parts (sep), the column's widest share (infow, %)
 var FRAME_PROFILES = {
-  f: { z: 1, infow: 26, band: 65, drop: 48, wdrop: 40, lead: 24, sep: 24, rowgap: 30, minw: 300, minwP: 620, dateIn: 30, num: 380, col: 220, words: 58, temp: 74, med: 38, small: 32,
-    cls: { num: 'value--peta', col: 'value--giga', words: 'value value--large', temp: 'value value--xlarge', med: 'value value--base', small: 'label label--xxlarge' } },
-  x: { z: 1872 / 800, infow: 38, band: 0, drop: 0, wdrop: 4, lead: 8, sep: 14, rowgap: 12, minw: 80, minwP: 250, dateIn: 40, num: 96, col: 74, words: 38, temp: 38, med: 30, small: 21,
-    cls: { num: 'value--xxlarge', col: 'value--xlarge', words: 'value value--base', temp: 'value value--base', med: 'title title--large', small: 'label label--large' } },
-  o: { z: 1, infow: 30, band: 0, drop: 0, wdrop: 2, lead: 6, sep: 10, rowgap: 8, minw: 100, minwP: 200, dateIn: 30, num: 74, col: 58, words: 26, temp: 38, med: 30, small: 18,
-    cls: { num: 'value--xlarge', col: 'value--large', words: 'value value--small', temp: 'value value--base', med: 'title title--base', small: 'label label--base' } },
+  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 58, ev: 58, title: 58, small: 40, lh: 70,
+    cls: { num: 'value--mega', words: 'value value--large', temp: 'value value--large', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge' } },
+  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 96, words: 38, temp: 38, ev: 38, title: 38, small: 30, lh: 42,
+    cls: { num: 'value--xxlarge', words: 'value value--base', temp: 'value value--base', ev: 'value value--base', title: 'value value--base', small: 'label label--xxlarge' } },
+  o: { infow: 34, sep: 12, bandEv: 1, num: 74, words: 26, temp: 26, ev: 26, title: 26, small: 21, lh: 31.2,
+    cls: { num: 'value--xlarge', words: 'label label--xlarge', temp: 'label label--xlarge', ev: 'label label--xlarge', title: 'label label--xlarge', small: 'label label--large' } },
 };
+FRAME_PROFILES.fp = FRAME_PROFILES.f;
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
 var INFO_MIN_SLOT = 300; // CSS px: a slot lower than this, or narrower than INFO_MIN_SLOT_W, has no info
 var INFO_MIN_SLOT_W = 380;
@@ -915,78 +917,37 @@ function frameBox(aspect, sw, sh, wMax, hMax) {
 /** The profile key of a screen with the whole-view frame layouts, or null (the others keep their strip). */
 function frameProfileOf(scr) {
   var long = Math.max(scr.w, scr.h), short = Math.min(scr.w, scr.h);
-  if (scr.frame) return 'f';
+  if (scr.frame) return scr.h > scr.w ? 'fp' : 'f';
   if (long === 1872 && short === 1404) return 'x';
   if (long === 800 && short === 480) return 'o';
   return null;
 }
 
-/** The whole-percent box of the largest size within the limits whose shape is nearest the work's: { w: cqw, h: cqh }. */
-function frameBox(aspect, sw, sh, wMax, hMax) {
-  var h, w, best = null;
-  for (h = hMax; h >= 10 && !best; h--) {
-    for (w = wMax; w >= 10 && !best; w--) {
-      if (Math.abs(Math.log((w * sw) / (h * sh) / aspect)) <= FRAME_SHAPE_ERR) best = { w: w, h: h };
-    }
-  }
-  if (!best) { // no pair that close: the largest box of the work's shape that fits
-    h = Math.min(hMax, Math.floor(wMax * sw / sh / aspect)); best = { w: Math.min(wMax, Math.round(h * sh * aspect / sw)), h: h };
-  }
-  return best;
-}
-
-/** Estimated CSS px heights of the parts at a profile's sizes (a line is 1.2 times its size; a title takes about one and a half lines). */
-function frameHeights(P, noForecast) {
-  var line = function (n) { return n * 1.2; };
-  return {
-    weather: P.lead + line(P.temp) + (noForecast ? 0 : line(P.small)),
-    event: P.lead + 2 * line(P.small) + 1.5 * line(P.med),
-    label: P.lead + 2 * line(P.med) + 3 * line(P.small),
-    date: function (num) { return Math.max(num * 1.02, 2 * line(P.words)); },
-  };
-}
-
-/** The layout of the info on a Frame, X or OG screen: { layout: "band" | "column", ... } (see FRAME_ constants). */
+/** The layout of the info on a Frame, X or OG screen (see FRAME_ constants): { layout: "band" | "below" | "column" | "stack", ... }. The sizes are a first plan; the browser measures, drops and grows. */
 function framePlan(art, sw, sh, set, key) {
   key = key || 'f';
-  var P = FRAME_PROFILES[key], b = set.blocks, aspect = art.w / art.h, label = !!set.label;
-  var cw = sw / P.z, ch = sh / P.z, portrait = sh > sw, m = Math.round(cw * FRAME_MARGIN_PCT / 100), bandW = 100 - 2 * FRAME_MARGIN_PCT;
-  // one attempt at a level of dropping (0 all, 1 no agenda, 2 no forecast line): a plan, or null when the layout it is asked for does not fit
-  var attempt = function (level, forceBand) {
-    // levels: 0 everything, 1 one event, 2 no agenda, 3 no forecast line
-    var noAgenda = level >= 2, noForecast = level >= 3, events = b.agenda ? Math.min(b.events, level >= 2 ? 0 : level === 1 ? 1 : AGENDA_ITEMS) : 0;
-    var H = frameHeights(P, noForecast), hasW = b.weather, n = (hasW ? 1 : 0) + events + (label ? 1 : 0), out = null;
-    var rowH = Math.max(hasW ? H.weather : 0, events ? H.event : 0, label ? H.label : 0);
-    var inlineDate = !!P.dateIn && !portrait && b.date, dateH = b.date ? H.date(P.num) : 0;
-    var avail = bandW - (inlineDate ? P.dateIn + FRAME_GAP_PCT : 0), minw = Math.ceil((portrait && P.minwP ? P.minwP : P.minw) / cw * 100);
-    var k = Math.max(1, Math.min(n, Math.floor((avail + FRAME_GAP_PCT) / (minw + FRAME_GAP_PCT)))), rows = n ? Math.ceil(n / k) : 0;
-    var colW = Math.floor((avail - (k - 1) * FRAME_GAP_PCT) / k);
-    var stripH = inlineDate ? Math.max(dateH, rows * rowH + (rows - 1) * P.rowgap) : dateH + (rows ? (dateH ? P.sep : 0) + rows * rowH + (rows - 1) * P.rowgap : 0);
-    var bandPct = P.band && !portrait ? P.band : Math.floor(100 * (ch - 3 * m - stripH) / ch), bandPx = [sw * bandW / 100, sh * bandPct / 100];
-    var cover = cropShare(aspect, bandPx[0] / bandPx[1]) <= FRAME_BAND_CROP_MAX;
-    if (!portrait && !cover && !forceBand) { // landscape, a work the band would crop much: the whole work, the column on its right, when everything fits
-      var box = frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
-      var need = (b.date ? H.date(P.col) : 0) + (hasW ? P.sep + H.weather : 0) + events * (P.sep + H.event) + (label ? P.sep + H.label : 0);
-      if (need > box.h / 100 * ch) return null;
-      out = { layout: 'column', artw: box.w, arth: box.h, bandPx: [sw * box.w / 100, sh * box.h / 100], infow: P.infow, gap: FRAME_COL_GUTTER, lead: P.lead, sepv: P.sep, wdrop: P.wdrop, drop: 0, numcls: P.cls.col };
-    } else {
-      if (bandPct < FRAME_MIN_BAND && level < 3) return null;
-      var inner = cover ? { w: bandW, h: bandPct } : frameBox(aspect, sw, sh, bandW, bandPct);
-      var cells = [], rowsOf = [], ci;
-      if (hasW) cells.push('w');
-      for (ci = 0; ci < events; ci++) cells.push('e' + ci);
-      if (label) cells.push('l');
-      for (ci = 0; ci < cells.length; ci += k) rowsOf.push(cells.slice(ci, ci + k));
-      out = { layout: 'band', portrait: portrait, rows: rowsOf, margin: m, bandw: bandW, band: bandPct, artw: inner.w, arth: inner.h, whole: !cover, bandPx: [sw * inner.w / 100, sh * inner.h / 100], lead: P.lead, drop: inlineDate ? P.drop : 0, wdrop: P.wdrop,
-        numcls: P.cls.num, datein: inlineDate ? P.dateIn : 0, gap: FRAME_GAP_PCT, colw: colW, rowgap: P.rowgap, sepv: P.sep, cols: n };
-    }
-    out.noAgenda = noAgenda; out.noForecast = noForecast; out.events = events;
-    return out;
-  };
-  var level, out = null;
-  for (level = 0; level < 4 && !out; level++) out = attempt(level, false);
-  if (!out) out = attempt(0, true) || attempt(3, true); // nothing fits as a column: the whole work in a band with everything, else with the least
-  out.frame = true; out.tier = key; out.fit = 'cover'; out.cls = P.cls; out.label = label; out.who = whoLine(art); out.coll = art.collection || ''; out.fill = false;
+  var P = FRAME_PROFILES[key], b = set.blocks, aspect = art.w / art.h, label = !!set.label, events = b.agenda ? Math.min(b.events, AGENDA_ITEMS) : 0;
+  var z = P.z || 1, cw = sw / z, ch = sh / z, portrait = sh > sw, m = Math.min(128, Math.round(cw * FRAME_MARGIN_PCT / 100)), bandW = 100 - 2 * FRAME_MARGIN_PCT, ln = function (n) { return n * 1.25; };
+  var evB = Math.min(events, P.bandEv), hasW = b.weather, out;
+  // the row's height: the date, or the tallest cell (the label: two title lines, artist, museum)
+  var rowH = Math.max(b.date ? Math.max(P.num * 1.05, 2 * ln(P.words)) : 0, label ? 2 * ln(P.title) + 2 * ln(P.small) : 0, evB ? 2 * ln(P.small) + ln(P.ev) : 0, hasW ? ln(P.temp) + ln(P.small) : 0);
+  var restPct = Math.floor(100 * (ch - 3 * m - rowH) / ch);
+  var base = { frame: true, tier: key, fit: 'cover', cls: P.cls, label: label, who: whoLine(art).replace(/ \u00b7 /g, '\u00a0\u00b7\u00a0'), coll: art.collection || '', fill: false,
+    margin: m, numgap: Math.round(P.words * 0.4), gappx: Math.round(1.5 * P.lh), gap: FRAME_GAP_PCT, sepv: P.sep, bandw: bandW, aspect: Math.round(aspect * 10000) / 10000, portrait: portrait };
+  var put = function (o) { for (var k in base) o[k] = base[k]; return o; };
+  if (!portrait && aspect >= FRAME_BAND_ASPECT) {
+    out = { layout: 'band', artw: bandW, arth: restPct, events: evB };
+  } else if (portrait && aspect >= FRAME_STACK_ASPECT) {
+    var full = frameBox(aspect, sw, sh, bandW, 60);
+    out = { layout: 'stack', artw: full.w, arth: full.h, events: events };
+  } else {
+    var below = frameBox(aspect, sw, sh, bandW, restPct), box = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
+    if (box && box.w * box.h >= below.w * below.h) out = { layout: 'column', artw: box.w, arth: box.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
+    else out = { layout: 'below', artw: below.w, arth: below.h, rowpct: below.w >= 60 ? below.w : bandW, events: evB };
+  }
+  out = put(out);
+  out.gap = out.layout === 'column' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
+  out.bandPx = [sw * out.artw / 100, sh * out.arth / 100];
   return out;
 }
 

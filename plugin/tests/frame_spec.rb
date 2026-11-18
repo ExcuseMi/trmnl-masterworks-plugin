@@ -200,6 +200,22 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
   end
 
+  it 'the X and the OG band: at most one event (date, weather, next event, label), and the painting label is never cut with an ellipsis, on every device' do
+    { 'v2' => 2.2, 'og_png' => 2.2, 'frame' => 2.2 }.each do |device, aspect|
+      page = frame(all_on, aspect, device:)
+      expect(page).to have_css("#{P}[data-layout=\"band\"]")
+      events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
+      expect(events).to eq(device == 'frame' ? 2 : 1), device
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-slot=\"label\"] [data-clamp]').length")).to eq(0), "#{device}: no clamp (ellipsis) in the label"
+      cut = page.evaluate("[...document.querySelectorAll('#{P} [data-slot=\"label\"] span')].filter(e => e.scrollHeight > e.clientHeight + 2).map(e => e.innerText)")
+      expect(cut).to eq([]), "#{device}: the label is whole"
+    end
+    [['v2', 'x'], ['og_png', 'o']].each do |device, _|
+      page = frame(all_on, 2.2, device:)
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-col]').length")).to eq(3), 'weather, the next event, the label beside the date'
+    end
+  end
+
   it 'the X: a work 16:9 gets the band at about two thirds of the height, the date and the columns in ONE row' do
     page = frame(all_on, 16.0 / 9, device: 'v2')
     expect(page).to have_css("#{P}[data-layout=\"band\"][data-profile=\"x\"]")
@@ -213,7 +229,7 @@ RSpec.describe 'Masterworks Frame layouts' do
   end
 
   # portrait screens: the work on top, the strip below (a work a fill would crop too much hangs whole in the band area)
-  [['frame', 'f'], ['v2', 'x'], ['og_png', 'o']].each do |device, profile|
+  [['frame', 'fp'], ['v2', 'x'], ['og_png', 'o']].each do |device, profile|
     { '3:4' => 0.75, '16:9' => 16.0 / 9 }.each do |name, aspect|
       it "#{device} portrait, #{name}: the band layout, the picture on top, the strip under it in the same width, nothing cut" do
         page = frame(all_on, aspect, device:, orientation: 'portrait')
@@ -233,6 +249,77 @@ RSpec.describe 'Masterworks Frame layouts' do
         expect((ratio - 1).abs < 0.03 || (pic[2] - pic[0]) >= 0.9 * (lay[2] - lay[0])).to be(true), "the whole work (its shape) or a cover across the band: #{ratio}"
         cut = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-clamp]')].filter(e => e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2).map(e => e.innerText)")
         expect(cut).to eq([])
+      end
+    end
+  end
+
+  # one generic rule, measured in the browser: at the device's normal sizes, what does not fit is dropped in a fixed order, never shrunk or cut
+  # with an ellipsis; the info block is one row or one column; the day number and the label title stay (else the art stands alone)
+  DROP_ORDER = { 1 => 'second event', 2 => 'first event', 3 => 'forecast line', 4 => 'museum line', 5 => 'weather', 6 => 'artist line' }.freeze
+  LONG_TITLE = 'The Extraordinarily Long and Winding Title of a Masterwork That Nobody Can Say in One Breath'
+  LONG_MUSEUM = 'Museum of Fine Arts and Applied Sciences of the Free and Hanseatic City'
+
+  def long_shards(aspect)
+    doc = fixture('one-landscape')
+    doc['w'][0]['w'] = (aspect * 1000).round
+    doc['w'][0]['h'] = 1000
+    doc['w'][0]['t'] = LONG_TITLE
+    doc['col'][doc['w'][0]['c']] = LONG_MUSEUM
+    BASES_FRAME.each_with_object({}) do |base, m|
+      (0..7).each do |k|
+        m["#{base}/landscape-#{k}.json"] = { json: doc }
+        m["#{base}/portrait-#{k}.json"] = { json: doc }
+      end
+    end
+  end
+
+  def long_ics
+    day = Time.now.utc.strftime('%Y%m%d')
+    ev = ->(uid, start, name) { ['BEGIN:VEVENT', "UID:#{uid}", "DTSTART:#{day}T#{start}00Z", "DTEND:#{day}T#{start.to_i + 1}0000Z", 'RRULE:FREQ=DAILY', "SUMMARY:#{name}", 'LOCATION:The Grand Conference Hall of the Old Town', 'END:VEVENT'] }
+    (['BEGIN:VCALENDAR'] + ev.call(1, '2301', 'Quarterly review of the extraordinarily long budget') + ev.call(2, '2302', 'Dinner with the whole family and friends') + ['END:VCALENDAR']).join("\r\n")
+  end
+
+  [['frame', 'landscape'], ['frame', 'portrait'], ['v2', 'landscape'], ['v2', 'portrait'], ['og_png', 'landscape'], ['og_png', 'portrait']].each do |device, orientation|
+    { 'a wide work' => 2.4, 'a square work' => 1.0, 'a 3:4 work' => 0.75 }.each do |what, aspect|
+      { 'normal text' => false, 'long titles and museum names' => true }.each do |content, long|
+        it "#{device} #{orientation}, #{what}, #{content}: one row or one column, nothing overflows, no ellipsis, drops follow the order" do
+          mocks = (long ? long_shards(aspect) : shape_shards(aspect)).merge(services)
+          mocks = mocks.merge('https://calendar.example.org/*' => { body: long_ics }) if long
+          page = trmnl.render(view: 'full', device:, orientation:, mocks:, custom_fields: { 'weather_location' => 'Paris', 'ics_url' => LINK_FRAME }.merge(all_on))
+          page.has_css?('img.image')
+          expect(page).to have_css("#{P} [data-picture]"), 'the art is always there'
+          block = "#{P} [data-info-block]"
+          visible = page.has_css?(block)
+          if visible
+            expect(page).to have_css("#{P} [data-day]")
+            expect(page).to have_css("#{P} [data-label]")
+            col = page.evaluate("document.querySelector('#{block}').getAttribute('data-fit') === 'column'")
+            lay = box(page, P)
+            blk = box(page, block)
+            limit = col ? blk[3] : lay[3]
+            bad = page.evaluate(<<~JS)
+              [...document.querySelectorAll('#{block} span')].filter(e => e.offsetParent).filter((e) => {
+                const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+                return r.bottom > #{limit} + 1 || r.right > #{col ? blk[2] : lay[2]} + 1 || cs.textOverflow === 'ellipsis' || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none') ||
+                  (!e.hasAttribute('data-day') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
+              }).map(e => e.innerText)
+            JS
+            expect(bad).to eq([]), 'nothing overflows or is cut'
+            # one row (the tops of the parts agree) or one column (their left edges agree)
+            parts = page.evaluate("[...document.querySelectorAll('#{block} [data-info]')].filter(e => e.offsetParent).map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top]; })")
+            if parts.size > 1
+              axis = col ? 0 : 1
+              spread = parts.map { |q| q[axis] }.minmax.then { |lo, hi| hi - lo }
+              expect(spread).to be <= 3, "#{col ? 'one column' : 'one row'}: #{parts}"
+            end
+          end
+          flags = page.evaluate("[1, 2, 3, 4, 5, 6].map(d => [...document.querySelectorAll('#{P} [data-drop=\"' + d + '\"]')].some(e => e.offsetParent !== null))")
+          seen = false
+          flags.each_with_index do |on, i|
+            expect(!seen || on).to be(true), "dropped out of order: #{DROP_ORDER[i + 1]} is gone but an earlier drop is still shown #{flags}" if seen && !on
+            seen ||= on
+          end
+        end
       end
     end
   end
