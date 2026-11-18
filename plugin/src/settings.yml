@@ -17,7 +17,7 @@ custom_fields:
 - keyname: author_bio
   field_type: author_bio
   name: About This Plugin
-  description: '<strong>A famous public-domain artwork, new at every refresh.</strong><br />5,000+ paintings, prints, posters and illustrations. Landscapes 588, seas 364, cities 414, modern and abstract 433, posters and Art Nouveau 292, nature illustration 301, Japanese prints 330, flowers and still life 236, portraits 570, religious 576, mythology 156, history 94, everyday scenes 270, other 386.<br />A work is picked at random, the well known ones more often; with no genre ticked, landscapes, cities, nature, prints, modern art and posters come up more often than religious art, portraits and history. With the museum label and the info off, a work fills the screen when that crops little; otherwise it hangs on a white or black mat with its label beside or under it, and no text ever lies over the art. Source: Wikidata and Wikimedia Commons.'
+  description: "<p><b>A famous public-domain artwork, new at every refresh.</b></p><p>Over 5,000 paintings, prints, posters and illustrations: landscapes, seas, cities, modern and abstract art, posters and Art Nouveau, nature illustration, Japanese prints, flowers and still life, portraits, religious art, mythology, history and everyday scenes.</p><p>Well-known works come up more often. With the label and the info off, a work fills the screen when that crops little; otherwise it hangs whole on a white or black mat, with its label beside or under it. No text ever covers the art.</p><p>Source: Wikidata and Wikimedia Commons.</p>"
   category: art,images
   github_url: https://github.com/ExcuseMi/trmnl-masterworks-plugin
   learn_more_url: https://www.wikidata.org
@@ -26,7 +26,7 @@ custom_fields:
   name: Fill the screen
   default: 'true'
   optional: true
-  help_text: "Only shown with the museum label, the date, the weather and the agenda all off (then there is nothing but the artwork). <b>On</b> (default): a work that fills the screen edge to edge while cropping at most 15 % of it does so; other works hang whole on a white or black mat. <b>Off</b>: only a work that needs almost no cropping (5 %) fills the screen; the rest hang on the mat. With the label or any info on, the work always hangs on its mat, with no text over it."
+  help_text: "<p>Only shown with the museum label, the date, the weather and the agenda all off (then there is nothing but the artwork).</p><ul><li><b>On</b> (default): a work that fills the screen edge to edge while cropping at most 15 % does so; other works hang whole on a white or black mat.</li><li><b>Off</b>: only a work that needs almost no cropping (5 %) fills the screen.</li></ul><p>With the label or any info on, the work always hangs on its mat, with no text over it.</p>"
 - keyname: label
   field_type: boolean
   name: Museum label
@@ -36,7 +36,7 @@ custom_fields:
   - when: 'true'
     hidden:
     - fill
-  help_text: "<b>On</b>: title, artist and year, then technique and where the work hangs, as on a museum wall. <b>Off</b>: only the artwork."
+  help_text: "<ul><li><b>On</b>: title, artist and year, then technique and where the work hangs, as on a museum wall.</li><li><b>Off</b>: only the artwork.</li></ul>"
 - keyname: show_date
   group: Info
   field_type: boolean
@@ -47,7 +47,7 @@ custom_fields:
   - when: 'true'
     hidden:
     - fill
-  help_text: "The day number, weekday and month in your account's language, next to the artwork (the work hangs whole on its mat; on the Frame a band across the width for wide works, else a column on its right; the museum label goes with it). The date, weather and agenda each have a toggle; any combination works."
+  help_text: "<p>The day number, weekday and month in your account's language, beside or under the artwork.</p><p>The date, weather and agenda each have their own toggle; any combination works.</p>"
 - keyname: show_weather
   group: Info
   field_type: boolean
@@ -62,7 +62,7 @@ custom_fields:
     hidden:
     - weather_location
     - temperature_unit
-  help_text: "The temperature and a short forecast line from Open-Meteo. Needs a weather location; without one, or when the weather cannot be fetched, this part is left out."
+  help_text: "<p>The temperature and a short forecast line from Open-Meteo.</p><p>Needs a <b>weather location</b>. Without one, or when the weather cannot be fetched, it is left out.</p>"
 - keyname: show_agenda
   group: Info
   field_type: boolean
@@ -76,27 +76,27 @@ custom_fields:
   - when: 'false'
     hidden:
     - ics_url
-  help_text: "Your next two events of today (tomorrow's from 6 pm, or when none is left) from a calendar link. Needs the calendar link below; without one nothing shows."
+  help_text: "<p>Your next two events of today (tomorrow's after 6 pm, or when none are left), from a calendar link.</p><p>Needs the <b>calendar link</b> below; without one nothing shows.</p>"
 - keyname: ics_url
   group: Info
   field_type: password
   name: Calendar (ICS link)
   optional: true
-  help_text: "The private ICS address of a calendar (Google Calendar: Settings, Integrate calendar, Secret address in iCal format; Outlook: Publish calendar; iCloud: Public calendar link). Treated as a secret: it is only used to fetch your events and is never shown, logged or passed on. A calendar larger than 2 MB, or one that is slow to answer, shows no agenda."
+  help_text: "<p>The private ICS address of a calendar:</p><ul><li><b>Google Calendar</b>: Settings, Integrate calendar, Secret address in iCal format</li><li><b>Outlook</b>: Publish calendar</li><li><b>iCloud</b>: Public calendar link</li></ul><p>Treated as a secret: only used to fetch your events, never shown, logged or passed on. A calendar over 2 MB, or one that is slow to answer, shows no agenda.</p>"
 - keyname: weather_location
   group: Info
   field_type: string
   name: Weather location
   optional: true
   placeholder: Paris, France
-  help_text: "A city or place name, or latitude and longitude (<code>48.85, 2.35</code>). TRMNL does not share your location, so the weather needs this. Weather from Open-Meteo (no account needed); the forecast line is in English."
+  help_text: "<p>A city or place name, or latitude and longitude (<code>48.85, 2.35</code>).</p><p>TRMNL does not share your location, so the weather needs this. Weather from Open-Meteo (no account needed); the forecast line is in English.</p>"
 - keyname: temperature_unit
   group: Info
   field_type: select
   name: Temperature unit
   default: auto
   optional: true
-  help_text: "Auto: Fahrenheit for an account language of the United States, else Celsius."
+  help_text: "<p><b>Auto</b>: Fahrenheit for an account language of the United States, else Celsius.</p>"
   options:
   - Auto: auto
   - Celsius: c
@@ -107,14 +107,14 @@ custom_fields:
   name: Family friendly
   default: 'true'
   optional: true
-  help_text: "<b>On</b> (default): leaves out works whose subject is nudity or graphic violence (nudes, bathers, Venus, beheadings, massacres, executions, martyrdoms, battles). The list comes from Wikidata's subjects and the titles, so it is careful but not perfect.<br /><b>Off</b>: all works."
+  help_text: "<ul><li><b>On</b> (default): leaves out works whose subject is nudity or graphic violence (nudes, bathers, Venus, beheadings, massacres, executions, martyrdoms, battles). The list comes from Wikidata's subjects and the titles, so it is careful but not perfect.</li><li><b>Off</b>: all works.</li></ul>"
 - keyname: genres
   group: Selection
   field_type: select
   multiple: true
   name: Genres
   optional: true
-  help_text: Tick the kinds of work you want; nothing ticked gives the default mix, which shows landscapes, seas, cities, nature illustration, Japanese prints, modern and abstract art and posters more often, and flowers and still life, religious art, portraits and history painting less often. With too few works of the ticked kinds, the default mix is used for that refresh. Tick only Portraits for portraits; tick every kind but Portraits to leave them out.
+  help_text: "<p>Tick the kinds of work you want. Nothing ticked gives the default mix: landscapes, seas, cities, nature illustration, Japanese prints, modern and abstract art and posters more often; flowers and still life, religious art, portraits and history painting less often.</p><p>With too few works of the ticked kinds, the default mix is used for that refresh.</p><ul><li>Portraits only: tick only Portraits.</li><li>No portraits: tick every kind but Portraits.</li></ul>"
   options:
   - Landscapes and seas: landscapes
   - Cities: cities
@@ -133,7 +133,7 @@ custom_fields:
   name: Period
   default: all
   optional: true
-  help_text: Only works of one movement or period. With few works in a period the filter is ignored for that refresh.
+  help_text: "<p>Only works of one movement or period. With few works in a period, the filter is ignored for that refresh.</p>"
   options:
   - All: all
   - Renaissance: Renaissance
