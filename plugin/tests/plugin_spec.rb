@@ -105,9 +105,12 @@ RSpec.describe 'Masterworks' do
           edge = rect(page, '[data-bevel]')
           lab = rect(page, '[data-label]')
           lay = layout_rect(page)
-          expect(lab[2]).to be_within(3).of(edge[2])
+          # label only, near-square work (owner 2026-11-18): the label is a column on the work's right, not below it; the rules below are for the label below the work
+          column = page.has_css?('[data-label-column]')
+          expect(lab[2]).to be_within(3).of(edge[2]) unless column
           # the text itself is right-aligned, so it ends on the picture's right edge
-          expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] .title')).textAlign")).to eq('right')
+          expect(page.evaluate("getComputedStyle(document.querySelector('[data-label] .title')).textAlign")).to eq('right') unless column
+          expect(lab[2]).to be <= lay[2] + 3
           expect(lab[3]).to be <= lay[3] + 3
           # a wide work may take up to 0.92 of the width (GALLERY_WIDE_MAX), others up to 0.75
           expect(edge[2] - edge[0]).to be <= (lay[2] - lay[0]) * 0.935

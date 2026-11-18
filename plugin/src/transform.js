@@ -68,6 +68,8 @@ var LABEL_SHARE = 0.11; // the room the label (title line, artist line, detail l
 var LABEL_LINE_SHARE = 0.032; // every further title line
 var LABEL_GAP_SHARE = 0.018;
 var LABEL_PX = { big: [40, 26, 21], normal: [20, 16, 16] }; // title, artist and detail sizes the markup uses (the floor of the room a label needs, and to guess how many lines a title takes)
+var LABEL_COL_MIN_PCT = 14; // label only, column layout: the column's width (% of the screen) between these
+var LABEL_COL_MAX_PCT = 34;
 var LABEL_MAX_SHARE = 0.4; // a label that would need more of a slot's height than this is left out (a playdate quadrant)
 var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
 // The info (date, weather, agenda) is one strip under the work, full width, never beside it and never cropping it: the work is scaled so the
@@ -1015,9 +1017,13 @@ function infoPlace(art, sw, sh, zoom, set) {
  */
 function labelColumn(art, sw, sh, key, g) {
   if (!g.label || sh > sw) return null;
-  var P = FRAME_PROFILES[key], box = frameBox(art.w / art.h, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
+  // the column is as wide as its text needs: the artist and detail lines whole, the title on one or two lines (the browser then narrows it to the real text, see fit in shared.liquid)
+  var px = LABEL_PX[art.kind || 'normal'], z = art.zoom || 1, ch = function (n, size) { return n * 0.5 * size * z * 1.1; };
+  var need = Math.max(ch(String(g.label.who).length, px[1]), ch(String(g.label.detail).length, px[2]), ch(String(art.title).length, px[0]) / 2);
+  var colw = Math.min(LABEL_COL_MAX_PCT, Math.max(LABEL_COL_MIN_PCT, Math.ceil(100 * need / sw)));
+  var box = frameBox(art.w / art.h, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - colw, FRAME_COL_H_MAX);
   if ((box.w * sw / 100) * (box.h * sh / 100) <= g.pw * g.ph * 1.05) return null; // below stays unless the column clearly gives the larger work
-  return { a: box.w, b: box.h, pw: Math.round(box.w * sw / 100), ph: Math.round(box.h * sh / 100), label: g.label, col: { w: P.infow, gap: FRAME_COL_GUTTER } };
+  return { a: box.w, b: box.h, pw: Math.round(box.w * sw / 100), ph: Math.round(box.h * sh / 100), label: g.label, col: { w: colw, gap: FRAME_COL_GUTTER } };
 }
 
 function artOf(work, shard, set, scr) {

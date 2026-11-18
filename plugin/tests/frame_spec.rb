@@ -409,4 +409,28 @@ RSpec.describe 'Masterworks Frame layouts' do
     expect(page).to have_css("#{P} [data-day]")
     expect(page).to have_css("#{P} [data-label]")
   end
+
+  # label only (no date, weather or agenda): a near-square work gets the label in a column on its right, the group centred; a wide work keeps it below
+  LABEL_ONLY = { 'show_date' => 'false', 'show_weather' => 'false', 'show_agenda' => 'false', 'label' => 'true' }.freeze
+
+  [['frame', 1.27], ['frame', 1.0], ['og_png', 1.27]].each do |device, aspect|
+    it "label only, #{device} #{aspect}: the label is a column on the work's right, the group is centred (equal outer margins), the last line on the work's bottom" do
+      page = frame(LABEL_ONLY, aspect, device:)
+      expect(page).to have_css("#{P} [data-label-column]")
+      lay = box(page, P)
+      pic = box(page, "#{P} [data-picture], #{P} [data-bevel]")
+      col = box(page, "#{P} [data-label-column] [data-label]")
+      expect(pic[0] - lay[0]).to be_within(4).of(lay[2] - col[2]), "equal outer margins of the group: #{lay} #{pic} #{col}"
+      text_right = page.evaluate("Math.max(...[...document.querySelectorAll('#{P} [data-label-column] span')].map(e => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().right; }))")
+      expect(col[2] - text_right).to be <= 0.02 * lay[2], "the column is as wide as its text: #{col} #{text_right}"
+      expect(col[0]).to be > pic[2]
+      expect(cut_text(page)).to eq([])
+    end
+  end
+
+  it 'label only, a 16:9 work: the label stays below the work (right-aligned), no column' do
+    page = frame(LABEL_ONLY, 16.0 / 9)
+    expect(page).to have_no_css("#{P} [data-label-column]")
+    expect(page).to have_css("#{P} [data-label]")
+  end
 end
