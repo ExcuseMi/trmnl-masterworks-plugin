@@ -17,7 +17,7 @@ RSpec.describe 'Masterworks cropped work' do
     doc = JSON.parse(File.read(File.join(__dir__, 'fixtures', 'one-landscape.json')))
     doc['w'][0].merge!('w' => 8561, 'h' => 6037)
     doc['w'][0]['x'] = box if box
-    shards = BASES_CR.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_CR.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     page = trmnl.render(view: 'full', device:, orientation: 'landscape', mocks: shards, custom_fields: fields)
     page.has_css?('img.image')
     page
