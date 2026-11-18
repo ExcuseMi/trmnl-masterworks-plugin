@@ -405,7 +405,7 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH, opts) {
   var aspect = art.w / art.h, wide = aspect >= slotW / slotH;
   var widthCap = (opts.share || (wide ? GALLERY_WIDE_MAX : GALLERY_SHARE)) * slotW; // opts.share: a region already apart from its info may be filled further
   var heightCap = (wide ? GALLERY_SHARE : GALLERY_TALL_MAX) * slotH;
-  var px = LABEL_PX[kind || 'normal'], maxLines = slotH >= 700 ? 2 : 1, hasDetail = slotH >= LABEL_DETAIL_MIN_H && !!detailLine(art);
+  var px = opts.px || LABEL_PX[kind || 'normal'], maxLines = slotH >= 700 ? 2 : 1, hasDetail = slotH >= LABEL_DETAIL_MIN_H && !!detailLine(art);
   var lines = 1, ph = 0, pw = 0, i;
   // the room a label needs: its share of the slot, but never less than its lines at the sizes the markup uses
   zoom = zoom || 1; // the label's text is in CSS px; the slot is in reported device px, which a zoomed screen draws larger
@@ -1022,7 +1022,7 @@ function infoPlace(art, sw, sh, zoom, set) {
 function labelColumn(art, sw, sh, key, g) {
   if (!g.label || sh > sw) return null;
   // the column is as wide as its text needs: the artist and detail lines whole, the title on one or two lines (the browser then narrows it to the real text, see fit in shared.liquid)
-  var px = LABEL_PX[art.kind || 'normal'], z = art.zoom || 1, ch = function (n, size) { return n * 0.5 * size * z * 1.1; };
+  var px = g.px || LABEL_PX[art.kind || 'normal'], z = art.zoom || 1, ch = function (n, size) { return n * 0.5 * size * z * 1.1; };
   var need = Math.max(ch(String(g.label.who).length, px[1]), ch(String(g.label.detail).length, px[2]), ch(String(art.title).length, px[0]) / 2);
   var colw = Math.min(LABEL_COL_MAX_PCT, Math.max(LABEL_COL_MIN_PCT, Math.ceil(100 * need / sw)));
   var box = frameBox(art.w / art.h, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - colw, FRAME_COL_H_MAX);
@@ -1047,8 +1047,12 @@ function artOf(work, shard, set, scr) {
       if (inf.label) { inf.who = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : ''); inf.detail = ''; } // the technique is left out when info is on
       geo[v] = inf.fill ? { mode: 'full', fit: 'cover', gallery: null, plate: null, info: inf } : { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
     } else if (set.label && v === 'full' && frameProfileOf(scr)) { // label only on the Frame, X or OG: below the work or in a column to its right, whichever leaves the larger whole work
-      var lg0 = galleryFor(art, sw, sh, true, art.kind, art.zoom);
-      geo[v] = { mode: 'gallery', fit: 'cover', gallery: labelColumn(art, sw, sh, frameProfileOf(scr), lg0) || lg0, plate: null, info: null };
+      var lp = FRAME_PROFILES[frameProfileOf(scr)], lpx = [lp.title, lp.small, lp.small]; // the label's sizes are the ones of the label in the info layouts (owner 2026-11-18)
+      var lg0 = galleryFor(art, sw, sh, true, art.kind, art.zoom, undefined, { px: lpx });
+      lg0.px = lpx;
+      var lgal = labelColumn(art, sw, sh, frameProfileOf(scr), lg0) || lg0;
+      lgal.cls = lp.cls;
+      geo[v] = { mode: 'gallery', fit: 'cover', gallery: lgal, plate: null, info: null };
     } else if (set.label || modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null }; // the label on: always the mat and the label as a gallery label (a slot too small for it has none); text never lies over the art
     else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: null, info: null }; // label off, no info: the work fills the view when that crops little
   }

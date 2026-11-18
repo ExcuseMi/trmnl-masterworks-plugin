@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+# Label only (date, weather and agenda off) draws the label at the same sizes as the label of the normal info layouts, on every device
+# (owner 2026-11-18). The X and the OG once drew it much smaller.
+require 'json'
+
+RSpec.describe 'Masterworks label-only type sizes' do
+  BASES_LS = %w[
+    https://raw.githubusercontent.com/ExcuseMi/trmnl-masterworks-plugin/main/data
+    https://cdn.jsdelivr.net/gh/ExcuseMi/trmnl-masterworks-plugin@main/data
+    https://excusemi.github.io/trmnl-masterworks-plugin/data
+    https://cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data
+  ].freeze
+
+  def fixture(name) = JSON.parse(File.read(File.join(__dir__, 'fixtures', "#{name}.json")))
+
+  def render_ls(device, aspect, fields)
+    doc = fixture('one-landscape')
+    doc['w'][0]['w'] = (aspect * 1000).round
+    doc['w'][0]['h'] = 1000
+    shards = BASES_LS.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc } } }
+    services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') } }
+    page = trmnl.render(view: 'full', device:, orientation: 'landscape', mocks: shards.merge(services), custom_fields: { 'weather_location' => 'Paris', 'label' => 'true' }.merge(fields))
+    page.has_css?('img.image')
+    page
+  end
+
+  # the computed size and the Framework size classes of the title and of the artist line
+  def sizes(page)
+    page.evaluate("(() => { const out = {}; const pick = (k, sel) => { const e = [...document.querySelectorAll('[data-block=\"primary\"] ' + sel)].find(x => x.offsetParent); if (e) out[k] = [getComputedStyle(e).fontSize, e.className.split(' ').filter(c => /--(base|small|large|xlarge|xxlarge|xxxlarge|mega)$/.test(c)).sort().join(' ')]; };
+      pick('title', 'span[data-label], div[data-label] > span:nth-of-type(1)');
+      pick('who', '[data-who], div[data-label] > span:nth-of-type(2)'); return out; })()")
+  end
+
+  ON = { 'show_date' => 'true', 'show_weather' => 'false', 'show_agenda' => 'false' }.freeze
+  OFF = { 'show_date' => 'false', 'show_weather' => 'false', 'show_agenda' => 'false' }.freeze
+
+  %w[v2 og_png frame].each do |device|
+    [16.0 / 9, 1.0].each do |aspect|
+      it "#{device} #{aspect.round(2)}: label only uses the sizes of the label in the info layout" do
+        normal = sizes(render_ls(device, aspect, ON))
+        only = sizes(render_ls(device, aspect, OFF))
+        expect(only['title']).to eq(normal['title']), "title: label only #{only['title']}, normal #{normal['title']}"
+        expect(only['who']).to eq(normal['who']), "artist line: label only #{only['who']}, normal #{normal['who']}"
+      end
+    end
+  end
+end
