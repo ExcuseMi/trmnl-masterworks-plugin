@@ -105,6 +105,9 @@ const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '
   if ((await page.$eval('#temperature_unit', (e) => e.value)) !== defOf('temperature_unit')) fails.push('temperature_unit default differs from settings.yml');
   const pageUnits = await page.$$eval('#temperature_unit option', (e) => e.map((x) => x.value));
   if (JSON.stringify(pageUnits) !== JSON.stringify(vals(optionsOf('temperature_unit')))) fails.push('temperature units differ from settings.yml');
+  if ((await page.$eval('#time_format', (e) => e.value)) !== defOf('time_format')) fails.push('time_format default differs from settings.yml');
+  const pageTimes = await page.$$eval('#time_format option', (e) => e.map((x) => x.value));
+  if (JSON.stringify(pageTimes) !== JSON.stringify(vals(optionsOf('time_format')))) fails.push('time formats differ from settings.yml');
   await page.click('#device button[data-v="frame"]');
   await page.waitForFunction(() => document.querySelector('#frame')?.getAttribute('model') === 'frame', null, { timeout: 30000 });
   for (const k of ['show_date', 'show_weather', 'show_agenda']) await page.check('#' + k);

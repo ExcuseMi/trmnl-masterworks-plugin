@@ -231,6 +231,7 @@ function settingsOf(input) {
     genres: genres, movement: movement, family_friendly: flag(c.family_friendly, true),
     show_date: flag(c.show_date, false), show_weather: flag(c.show_weather, false), show_agenda: flag(c.show_agenda, false), // the info strip's three parts, each off by default
     weather_location: String(c.weather_location === undefined || c.weather_location === null ? '' : c.weather_location).trim().slice(0, 80),
+    time_format: c.time_format === '12h' ? '12h' : '24h', // anything but exactly 12h (empty, unknown, not saved yet) is 24-hour
     temperature_unit: unit === 'f' ? 'f' : 'c', // anything but Fahrenheit (an old saved "auto", empty) is Celsius
   };
 }
@@ -882,12 +883,12 @@ async function fetchIcs(url) {
 }
 
 /** { day, label, items } for the strip, or null (no link, a failure, too big): never throws. */
-async function fetchAgenda(url, locale, userZ, nowMs, local) {
+async function fetchAgenda(url, locale, userZ, nowMs, local, timeFormat) {
   if (!url) return null;
   var text = await fetchIcs(url);
   if (!text) return null;
-  var h24 = /h2[34]/.test(new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle || ''); // the account language's own clock: 9:00 AM or 09:00
-  var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', timeZone: userZ.zone });
+  var h24 = timeFormat !== '12h'; // the time_format setting decides, not the account language: 09:00 or 9:00 AM; anything but exactly 12h is 24-hour
+  var tf = new Intl.DateTimeFormat(locale, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hourCycle: h24 ? 'h23' : 'h12', timeZone: userZ.zone });
   var a = pickAgenda(text, userZ, nowMs, local, function (ms) { return tf.format(new Date(ms)); });
   if (!a.items.length) return null; // nothing relevant, nothing shown
   var label = '';
@@ -1088,7 +1089,7 @@ async function run(input) {
   var locale = userLocale(input), zone = userZone(input), nowMs = Date.now(), local = dayInfo(nowMs, locale, zone), url = set.show_agenda ? icsUrl(input) : '';
   // the weather and the agenda are asked while the data is fetched; a failure, a missing location or link, or the deadline leave them out
   var wxP = set.show_weather ? withDeadline(fetchWeather(set, locale, zone, local.iso, state.loc), WEATHER_DEADLINE_MS) : Promise.resolve(null);
-  var agP = url ? withDeadline(fetchAgenda(url, locale, zone, nowMs, local), ICS_DEADLINE_MS) : Promise.resolve(null);
+  var agP = url ? withDeadline(fetchAgenda(url, locale, zone, nowMs, local, set.time_format), ICS_DEADLINE_MS) : Promise.resolve(null);
   var shard;
   try {
     shard = await fetchShard(scr.o, Math.random);
