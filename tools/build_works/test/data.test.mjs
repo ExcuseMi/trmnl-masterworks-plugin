@@ -92,18 +92,19 @@ test('the suspect rule: a flag or a safety doubt, nothing else; an override that
 // Owner 2026-11-18, generic rules for old and new works: the curator's sure quality exclusions, what is no picture, and
 // the same picture twice leave the data; every work in the data was judged by the curator (a rebuild must not pull in an
 // unjudged work from the overshoot).
-import { exclusions, loadExclusions } from '../curator_exclude.mjs';
+import { exclusions, loadExclusions, scoreOf } from '../curator_exclude.mjs';
 import { isNotAPicture } from '../classify.mjs';
 import { SAME_PICTURE, samePictureDrops } from '../dedupe.mjs';
 
-test('no work the curator surely excludes is in the data (museum photo, chart or label, blur)', () => {
+test('no work the curator surely excludes is in the data (museum photo or chart or label, score 0.70 or more)', () => {
   const ex = loadExclusions();
-  assert.ok(Object.keys(ex).length > 200, `${Object.keys(ex).length} exclusions`);
+  assert.strictEqual(scoreOf('museum photo 0.63; chart/label 0.67'), 0.67);
+  assert.ok(Object.keys(ex).length > 50, `${Object.keys(ex).length} exclusions`);
   assert.deepStrictEqual(works.filter((w) => ex[w.i]).map((w) => `${w.i} ${ex[w.i]}`), []);
 });
 
 test('the exclusion rule takes the sure set only, not the doubtful', () => {
-  assert.deepStrictEqual(exclusions([{ qid: 'Q2', cur: { exclude: 'chart/label 0.8', doubt: [] } }, { qid: 'Q1', cur: { exclude: null, doubt: ['quality'] } }, { qid: 'Q3' }]), { Q2: 'chart/label 0.8' });
+  assert.deepStrictEqual(exclusions([{ qid: 'Q2', cur: { exclude: 'chart/label 0.80', doubt: [] } }, { qid: 'Q4', cur: { exclude: 'museum photo 0.60', doubt: [] } }, { qid: 'Q5', cur: { exclude: 'blur 38', doubt: [] } }, { qid: 'Q1', cur: { exclude: null, doubt: ['quality'] } }, { qid: 'Q3' }]), { Q2: 'chart/label 0.80' });
 });
 
 test('maps, plans, banknotes, ostraca and objects are no pictures; paintings and prints stay', () => {
