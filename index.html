@@ -41,6 +41,7 @@ legend{padding:0;font-weight:600;margin-bottom:6px}
 .checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px}
 .checks label,.one{display:flex;gap:8px;align-items:center;min-height:32px}
 select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-height:40px;max-width:100%}
+.one[hidden]{display:none}
 .hint{color:var(--mute);margin:4px 0 0}
 footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
 </style>
@@ -76,6 +77,14 @@ footer{margin-top:28px;color:var(--mute);font:13px/1.5 system-ui,sans-serif}
   <div class="grid">
     <fieldset><legend>Display</legend>
       <label class="one"><input type="checkbox" id="label" checked> <span id="label-name">Museum label</span></label>
+      <label class="one"><input type="checkbox" id="show_date"> <span id="show_date-name">Show the date</span></label>
+      <label class="one"><input type="checkbox" id="show_weather"> <span id="show_weather-name">Show the weather</span></label>
+      <label class="one"><input type="checkbox" id="show_agenda"> <span id="show_agenda-name">Show the agenda</span></label>
+      <label class="one" id="fill-row"><input type="checkbox" id="fill" checked> <span id="fill-name">Fill the screen</span></label>
+      <label class="one" id="unit-row" hidden><span id="unit-name">Temperature unit</span> <select id="temperature_unit" aria-labelledby="unit-name"></select></label>
+      <p class="hint">Weather and agenda show sample data here (Paris, 8:00; two events), as there is no location or calendar link on this page.</p>
+    </fieldset>
+    <fieldset><legend>Selection</legend>
       <label class="one"><input type="checkbox" id="family_friendly" checked> <span id="family-name">Family friendly</span></label>
     </fieldset>
     <fieldset><legend id="movement-name">Period</legend>

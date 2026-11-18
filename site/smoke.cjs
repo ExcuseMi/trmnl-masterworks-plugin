@@ -96,6 +96,35 @@ const INKS = ['184,50,44', '63,110,74', '47,79,143', '227,200,42', '26,26,26', '
   if (JSON.stringify(pageGenres) !== JSON.stringify(vals(f.genres.options))) fails.push('genres differ from settings.yml');
   if (JSON.stringify(pageMov) !== JSON.stringify(vals(f.movement.options))) fails.push('periods differ from settings.yml');
 
+  // the info settings: defaults as in settings.yml, the toggles reach the plugin (sample weather and agenda), fill and unit follow their rules
+  const defOf = (key) => { let inField = false; for (const l of lines) { if (/^- keyname: /.test(l)) { inField = l.trim() === '- keyname: ' + key; continue; } const m = inField && /^  default: '?([^']*)'?$/.exec(l); if (m) return m[1]; } return null; };
+  for (const k of ['label', 'fill', 'show_date', 'show_weather', 'show_agenda']) {
+    const on = await page.isChecked('#' + k);
+    if (String(on) !== defOf(k)) fails.push('toggle ' + k + ' default ' + on + ' differs from settings.yml ' + defOf(k));
+  }
+  if ((await page.$eval('#temperature_unit', (e) => e.value)) !== defOf('temperature_unit')) fails.push('temperature_unit default differs from settings.yml');
+  const pageUnits = await page.$$eval('#temperature_unit option', (e) => e.map((x) => x.value));
+  if (JSON.stringify(pageUnits) !== JSON.stringify(vals(optionsOf('temperature_unit')))) fails.push('temperature units differ from settings.yml');
+  await page.click('#device button[data-v="frame"]');
+  await page.waitForFunction(() => document.querySelector('#frame')?.getAttribute('model') === 'frame', null, { timeout: 30000 });
+  for (const k of ['show_date', 'show_weather', 'show_agenda']) await page.check('#' + k);
+  if (await page.isVisible('#fill-row')) fails.push('fill is shown with the label and info on');
+  if (!(await page.isVisible('#unit-row'))) fails.push('temperature unit is hidden with the weather on');
+  const hasText = async (re) => { for (const fr of page.frames()) { try { if (await fr.evaluate((s) => new RegExp(s).test(document.body ? document.body.innerText : ''), re)) return true; } catch (e) { /* frame gone */ } } return false; };
+  let sample = false;
+  for (let i = 0; i < 6 && !sample; i++) {
+    await page.waitForSelector('#next:not([disabled])');
+    await artOf(page);
+    for (let j = 0; j < 10 && !sample; j++) { sample = await hasText('Bake the pies'); if (!sample) await page.waitForTimeout(300); }
+    if (!sample) await page.click('#next');   // a work whose shape leaves no room for the strip: the next one
+  }
+  if (!sample) fails.push('with the date, weather and agenda on, the sample agenda never showed on the Frame');
+  for (const k of ['show_date', 'show_weather', 'show_agenda']) await page.uncheck('#' + k);
+  await page.uncheck('#label');
+  if (!(await page.isVisible('#fill-row'))) fails.push('fill is hidden with the label and info off');
+  await page.check('#label');
+  await artOf(page);
+
   const seen = new Set();
   for (const dev of ['frame', 'x', 'og']) {
     await page.click(`#device button[data-v="${dev}"]`);

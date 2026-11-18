@@ -6,7 +6,26 @@
   var S = { device: 'frame', color: 'walnut', state: { h: [] }, engine: null, cfg: null, token: 0, lastUrl: null, markup: null, look: true, shards: {} };
 
   // The plugin's data shards are read from this site first (same repository, same origin), the mirrors only if that fails.
+  // Sample data for the weather and the agenda (the page has no location and no calendar link). The shapes are the services' own;
+  // the temperatures are Celsius and converted when the plugin asks for Fahrenheit. The clock is pinned to 8:00 UTC today.
+  var SAMPLE_ICS = 'https://calendar.example.org/sample.ics';
+  function sampleNow() { var d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 8, 0, 0); }
+  function sampleWeather(url) {
+    var day = new Date(sampleNow()).toISOString().slice(0, 10), next = new Date(sampleNow() + 864e5).toISOString().slice(0, 10), f = /temperature_unit=fahrenheit/.test(url);
+    var cv = function (c) { return f ? Math.round((c * 9 / 5 + 32) * 10) / 10 : c; }, times = [], codes = [];
+    for (var h = 0; h < 24; h++) { times.push(day + 'T' + (h < 10 ? '0' : '') + h + ':00'); codes.push(h === 11 || h === 12 ? 61 : h === 13 ? 63 : 3); }
+    times.push(next + 'T00:00'); codes.push(3);
+    return { current: { time: day + 'T08:00', temperature_2m: cv(7.6), weather_code: 3 }, hourly: { time: times, weather_code: codes },
+      daily: { time: [day, next], temperature_2m_max: [cv(11.2), cv(10)], temperature_2m_min: [cv(4.4), cv(3)] } };
+  }
+  var SAMPLE_CAL = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:1', 'DTSTART:20260101T103000Z', 'DTEND:20260101T110000Z', 'RRULE:FREQ=DAILY', 'SUMMARY:Bake the pies', 'LOCATION:Kitchen', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:2', 'DTSTART:20260101T133000Z', 'DTEND:20260101T140000Z', 'RRULE:FREQ=DAILY', 'SUMMARY:Call with Berlin', 'LOCATION:Home office', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  function ok(body) { return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); }, text: function () { return Promise.resolve(body); } }); }
+
   function dataFetch(url, init) {
+    if (url === SAMPLE_ICS) return ok(SAMPLE_CAL);
+    if (/geocoding-api\.open-meteo\.com/.test(url)) return ok({ results: [{ name: 'Paris', latitude: 48.85341, longitude: 2.3488, country: 'France' }] });
+    if (/api\.open-meteo\.com/.test(url)) return ok(sampleWeather(url));
     var m = /\/data\/([^/?]+)$/.exec(url);
     if (!m) return fetch(url, init);
     var name = m[1];
@@ -29,6 +48,10 @@
     S.cfg = f;
     $('label-name').textContent = f.label.name;
     $('label').checked = f.label.default === 'true';
+    ['fill', 'show_date', 'show_weather', 'show_agenda'].forEach(function (k) { $(k + '-name').textContent = f[k].name; $(k).checked = f[k].default === 'true'; });
+    $('unit-name').textContent = f.temperature_unit.name;
+    f.temperature_unit.options.forEach(function (o) { var p = opt(o), el = document.createElement('option'); el.value = p[1]; el.textContent = p[0]; $('temperature_unit').appendChild(el); });
+    $('temperature_unit').value = String(f.temperature_unit.default);
     $('family-name').textContent = f.family_friendly.name;
     $('family_friendly').checked = f.family_friendly.default === 'true';
     $('genres-name').textContent = f.genres.name;
@@ -47,10 +70,18 @@
 
   function fields() {
     return {
-      label: String($('label').checked), family_friendly: String($('family_friendly').checked),
+      label: String($('label').checked), fill: String($('fill').checked), show_date: String($('show_date').checked),
+      show_weather: String($('show_weather').checked), show_agenda: String($('show_agenda').checked), temperature_unit: $('temperature_unit').value,
+      weather_location: 'Paris', ics_url: SAMPLE_ICS, family_friendly: String($('family_friendly').checked),
       genres: [].filter.call($('genres').querySelectorAll('input'), function (i) { return i.checked; }).map(function (i) { return i.value; }),
       movement: $('movement').value
     };
+  }
+
+  // as in settings.yml: fill only with nothing else on; the unit only with the weather on
+  function syncVisible() {
+    $('fill-row').hidden = ['label', 'show_date', 'show_weather', 'show_agenda'].some(function (k) { return $(k).checked; });
+    $('unit-row').hidden = !$('show_weather').checked;
   }
 
   function syncButtons() {
@@ -86,7 +117,7 @@
     var my = ++S.token;
     $('next').disabled = true;
     try {
-      var data = await S.engine.compute({ device: S.device, fields: fields(), state: S.state, fetch: dataFetch });
+      var data = await S.engine.compute({ device: S.device, fields: fields(), state: S.state, fetch: dataFetch, now: sampleNow() });
       if (my !== S.token) return;
       if (!data.art) throw new Error(data.notice || 'no artwork');
       S.state = data.trmnl_state || S.state;
@@ -146,7 +177,8 @@
     });
     $('zoomclose').addEventListener('click', function () { $('zoomdlg').close(); });
     $('look').addEventListener('change', function () { S.look = $('look').checked; if (S.markup) load($('frame')); });
-    ['label', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { show(); }); });
+    ['label', 'fill', 'show_date', 'show_weather', 'show_agenda', 'temperature_unit', 'family_friendly', 'movement'].forEach(function (id) { $(id).addEventListener('change', function () { syncVisible(); show(); }); });
+    syncVisible();
     var go = function () { show(); };
     if (window.customElements && customElements.get('trmnl-frame')) go(); else customElements.whenDefined('trmnl-frame').then(go);
   }).catch(function (e) { $('cap').textContent = 'The page could not load its files: ' + e.message; });

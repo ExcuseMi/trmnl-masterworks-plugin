@@ -39,12 +39,14 @@
       var trmnl = {
         user: { id: 1, locale: 'en-US', time_zone: 'UTC', time_zone_iana: 'UTC', utc_offset: 0 },
         device: { id: 1, friendly_id: 'ABC123', height: dev.height, width: dev.width, model: dev.model, bit_depth: dev.bit_depth, orientation: 'landscape' },
-        system: { timestamp_utc: Math.floor(Date.now() / 1000) },
+        system: { timestamp_utc: Math.floor((o.now == null ? Date.now() : o.now) / 1000) },
         plugin_settings: { instance_name: 'Masterworks', refresh_interval_minutes: 60, strategy: 'polling', dark_mode: 'no', no_screen_padding: 'yes', custom_fields_values: o.fields },
         state: o.state || {}
       };
       var mod = { exports: {} };
-      var run = new Function('fetch', 'module', plugin.transform + '\n;return run;')(o.fetch, mod);
+      // o.now (ms) pins the clock the transform sees: a Date subclass shadows the global one inside the plugin's code only
+      var D = o.now == null ? Date : (function () { function P() { var a = [].slice.call(arguments); return a.length ? new (Function.prototype.bind.apply(Date, [null].concat(a)))() : new Date(o.now); } P.prototype = Date.prototype; P.UTC = Date.UTC; P.parse = Date.parse; P.now = function () { return o.now; }; return P; })();
+      var run = new Function('fetch', 'module', 'Date', plugin.transform + '\n;return run;')(o.fetch, mod, D);
       var out = await run({ trmnl: trmnl });
       var data = Object.assign({}, out, { trmnl: Object.assign({}, trmnl, { state: out.trmnl_state }) });
       return data;
