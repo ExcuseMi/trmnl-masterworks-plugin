@@ -279,6 +279,7 @@
     }); }
   function no(r) { (window.mwLog = window.mwLog || []).push(r); return true; }
   var culprit = null; // a text too wide for its column: in a column, dropping other parts gives it no width, so it (or its part) goes first
+  var cl = 0; // the lines the title is clamped to (0: whole)
   var tl = 2; // the lines the label title may take: two, more only in a row under the work when nothing else helps (never dropped, never cut)
   var strict = false; // a row first tries the painting's title on one line (then all second lines share one baseline), else allows two
   function bad(blk, lay, kind) {
@@ -298,7 +299,7 @@
       if (cells.length && rect(cells[cells.length - 1]).right > rr.right + 1) return no(4);
       lab = row.querySelector('[data-cell="l"]');
       if (lab && vis(lab) && cells.length > 2 && rect(lab).width < 0.4 * rr.width) return no(5); // the label's 40 % share is claimed against the weather and the events; with only the date beside it, it gets what is left (the date is never dropped)
-      if (kind === 'below' ? lb.height - 3 * m - bb.height < 0.45 * lb.height : bb.bottom > lb.bottom - m + 1) return no(6);
+      if (kind === 'below' ? lb.height - 3 * m - bb.height < (cl ? 0.6 : 0.45) * lb.height : bb.bottom > lb.bottom - m + 1) return no(6);
       var band = lay.querySelector('[data-band]');
       if (band && rect(band).height < 0.45 * lb.height) return no(7);
     } else if (kind === 'stack') {
@@ -405,12 +406,23 @@
     if (lay.querySelector('[data-group]')) { setCls(pic, /^w--\[/, 'w--[' + best[0] + 'cqw]'); setWrap(lay, best[0] + (+lay.getAttribute('data-gapw') || 0)); } else setWrap(lay, best[0]);
     [].forEach.call(lay.querySelectorAll('[data-padtop],[data-padbot]'), function (e) { setH(e, 0, lay); });
   }
+  // the painting's title is the one text that may end in an ellipsis: clamped to n lines (Framework data-clamp), the lines that fit; n 0 restores it whole
+  function clampTitle(e, n) {
+    var full = e.getAttribute('data-full'), lo = 0, hi, mid;
+    if (!full) { full = e.textContent; e.setAttribute('data-full', full); }
+    e.textContent = full; e.removeAttribute('data-clamp'); e.removeAttribute('data-clamp-original');
+    if (!n || textBox(e).lines <= n) return;
+    hi = full.length;
+    while (lo < hi - 1) { mid = (lo + hi) >> 1; e.textContent = full.slice(0, mid).replace(/\s+$/, '') + '...'; if (textBox(e).lines <= n) lo = mid; else hi = mid; }
+    e.textContent = full.slice(0, lo).replace(/\s+$/, '') + '...'; e.setAttribute('data-clamp-original', full); e.setAttribute('data-clamp', String(n));
+  }
   function fit() {
     if (document.fonts && document.fonts.status && document.fonts.status !== 'loaded') return; // before the fonts are in, every text is the wrong size
     var blocks = document.querySelectorAll('[data-info-block][data-fit]'), k, items, i, blk, lay, kind, was = document.querySelectorAll('[data-fitted]'), adj = document.querySelectorAll('[data-adj]');
     window.mwLog = [];
     for (i = 0; i < was.length; i++) { was[i].classList.remove('hidden'); was[i].removeAttribute('data-fitted'); } // measured again from the full block
     for (i = 0; i < adj.length; i++) { if (adj[i].hasAttribute('data-c0')) adj[i].className = adj[i].getAttribute('data-c0'); else adj[i].setAttribute('data-c0', adj[i].className); }
+    [].forEach.call(document.querySelectorAll('[data-full]'), function (e) { clampTitle(e, 0); });
     labelColumns();
     for (k = 0; k < blocks.length; k++) {
       blk = blocks[k]; lay = blk.closest('[data-block]'); kind = blk.getAttribute('data-fit');
@@ -420,9 +432,10 @@
       if (kind === 'column') { var dcell = blk.querySelector('[data-cell="date"]'), dw = dcell ? rect(dcell).width : 0; if (dw > rect(blk).width + 0.5) setWrap(lay, cqwOf(wrapOf(lay), /w--\[(\d+)cqw\]/) + Math.ceil((dw - rect(blk).width) / rect(lay).width * 100)); } // a long weekday or month (Wednesday, September) is wider than the column: the column takes the date's width, the date is never dropped
       if (kind === 'stack') { var t = blk.querySelector('[data-label]'); if (t) setH(blk.querySelector('[data-labelgap]'), 2 * met(t).lh, lay); }
       // passes: the title on one line, then on two; a row under a whole work that is too narrow for it tries the full width as well
-      tl = 2;
+      tl = 2; cl = 0;
       var pass, fits = false, rowp = blk.querySelector('[data-row]'), wide = false, rep = 0, wasW, ex = 0, again = false;
       do { fits = false; wide = false; again = false; wasW = rect(blk).width;
+      var ttl = blk.querySelector("[data-label]"); if (ttl) clampTitle(ttl, cl);
       for (pass = rowp ? 0 : 1; pass < 2 && !fits; pass++) {
         strict = pass % 2 === 0;
         [].forEach.call(blk.querySelectorAll('[data-fitted]'), function (e) { e.classList.remove('hidden'); e.removeAttribute('data-fitted'); });
@@ -436,8 +449,9 @@
         fits = !bad(blk, lay, kind);
       }
       strict = false;
-      if (!fits && (kind === 'below' || kind === 'stack') && tl < 9) { tl++; again = true; continue; }
-      if (!fits && kind === 'column' && ex < 24) { ex += 3; again = widen(blk, lay, 3); if (again) continue; } // a title too long for the column: the column takes more width, the work gets smaller
+      if (!fits && cl === 0 && (kind === 'below' || kind === 'stack') && tl < 9) { tl++; again = true; continue; }
+      if (!fits && cl === 0 && kind === 'column' && ex < 24) { ex += 3; again = widen(blk, lay, 3); if (again) continue; } // a title too long for the column: the column takes more width, the work gets smaller
+      if (!fits && cl !== 1 && (kind === 'below' || kind === 'stack' || kind === 'column')) { cl = cl ? cl - 1 : 8; tl = cl; again = true; continue; } // still no room: the title is clamped to the lines that fit, 8 down to 1; it is never hidden while one line fits
       if (!fits) { mark(blk); if (kind === 'below') grow(blk, lay, true); if (kind !== 'below') regrow(lay); continue; } // the split's two blocks stand or fall together: the title is never dropped, so no info without it
       align(blk, lay);
       if (kind === 'below') grow(blk, lay, wide, rep === 2 ? Math.round(wasW / rect(lay).width * 100) : 0);

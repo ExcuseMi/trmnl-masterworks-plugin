@@ -110,12 +110,12 @@ var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most
 // first line's cap top, its baseline on the second's), the primary lines (weekday, month, temperature, event and painting titles) and the
 // secondary lines one step below (forecast, time, place, artist and year, museum); lh the primary line height (the gap between cells is 1.5 of it); their CSS px (z: the screen's CSS scale, the X draws 1040 CSS px on 1872) for the estimates, the vertical gap between column parts (sep), the column's widest share (infow, %)
 var FRAME_PROFILES = {
-  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 58, ev: 58, title: 58, small: 40, lh: 70,
-    cls: { num: 'value--mega', words: 'value value--large', temp: 'value value--large', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge' } },
-  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 30, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
-    cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'label label--xxlarge', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge' } },
-  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 21, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
-    cls: { num: 'value--large', words: 'label label--large', temp: 'label label--large', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall' } },
+  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 170, ev: 58, title: 58, small: 40, lh: 70,
+    cls: { num: 'value--mega', words: 'value value--large', temp: 'value--mega', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge text--regular' } },
+  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 74, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
+    cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'value--xlarge', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge text--regular' } },
+  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 58, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
+    cls: { num: 'value--large', words: 'label label--large', temp: 'value--large', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall text--regular' } },
 };
 FRAME_PROFILES.fp = FRAME_PROFILES.f;
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more

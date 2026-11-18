@@ -13,7 +13,7 @@ RSpec.describe 'Masterworks long titles' do
     https://cdn.statically.io/gh/ExcuseMi/trmnl-masterworks-plugin@main/data
   ].freeze
   REAL = 'On the Way between Old and New Cairo, Citadel Mosque of Mohammed Ali, and Tombs of the Mamelukes'
-  LONGER = "#{REAL}, with the Caravan Resting under the Walls" # 140 characters: the OG (800 x 480, the row as wide as the work, nothing wider) cannot hold more than the real 96 beside the date, so it is not tried there
+  LONGER = "#{REAL}, with the Caravan Resting under the Walls" # 140 characters: on every device the title shows, clamped (data-clamp) to the lines that fit when it does not fit whole
 
   def fixture(name) = JSON.parse(File.read(File.join(__dir__, 'fixtures', "#{name}.json")))
 
@@ -55,12 +55,18 @@ RSpec.describe 'Masterworks long titles' do
 
   %w[frame og_png v2].each do |device|
     %w[landscape portrait].each do |orientation|
-      (device == 'og_png' ? [REAL] : [REAL, LONGER]).each do |title|
+      [REAL, LONGER].each do |title|
         SETTINGS.each do |name, fields|
           it "#{device} #{orientation} #{title.length} chars, #{name}: the title is shown (label on) and the work is big" do
             page = render_lt(device, orientation, title, fields)
             w = work(page)
             expect(title_shown(page)).to be(true), 'the title' if fields['label'] == 'true'
+            if fields['label'] == 'true' && fields.key?('show_date')
+              t = page.evaluate("(() => { const e = [...document.querySelectorAll('[data-block=\"primary\"] [data-info-block] [data-label]')].find(x => x.offsetParent && !x.classList.contains('hidden')); return e ? [e.textContent.trim(), e.getAttribute('data-clamp'), e.getAttribute('data-full')] : null; })()")
+              expect(t).not_to be_nil, 'the title is in the info block'
+              expect(t[0].end_with?('...') ? !t[1].nil? : true).to be(true), 'a shortened title carries data-clamp'
+              expect(t[0].length).to be >= 20, 'a clamped title keeps its first lines'
+            end
             expect(w['w']).to be >= 45, "the work is #{w['w'].round}% of the width (tiny)"
             expect(w['w']).to be >= w['floor'] - 1, "the work is narrower than the row-under floor #{w['floor']}"
           end

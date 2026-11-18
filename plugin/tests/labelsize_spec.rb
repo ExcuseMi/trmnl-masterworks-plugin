@@ -74,4 +74,15 @@ RSpec.describe 'Masterworks label-only type sizes' do
       end
     end
   end
+
+  # the title leads: the secondary lines (artist, museum, medium, forecast, times) are never heavier than the title, and on the OG they are regular weight (owner 2026-11-18)
+  %w[v2 og_png frame].each do |device|
+    it "#{device}: the secondary lines are not heavier than the painting's title" do
+      page = render_ls(device, 16.0 / 9, ON)
+      w = page.evaluate("(() => { const q = (s) => [...document.querySelectorAll('[data-block=\"primary\"] ' + s)].filter(e => e.offsetParent && !e.classList.contains('hidden')).map(e => +getComputedStyle(e).fontWeight); return { title: q('span[data-label]'), who: q('[data-who]'), museum: q('[data-museum]') }; })()")
+      title = w['title'].max
+      (w['who'] + w['museum']).each { |x| expect(x).to be <= title, "secondary weight #{x} over the title's #{title}" }
+      (w['who'] + w['museum']).each { |x| expect(x).to be <= 450, "OG secondary weight #{x} is not regular" } if device == 'og_png'
+    end
+  end
 end

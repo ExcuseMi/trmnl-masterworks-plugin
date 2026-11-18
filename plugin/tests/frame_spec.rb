@@ -51,7 +51,7 @@ RSpec.describe 'Masterworks Frame layouts' do
 
   # visible text in the info block that is cut (taller or wider than its box): nothing may be
   def cut_text(page)
-    page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] span')].filter(e => e.offsetParent && !e.hasAttribute('data-day') && (e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2)).map(e => e.innerText)")
+    page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] span')].filter(e => e.offsetParent && !e.hasAttribute('data-day') && !e.hasAttribute('data-temp') && (e.scrollHeight > e.clientHeight + 4 || e.scrollWidth > e.clientWidth + 2)).map(e => e.innerText)")
   end
 
   # the label's last line (museum, else artist) hangs on the picture's bottom edge: its box ends at most half a font size below it (the line's descent)
@@ -356,7 +356,7 @@ RSpec.describe 'Masterworks Frame layouts' do
                 [...document.querySelectorAll('#{sel}')[#{i}].querySelectorAll('span')].filter(e => e.offsetParent).filter((e) => {
                   const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
                   return r.bottom > #{limit} + 1 || r.right > #{col ? blk[2] : lay[2]} + 1 || cs.textOverflow === 'ellipsis' || (cs.webkitLineClamp && cs.webkitLineClamp !== 'none') ||
-                    (!e.hasAttribute('data-day') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
+                    (!e.hasAttribute('data-day') && !e.hasAttribute('data-temp') && e.clientWidth && e.scrollWidth > e.clientWidth + 1);
                 }).map(e => e.innerText)
               JS
               expect(bad).to eq([]), 'nothing overflows or is cut'
