@@ -20,7 +20,7 @@ RSpec.describe 'Masterworks long titles' do
   def render_lt(device, orientation, title, fields)
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => 5732, 'h' => 3487, 't' => title)
-    shards = BASES_LT.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_LT.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     page = trmnl.render(view: 'full', device:, orientation:, mocks: shards, custom_fields: fields)
     page.has_css?('img.image')
     page

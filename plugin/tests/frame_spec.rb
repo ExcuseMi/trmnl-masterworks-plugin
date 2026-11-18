@@ -20,7 +20,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     doc['w'][0]['w'] = (aspect * 1000).round
     doc['w'][0]['h'] = 1000
     BASES_FRAME.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: doc }
         m["#{base}/portrait-#{k}.json"] = { json: doc }
       end
@@ -318,7 +318,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     doc['w'][0]['t'] = LONG_TITLE
     doc['col'][doc['w'][0]['c']] = LONG_MUSEUM
     BASES_FRAME.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: doc }
         m["#{base}/portrait-#{k}.json"] = { json: doc }
       end

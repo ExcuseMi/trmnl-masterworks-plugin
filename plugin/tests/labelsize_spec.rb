@@ -18,7 +18,7 @@ RSpec.describe 'Masterworks label-only type sizes' do
     doc = fixture('one-landscape')
     doc['w'][0]['w'] = (aspect * 1000).round
     doc['w'][0]['h'] = 1000
-    shards = BASES_LS.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc } } }
+    shards = BASES_LS.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') } }
     page = trmnl.render(view: 'full', device:, orientation: 'landscape', mocks: shards.merge(services), custom_fields: { 'weather_location' => 'Paris', 'label' => 'true' }.merge(fields))
     page.has_css?('img.image')

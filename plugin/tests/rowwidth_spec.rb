@@ -25,7 +25,7 @@ RSpec.describe 'Masterworks row width' do
   def render_row(device, orientation, w, h, title)
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => w, 'h' => h, 't' => title)
-    shards = BASES_RW.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
+    shards = BASES_RW.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') }, 'https://calendar.example.org/*' => { body: ics } }
     fields = { 'weather_location' => 'Paris', 'ics_url' => 'https://calendar.example.org/private/abc/basic.ics', 'show_date' => 'true', 'show_weather' => 'true', 'show_agenda' => 'true', 'label' => 'true' }
     page = trmnl.render(view: 'full', device:, orientation:, mocks: shards.merge(services), custom_fields: fields)

@@ -20,7 +20,7 @@ RSpec.describe 'Masterworks pixel guard for the screens that are not the Frame' 
 
   def shards(landscape, portrait)
     BASES_G.each_with_object({}) do |base, m|
-      (0..7).each do |k|
+      (0..15).each do |k|
         m["#{base}/landscape-#{k}.json"] = { json: fixture(landscape) }
         m["#{base}/portrait-#{k}.json"] = { json: fixture(portrait) }
       end
