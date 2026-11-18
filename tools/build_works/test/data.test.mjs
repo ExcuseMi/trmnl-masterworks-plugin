@@ -65,3 +65,26 @@ test('every work is not a PNG, or says the thumbnail step to ask for (a PNG thum
   const bad = works.filter((w) => /\.png$/i.test(w.f) && !(w.r >= 250 && w.r <= 960)).map((w) => `${w.i} ${w.f}`);
   assert.deepStrictEqual(bad, []);
 });
+
+// Owner 2026-11-18, error on the side of caution: every work the curator flagged or found borderline on safety has the
+// family flag (the snapshot is made from the server's index export, overrides applied). Q19967004 (Schiele, The Embrace)
+// showed with Family friendly on.
+import { suspects, suspectOf, loadSuspects } from '../curator_safety.mjs';
+
+test('every curator safety suspect has the family flag, and Q19967004 too', () => {
+  const sus = loadSuspects(), ids = new Set(works.map((w) => w.i));
+  assert.ok(Object.keys(sus).length > 1200, `${Object.keys(sus).length} suspects`);
+  const bad = Object.keys(sus).filter((q) => ids.has(q) && !works.filter((w) => w.i === q).every((w) => w.u));
+  assert.deepStrictEqual(bad, []);
+  assert.ok(works.filter((w) => w.i === 'Q19967004').every((w) => w.u));
+  assert.ok(sus.Q19967004, 'the curator flagged it');
+});
+
+test('the suspect rule: a flag or a safety doubt, nothing else; an override that clears both un-flags', () => {
+  assert.strictEqual(suspectOf({ flag: 'nudity', doubt: [] }), 'flag');
+  assert.strictEqual(suspectOf({ flag: null, doubt: ['genre', 'safety'] }), 'doubt');
+  assert.strictEqual(suspectOf({ flag: null, doubt: ['quality'] }), null);
+  assert.strictEqual(suspectOf({ flag: null, doubt: [] }), null);
+  assert.strictEqual(suspectOf(undefined), null);
+  assert.deepStrictEqual(suspects([{ qid: 'Q2', cur: { flag: 'violence', doubt: [] } }, { qid: 'Q1', cur: { flag: null, doubt: [] } }]), { Q2: 'flag' });
+});

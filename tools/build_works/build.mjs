@@ -16,6 +16,7 @@ import { DEPICTS_RE, SERIES_GENRE, genreOf, is2dArtwork, unfriendlyReasons } fro
 import { latestYear, yearInfo } from './dates.mjs';
 import { venueOf } from './names.mjs';
 import { normalizeMedium } from './media.mjs';
+import { loadSuspects } from './curator_safety.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -145,6 +146,7 @@ const imageOf = (p) => {
 };
 const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
 const artistOf = (p) => p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
+const curatorSuspects = loadSuspects();
 const reasonsOf = (p) => unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title: titleOf(p), genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, titleOf(p), yearInfo(tags[p.id].dates).year)) });
 // one work once: the most famous version of an artist + title is kept, with the flags of all its versions
 const once = dedupe(picked.filter((p) => imageOf(p)).map((p) => ({
@@ -168,7 +170,7 @@ for (const p of picked) {
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), yearLabel: yearInfo(tags[p.id].dates).label,
     genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
-    reasons: once.reasons.get(p.id),
+    reasons: [...(once.reasons.get(p.id) || []), ...(curatorSuspects[p.id] ? [`curator ${curatorSuspects[p.id]}`] : [])], // the curator's safety suspects are flagged too (owner 2026-11-18)
     locations: tags[p.id].locations, collections: p.d.coll,
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });
