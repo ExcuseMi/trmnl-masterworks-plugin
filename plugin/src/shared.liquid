@@ -135,7 +135,7 @@
     <div class="w--[{{ gl.col.gap }}cqw] shrink-0"></div>
     <div class="flex flex--col flex--left gap--none w--[{{ gl.col.w }}cqw] h--[{{ gl.b }}cqh] shrink-0" data-label="1" data-label-col-text="1" data-adj="1">
       <div class="w--full grow"></div>
-      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--left">{{ art.title | escape }}</span>
+      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--left" data-title="1">{{ art.title | escape }}</span>
       {% if gl.label.who != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ acls }}{% endif %} {{ ink }} block w--full text--left">{{ gl.label.who | escape }}</span>{% endif %}
       {% if gl.label.detail != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ dcls }}{% endif %} {{ ink }} block w--full text--left">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>
@@ -145,7 +145,7 @@
     {{ bevel }}
     {% if gl.label %}
     <div class="flex flex--col flex--right gap--none w--[{{ gl.a }}cqw] {{ lpad }}" data-label="1">
-      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.lines }}" data-clamp-lg="2">{{ art.title | escape }}</span>
+      <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--right" data-title="1" data-clamp="{{ gl.label.lines }}" data-clamp-lg="2">{{ art.title | escape }}</span>
       {% if gl.label.who != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ acls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
       {% if gl.label.detail != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ dcls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>

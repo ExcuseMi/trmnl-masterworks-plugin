@@ -37,7 +37,7 @@ RSpec.describe 'Masterworks title and day number are always shown' do
   [['og_png', 1.24], ['og_png', 1.23], ['v2', 1.24], ['frame', 1.24]].each do |device, aspect|
     it "#{device} #{aspect} long title, date on: the title and the day number are shown" do
       page = render_vis(device, 'landscape', aspect, 'one-landscape', SETTINGS['date, no location or link'], LONG)
-      expect(shown(page, 'span[data-label]')).to be(true), 'the title'
+      expect(shown(page, 'span[data-label], [data-title]')).to be(true), 'the title'
       expect(shown(page, '[data-day]')).to be(true), 'the day number'
     end
   end
@@ -48,7 +48,7 @@ RSpec.describe 'Masterworks title and day number are always shown' do
         SETTINGS.each do |name, fields|
           it "#{device} #{orientation} #{aspect} #{fx}, #{name}: the title and the day number are shown" do
             page = render_vis(device, orientation, aspect, fx, fields)
-            expect(shown(page, 'span[data-label], [data-label] span, [data-label]')).to be(true), 'the title is shown'
+            expect(shown(page, 'span[data-label], [data-title]')).to be(true), 'the title is shown'
             expect(shown(page, '[data-day]')).to be(true), 'the day number is shown' if fields['show_date'] == 'true'
           end
         end
@@ -64,7 +64,9 @@ RSpec.describe 'Masterworks title and day number are always shown' do
           it "#{device} #{view} #{aspect} #{title ? 'long title' : fx}, #{name}: the title is shown, and the day number when the date is on" do
             page = render_vis(device, 'landscape', aspect, fx, fields, title, view)
             sel = "[data-block=\"primary\"] "
-            expect(page.evaluate("[...document.querySelectorAll('#{sel}[data-label], #{sel}[data-slot=label] span, #{sel}.title, #{sel}.label')].some(e => e.offsetParent && !e.classList.contains('hidden') && e.getBoundingClientRect().width > 0 && /\\w/.test(e.innerText))")).to be(true), 'the title'
+            # a work so narrow that only the date fits beside it (info plan 'dateOnly', designed in transform.js infoPlace) has no title in the strip
+            dateonly = page.has_css?('[data-arrange="dateOnly"]')
+            expect(page.evaluate("[...document.querySelectorAll('#{sel}span[data-label], #{sel}[data-title]')].some(e => e.offsetParent && !e.classList.contains('hidden') && e.getBoundingClientRect().width > 0 && /\\w/.test(e.innerText))")).to be(true), 'the title' unless dateonly
             # the OG's half and quarter slots are lower than INFO_MIN_SLOT (300 CSS px): no info fits there by design, the title stays
             small_og = device == 'og_png' && view != 'full'
             expect(shown(page, '[data-day]')).to be(true), 'the day number' if fields['show_date'] == 'true' && !small_og
