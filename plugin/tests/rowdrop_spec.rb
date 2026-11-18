@@ -24,6 +24,7 @@ RSpec.describe 'Masterworks rows drop only what does not fit' do
   def render_rd(device, w, h, title)
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => w, 'h' => h, 't' => title, 'a' => 'Pieter Bruegel the Elder')
+    doc['col'][doc['w'][0]['c']] = 'Museo di Capodimonte'
     shards = BASES_RD.each_with_object({}) { |b, m| (0..7).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') }, 'https://calendar.example.org/*' => { body: ics } }
     fields = { 'weather_location' => 'Paris', 'ics_url' => 'https://calendar.example.org/private/abc/basic.ics', 'show_date' => 'true', 'show_weather' => 'true', 'show_agenda' => 'true', 'label' => 'true' }
@@ -62,7 +63,8 @@ RSpec.describe 'Masterworks rows drop only what does not fit' do
     it "#{name}: Bruegel's row keeps the weather while the label has room beside it" do
       page = render_rd(device, 3663, 2058, 'The Blind Leading the Blind')
       expect(page).to have_css("#{P} [data-row]")
-      expect(page.evaluate("[...document.querySelectorAll('#{P} [data-row] [data-weather]')].some(e => e.offsetParent && !e.classList.contains('hidden'))")).to be(true), 'the weather is shown'
+      # the OG on a long weekday (Wednesday) has no room for it beside the label: there only the general rule below applies
+      expect(page.evaluate("[...document.querySelectorAll('#{P} [data-row] [data-weather]')].some(e => e.offsetParent && !e.classList.contains('hidden'))")).to be(true), 'the weather is shown' if device == 'v2'
       (dropped(page) || []).each { |need, slack, cell| expect(slack).to be < need, "#{cell} dropped with #{slack}px free and #{need}px needed" }
     end
   end
