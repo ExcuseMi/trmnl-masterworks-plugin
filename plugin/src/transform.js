@@ -925,7 +925,7 @@ function frameProfileOf(scr) {
   return null;
 }
 
-/** The layout of the info on a Frame, X or OG screen (see FRAME_ constants): { layout: "band" | "below" | "column" | "stack", ... }. The sizes are a first plan; the browser measures, drops and grows. */
+/** The layout of the info on a Frame, X or OG screen (see FRAME_ constants): { layout: "band" | "below" | "column" | "split" | "stack", ... }. The sizes are a first plan; the browser measures, drops and grows. */
 function framePlan(art, sw, sh, set, key) {
   key = key || 'f';
   var P = FRAME_PROFILES[key], b = set.blocks, aspect = art.w / art.h, label = !!set.label, events = b.agenda ? Math.min(b.events, AGENDA_ITEMS) : 0;
@@ -944,11 +944,15 @@ function framePlan(art, sw, sh, set, key) {
     out = { layout: 'stack', artw: full.w, arth: full.h, events: events };
   } else {
     var below = frameBox(aspect, sw, sh, bandW, restPct), box = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
-    if (box && box.w * box.h >= below.w * below.h) out = { layout: 'column', artw: box.w, arth: box.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
+    var split = portrait ? null : frameBox(aspect, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - 2 * FRAME_COL_GUTTER - 2 * P.infow, FRAME_COL_H_MAX);
+    var best = box && box.w * box.h >= below.w * below.h ? box : below;
+    // the split (date, weather, events left of the work, the work centred, the label right) only when the work is shown as large as the best other layout gives; Frame only
+    if (split && key === 'f' && split.w * split.h >= best.w * best.h) out = { layout: 'split', artw: split.w, arth: split.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
+    else if (box && box.w * box.h >= below.w * below.h) out = { layout: 'column', artw: box.w, arth: box.h, infow: P.infow, gap: FRAME_COL_GUTTER, events: events };
     else out = { layout: 'below', artw: below.w, arth: below.h, rowpct: below.w >= 60 ? below.w : bandW, events: evB };
   }
   out = put(out);
-  out.gap = out.layout === 'column' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
+  out.gap = out.layout === 'column' || out.layout === 'split' ? FRAME_COL_GUTTER : FRAME_GAP_PCT;
   out.bandPx = [sw * out.artw / 100, sh * out.arth / 100];
   return out;
 }

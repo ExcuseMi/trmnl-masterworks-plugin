@@ -19,7 +19,7 @@
 {% assign c = inf.cls %}
 {% assign lay = inf.layout %}
 {% assign inrow = false %}{% if lay == "band" or lay == "below" %}{% assign inrow = true %}{% endif %}
-{% if inrow %}{% assign cell = "flex flex--col flex--left gap--none shrink-0" %}{% assign lcell = "flex flex--col flex--left gap--none grow basis--0" %}{% else %}{% assign cell = "flex flex--col flex--left gap--none w--full shrink-0" %}{% assign lcell = cell %}{% endif %}
+{% if inrow %}{% assign cell = "flex flex--col flex--left gap--none shrink-0" %}{% assign lcell = "flex flex--row flex--right flex--top gap--none grow basis--0" %}{% else %}{% assign cell = "flex flex--col flex--left gap--none w--full shrink-0" %}{% assign lcell = cell %}{% endif %}
 {% capture lift %}<div class="w--full h--[0px] shrink-0" data-lift="1" data-adj="1"></div>{% endcapture %}
 {% capture gap %}{% if inrow %}<div class="w--[{{ inf.gappx }}px] shrink-0" data-gap="1"></div>{% else %}<div class="w--full h--[{{ inf.sepv }}px] shrink-0" data-gap="1"></div>{% endif %}{% endcapture %}
 {% capture d_p %}{% if info.has_date %}<div class="flex flex--row flex--left flex--top gap--none shrink-0" data-info="date" data-cell="date">
@@ -38,11 +38,11 @@
       <span class="{{ c.ev }} text--bold {{ ink }} block text--left shrink-0" data-event-title="1">{{ ev.title | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
       <span class="{{ c.small }} {{ ink }} block text--left value--tnums shrink-0" data-event-time="1">{{ ev.time | escape }}{% if ev.loc != blank %} · {{ ev.loc | escape }}{% endif %}</span>
     </div>{{ gap }}{% endfor %}{% endif %}{% endcapture %}
-{% capture l_p %}{% if inf.label %}<div class="{{ lcell }}" data-cell="l" data-slot="label">{{ lift }}
+{% capture l_p %}{% if inf.label %}<div class="{{ lcell }}" data-cell="l" data-slot="label">{% if inrow %}<div class="flex flex--col flex--left gap--none" data-lbody="1">{% endif %}{{ lift }}
       <span class="{{ c.title }} {{ ink }} block text--left shrink-0" data-label="1">{{ art.title | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
       <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-who="1" data-drop="6">{{ inf.who | escape }}</span>
       {% if inf.coll != blank %}<span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-museum="1" data-drop="{% if inrow %}4{% else %}0{% endif %}">{{ inf.coll | escape }}</span>{% endif %}
-    </div>{% endif %}{% endcapture %}
+    {% if inrow %}</div>{% endif %}</div>{% endif %}{% endcapture %}
 {% capture img %}<img {% if block == "backup" %}data-src="{{ art.url }}" data-srcset="{{ art.srcset }}"{% else %}src="{{ art.url }}" srcset="{{ art.srcset }}"{% endif %} sizes="{{ inf.artw }}vw"{% if block == "backup" %}{% elsif swap != blank %} onerror="{{ swap }}"{% endif %} class="image image--cover image-dither block{% if lay == "band" %} absolute top--0 left--0{% endif %} w--full h--full" alt="" />{% endcapture %}
 {% capture picture %}<div class="relative w--[{{ inf.artw }}cqw] h--[{{ inf.arth }}cqh] shrink-0 {{ mat }}" data-picture="1" data-adj="1">{{ img }}</div>{% endcapture %}
 {% capture mgap %}<div class="w--full h--[{{ inf.margin }}px] shrink-0"></div>{% endcapture %}
@@ -60,6 +60,17 @@
 <div class="layout layout--col layout--top gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
   {{ mgap }}{{ picture }}{{ mgap }}
   <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.artw }}cqw] shrink-0" data-info-block="column" data-fit="stack">{{ d_p }}{{ w_p }}{{ e_p }}<div class="w--full h--[0px] shrink-0" data-labelgap="1" data-adj="1"></div>{{ l_p }}</div>
+</div>
+{% elsif lay == "split" %}
+<div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
+  {% comment %} try-split: the date, weather and events on the left, the work in the middle, the label on the right, equal widths, the work exactly centred {% endcomment %}
+  <div class="flex gap--none" data-group="1">
+    <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.infow }}cqw] shrink-0" data-info-block="column" data-fit="splitL" data-adj="1">{{ d_p }}{{ w_p }}{{ e_p }}</div>
+    <div class="w--[{{ inf.gap }}cqw] shrink-0"></div>
+    <div class="flex flex--col flex--left gap--none shrink-0"><div class="w--full h--[0px] shrink-0" data-padtop="1" data-adj="1"></div>{{ picture }}<div class="w--full h--[0px] shrink-0" data-padbot="1" data-adj="1"></div></div>
+    <div class="w--[{{ inf.gap }}cqw] shrink-0"></div>
+    <div class="flex flex--col flex--left flex--top gap--none w--[{{ inf.infow }}cqw] shrink-0" data-info-block="column" data-fit="splitR" data-adj="1"><div class="w--full grow"></div>{{ l_p }}</div>
+  </div>
 </div>
 {% else %}
 <div class="layout layout--row layout--center gap--none p--0 {{ mat }}{% if block == "backup" %} hidden{% endif %}" {{ attrs }}>
@@ -287,6 +298,9 @@
       if (band && rect(band).height < 0.45 * lb.height) return no(7);
     } else if (kind === 'stack') {
       if (bb.bottom > lb.bottom - m + 1) return no(8);
+    } else if (kind === 'splitL' || kind === 'splitR') {
+      var spic = lay.querySelector('[data-picture]');
+      if (last && rect(last).bottom > rect(spic).bottom + 1) return no(9);
     } else {
       var pic = lay.querySelector('[data-picture]'), lg = blk.querySelector('[data-labelgap]'), t = blk.querySelector('[data-label]');
       if (last && rect(last).bottom > rect(pic).bottom + 1) return no(9);
@@ -355,6 +369,15 @@
       if (w > 0) setCls(el, /^w--\[/, 'w--[' + Math.min(Math.ceil(w / rect(lay).width * 100) + 0, Math.round(rect(el).width / rect(lay).width * 100)) + 'cqw]');
     }
   }
+  // try-split: the left block's first ink on the work's top (the work moves down by the cap offset), the right block's last baseline on the work's bottom
+  function split(blk, lay, kind) {
+    var sp = [].filter.call(blk.querySelectorAll('span'), vis), br = rect(blk), top = 1e9, last = sp[sp.length - 1];
+    if (!sp.length) return;
+    if (kind === 'splitL') {
+      sp.forEach(function (e) { var r = rect(e), mt = met(e); if (!e.closest('[data-cell="date"]') || e.hasAttribute('data-day') || e.hasAttribute('data-weekday')) top = Math.min(top, r.top + mt.cap); });
+      setH(lay.querySelector('[data-padtop]'), Math.max(0, top - br.top), lay);
+    } else setH(lay.querySelector('[data-padbot]'), met(last).lh - met(last).base, lay);
+  }
   function fit() {
     if (document.fonts && document.fonts.status && document.fonts.status !== 'loaded') return; // before the fonts are in, every text is the wrong size
     var blocks = document.querySelectorAll('[data-info-block][data-fit]'), k, items, i, blk, lay, kind, was = document.querySelectorAll('[data-fitted]'), adj = document.querySelectorAll('[data-adj]');
@@ -389,6 +412,7 @@
       align(blk, lay);
       if (kind === 'below') grow(blk, lay, wide);
       if (kind === 'column') column(blk, lay);
+      if (kind === 'splitL' || kind === 'splitR') split(blk, lay, kind);
     }
   }
   window.mwFit = fit;

@@ -64,7 +64,9 @@ RSpec.describe 'Masterworks Frame layouts' do
   P = '[data-block="primary"]'
 
   BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2:1' => 2.0, '16:9' => 16.0 / 9 }.freeze
-  COLUMN_SHAPES = { '3:2' => 1.5, '4:3' => 4.0 / 3, 'square' => 1.0, '3:4' => 0.75, 'scroll 1:2.5' => 0.4 }.freeze
+  COLUMN_SHAPES = { '3:2' => 1.5, '4:3' => 4.0 / 3, 'square' => 1.0 }.freeze
+  # tall works on the Frame: the split costs no image size, so it is used (info left, work centred, label right)
+  SPLIT_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4 }.freeze
 
   BAND_SHAPES.each do |name, aspect|
     it "#{name}: the band layout, the picture covers a band inside equal margins, the strip is as wide as the band" do
@@ -104,6 +106,43 @@ RSpec.describe 'Masterworks Frame layouts' do
       expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0), 'no rules in the column'
       ratio = ((pic[2] - pic[0]) / (pic[3] - pic[1])) / aspect
       expect(ratio).to be_within(0.03).of(1), 'the picture has the work\'s shape (the whole work)'
+    end
+  end
+
+  SPLIT_SHAPES.merge('dark 3:4' => 0.75).each do |name, aspect|
+    it "#{name}: the split layout on the Frame, the info left of the work, the work centred on the screen, the label right of it" do
+      page = frame(all_on, aspect, name.start_with?('dark') ? 'one-dark-landscape' : 'one-landscape')
+      expect(page).to have_css("#{P}[data-layout=\"split\"]")
+      lay = box(page, P)
+      pic = box(page, "#{P} [data-picture]")
+      left, right = page.evaluate("[...document.querySelectorAll('#{P} [data-info-block]')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })")
+      expect(left[2]).to be <= pic[0] + 1, 'the date, weather and events are left of the work'
+      expect(right[0]).to be >= pic[2] - 1, 'the label column is right of the work'
+      expect(pic[0] - lay[0]).to be_within(3).of(lay[2] - pic[2]), 'the work is horizontally centred on the screen'
+      expect(box(page, "#{P} [data-slot=\"label\"]")[0]).to be >= pic[2]
+      expect(page.evaluate("document.querySelectorAll('#{P} [data-rule]').length")).to eq(0)
+      expect(cut_text(page)).to eq([])
+    end
+  end
+
+  it 'the split is only for tall works on the Frame: square, 3:2, the X and the OG never use it' do
+    [1.0, 1.5].each { |a| expect(frame(all_on, a)).to have_no_css("#{P}[data-layout=\"split\"]") }
+    %w[v2 og_png].each { |d| [1.0, 0.75, 1.5].each { |a| expect(frame(all_on, a, device: d)).to have_no_css("#{P}[data-layout=\"split\"]") } }
+  end
+
+  # the label is the last element and ends at the work's right edge in every row (under a band or under a whole work)
+  { 'frame' => 'f', 'v2' => 'x', 'og_png' => 'o' }.each do |device, _profile|
+    [2.5, 2.0, 16.0 / 9, 1.5].each do |aspect|
+      it "#{device}, #{aspect.round(2)}: in a row the label's right edge is the work's right edge" do
+        page = frame(all_on, aspect, device:)
+        layout = page.evaluate("document.querySelector('#{P}').getAttribute('data-layout')")
+        skip "#{layout} layout, not a row" unless %w[band below].include?(layout)
+        pic = box(page, "#{P} [data-picture]")
+        lab = box(page, "#{P} [data-slot=\"label\"]")
+        expect(lab[2]).to be_within(2).of(pic[2]), "label #{lab} work #{pic}"
+        txt = page.evaluate("(() => { const b = document.querySelector('#{P} [data-lbody]').getBoundingClientRect(); return [b.left, b.right]; })()")
+        expect(txt[1]).to be_within(2).of(pic[2]), 'the label text block ends on the right edge'
+      end
     end
   end
 
