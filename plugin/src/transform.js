@@ -936,7 +936,8 @@ function framePlan(art, sw, sh, set, key) {
   var base = { frame: true, tier: key, fit: 'cover', cls: P.cls, label: label, who: whoLine(art).replace(/ \u00b7 /g, '\u00a0\u00b7\u00a0'), coll: art.collection || '', fill: false,
     margin: m, numgap: Math.round(P.words * 0.4), gappx: Math.round(1.5 * P.lh), gap: FRAME_GAP_PCT, sepv: P.sep, bandw: bandW, aspect: Math.round(aspect * 10000) / 10000, portrait: portrait };
   var put = function (o) { for (var k in base) o[k] = base[k]; return o; };
-  if (!portrait && aspect >= FRAME_BAND_ASPECT) {
+  // the band covers its box: only when that crops at most FILL_CROP_MAX of the work, else the whole work (row under it, or column)
+  if (!portrait && aspect >= FRAME_BAND_ASPECT && cropShare(aspect, (bandW * sw) / (restPct * sh)) <= FILL_CROP_MAX) {
     out = { layout: 'band', artw: bandW, arth: restPct, events: evB };
   } else if (portrait && aspect >= FRAME_STACK_ASPECT) {
     var full = frameBox(aspect, sw, sh, bandW, 60);

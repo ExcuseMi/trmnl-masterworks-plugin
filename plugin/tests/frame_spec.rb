@@ -63,7 +63,9 @@ RSpec.describe 'Masterworks Frame layouts' do
   def all_on = { 'show_date' => 'true', 'show_weather' => 'true', 'show_agenda' => 'true', 'label' => 'true' }
   P = '[data-block="primary"]'
 
-  BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2:1' => 2.0, '16:9' => 16.0 / 9 }.freeze
+  # a band only when it crops at most 15 % (FILL_CROP_MAX): on the Frame these shapes; 2:1 and 16:9 keep the whole work there
+  BAND_SHAPES = { 'panorama 2.5:1' => 2.5, '2.4:1' => 2.4, '2.2:1' => 2.2 }.freeze
+  BAND_ASPECT = { 'frame' => 2.4, 'v2' => 2.0, 'og_png' => 2.2 }.freeze # a shape each device takes as a band
   COLUMN_SHAPES = { '3:2' => 1.5, '4:3' => 4.0 / 3, 'square' => 1.0 }.freeze
   # tall works on the Frame: the single right-hand column (info on top, label at the bottom); the owner reversed the split layout 2026-11-18
   TALL_SHAPES = { '3:4' => 0.75, 'scroll 1:2.5' => 0.4, 'dark 3:4' => 0.75 }.freeze
@@ -178,7 +180,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     on = KEYS_FRAME.each_with_index.select { |_, i| mask[i] == 1 }.map(&:first)
     fields = KEYS_FRAME.to_h { |k| [k, on.include?(k) ? 'true' : 'false'] }
     strip = (on & %w[show_date show_weather show_agenda]).any?
-    { 'band' => 2.0, 'column' => 1.5 }.each do |layout, aspect|
+    { 'band' => 2.4, 'column' => 1.5 }.each do |layout, aspect|
       it "#{layout}, on: #{on.empty? ? 'nothing' : on.join(' ')}: only the parts that are on, no empty column, no stray rule" do
         page = frame(fields, aspect)
         unless strip
@@ -240,7 +242,7 @@ RSpec.describe 'Masterworks Frame layouts' do
     end
 
     it "#{device}: a work 16:9 and wider gets the band when its fill crops little, whole otherwise; nothing overlaps" do
-      page = frame(all_on, 2.4, device:)
+      page = frame(all_on, BAND_ASPECT[device], device:)
       expect(page).to have_css("#{P}[data-layout=\"band\"]")
       pic = box(page, "#{P} [data-picture]")
       strip = box(page, "#{P} [data-info-block]")
@@ -250,7 +252,7 @@ RSpec.describe 'Masterworks Frame layouts' do
   end
 
   it 'the X and the OG band: at most one event (date, weather, next event, label), and the painting label is never cut with an ellipsis, on every device' do
-    { 'v2' => 2.2, 'og_png' => 2.2, 'frame' => 2.2 }.each do |device, aspect|
+    BAND_ASPECT.each do |device, aspect|
       page = frame(all_on, aspect, device:)
       expect(page).to have_css("#{P}[data-layout=\"band\"]")
       events = page.evaluate("document.querySelectorAll('#{P} [data-event]').length")
@@ -260,7 +262,7 @@ RSpec.describe 'Masterworks Frame layouts' do
       expect(cut).to eq([]), "#{device}: the label is whole"
     end
     [['v2', 'x'], ['og_png', 'o']].each do |device, _|
-      page = frame(all_on, 2.2, device:)
+      page = frame(all_on, BAND_ASPECT[device], device:)
       expect(page.evaluate("[...document.querySelectorAll('#{P} [data-info-block] [data-cell]')].map(e => e.getAttribute('data-cell'))")).to eq(%w[date w e l]), 'date, weather, the next event, the label'
     end
   end

@@ -300,7 +300,8 @@ const FRAME_SET = { strip: true, blocks: { date: true, weather: true, agenda: tr
 const framePlan = (aspect, set = FRAME_SET) => t.framePlan({ w: Math.round(aspect * 1000), h: 1000, kind: 'big', title: 't', artist: 'a', collection: 'c' }, 2560, 1440, set);
 
 test('Frame: a band for 16:9 and wider, the column layout for every other shape', () => {
-  for (const a of [2.5, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`);
+  for (const a of [2.5, 2.4, 2.2]) assert.strictEqual(framePlan(a).layout, 'band', `${a}`); // a band only when it crops at most 15 % (owner rule): 2:1, 16:9 and 3:1 keep the whole work on the Frame
+  for (const a of [3, 2, 16 / 9]) assert.strictEqual(framePlan(a).layout, 'below', `${a}`);
   for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`); // tall too: the split layout is gone (owner 2026-11-18)
 });
 
@@ -309,7 +310,7 @@ test('Frame: no layout is ever a split (blocks on both sides of the work)', () =
 });
 
 test('Frame band: equal margins on three sides, the strip as wide as the band, no columns or rules in the plan (one row)', () => {
-  const p = framePlan(2);
+  const p = framePlan(2.4);
   assert.strictEqual(p.bandPx[0], 2560 - 2 * 51.2);
   assert.strictEqual(p.margin, 51);
   assert.strictEqual(p.events, 2);
