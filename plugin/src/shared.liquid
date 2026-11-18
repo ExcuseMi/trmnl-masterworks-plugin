@@ -117,6 +117,18 @@
       {% render "info", inf:inf, info:info, art:art, ink:ink, frame:frame %}
     </div>
   </div>
+  {% elsif gl.col %}
+  {% comment %} label only, near-square or tall work: the whole work with the label in a column on its right, its last line level with the work's bottom (the group is centred on the mat) {% endcomment %}
+  <div class="flex flex--row gap--none" data-label-column="1">
+    {{ bevel }}
+    <div class="w--[{{ gl.col.gap }}cqw] shrink-0"></div>
+    <div class="flex flex--col flex--left gap--none w--[{{ gl.col.w }}cqw] h--[{{ gl.b }}cqh] shrink-0" data-label="1">
+      <div class="w--full grow"></div>
+      <span class="title {{ tcls }} {{ ink }} block w--full text--left" data-clamp="3" data-clamp-lg="3">{{ art.title | escape }}</span>
+      {% if gl.label.who != blank %}<span class="label {{ acls }} {{ ink }} block w--full text--left" data-clamp="2" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
+      {% if gl.label.detail != blank %}<span class="label {{ dcls }} {{ ink }} block w--full text--left" data-clamp="2" data-clamp-lg="2">{{ gl.label.detail | escape }}</span>{% endif %}
+    </div>
+  </div>
   {% else %}
   <div class="flex flex--col flex--center-x gap--none">
     {{ bevel }}

@@ -305,12 +305,12 @@ test('Frame: a band for 16:9 and wider, the column layout for every other shape'
   for (const a of [1.5, 4 / 3, 1, 3 / 4, 0.6, 0.4]) assert.strictEqual(framePlan(a).layout, 'column', `${a}`);
 });
 
-test('Frame band: equal margins on three sides, the strip as wide as the band, equal columns', () => {
+test('Frame band: equal margins on three sides, the strip as wide as the band, no columns or rules in the plan (one row)', () => {
   const p = framePlan(2);
   assert.strictEqual(p.bandPx[0], 2560 - 2 * 51.2);
-  assert.ok(Math.abs(p.margin - 2560 * p.mpct / 100) < 2 || p.margin === 51);
-  assert.strictEqual(p.cols, 4);
-  assert.strictEqual(framePlan(2, { ...FRAME_SET, label: false }).cols, 3, 'a column that is off is not drawn');
+  assert.strictEqual(p.margin, 51);
+  assert.strictEqual(p.events, 2);
+  assert.strictEqual(p.cols, undefined, 'the plan has no grid of columns');
 });
 
 test('Frame column: the whole work in a whole-percent box of its own shape, the group inside the screen and centred by its boxes', () => {
@@ -322,9 +322,25 @@ test('Frame column: the whole work in a whole-percent box of its own shape, the 
   }
   const sq = framePlan(1), wide = framePlan(1.5);
   assert.ok(sq.arth >= 80, 'as large as the screen allows');
-  assert.ok(wide.artw === 67 || wide.arth === 92, 'one of the limits is reached');
+  assert.ok(wide.artw === 100 - 2 * 2 - wide.gap - wide.infow || wide.arth === 92, 'one of the limits is reached');
 });
 
 test('Frame: at most two agenda events are ever kept', () => {
   assert.strictEqual(t.AGENDA_ITEMS, 2);
+});
+
+// label only (no date, weather or agenda) on the Frame, X and OG: the label in a column to the right of a near-square work, below a wide one
+test('label only: a near-square work gets the label in a column on its right, a 16:9 work keeps it below', () => {
+  const geoOf = (aspect, w, h, key) => {
+    const art = { w: Math.round(aspect * 1000), h: 1000, title: 'Landscape with the Port', artist: 'Claude Lorrain', year: '1639', collection: 'Louvre', medium: 'Oil', kind: key === 'f' ? 'big' : 'normal' };
+    return t.labelColumn(art, w, h, key, t.galleryFor(art, w, h, true, art.kind, 1));
+  };
+  for (const [key, w, h] of [['f', 2560, 1440], ['o', 800, 480]]) {
+    assert.ok(geoOf(1.27, w, h, key), `${key}: 1.27:1 goes to a column`);
+    assert.ok(geoOf(1, w, h, key), `${key}: square goes to a column`);
+    assert.strictEqual(geoOf(16 / 9, w, h, key), null, `${key}: 16:9 stays below`);
+    assert.strictEqual(geoOf(2.5, w, h, key), null, `${key}: a panorama stays below`);
+  }
+  const col = geoOf(1.27, 2560, 1440, 'f'), art = { w: 1270, h: 1000, title: 't', artist: 'a', year: '1', collection: 'c', kind: 'big' };
+  assert.ok(col.pw > t.galleryFor(art, 2560, 1440, true, 'big', 1).pw, 'the whole work is larger than with the label below');
 });

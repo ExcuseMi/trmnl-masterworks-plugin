@@ -1008,6 +1008,18 @@ function infoPlace(art, sw, sh, zoom, set) {
   return out;
 }
 
+/**
+ * Label only (no date, weather or agenda): the label in a column to the right of the whole work, its last line level with the work's bottom,
+ * when that leaves a larger work than the label below it (near-square and tall works); wide works keep the label below. null: keep below.
+ * g is the below geometry; the column reuses the info column's width of the profile and its gutter and margins.
+ */
+function labelColumn(art, sw, sh, key, g) {
+  if (!g.label || sh > sw) return null;
+  var P = FRAME_PROFILES[key], box = frameBox(art.w / art.h, sw, sh, 100 - 2 * FRAME_MARGIN_PCT - FRAME_COL_GUTTER - P.infow, FRAME_COL_H_MAX);
+  if ((box.w * sw / 100) * (box.h * sh / 100) <= g.pw * g.ph * 1.05) return null; // below stays unless the column clearly gives the larger work
+  return { a: box.w, b: box.h, pw: Math.round(box.w * sw / 100), ph: Math.round(box.h * sh / 100), label: g.label, col: { w: P.infow, gap: FRAME_COL_GUTTER } };
+}
+
 function artOf(work, shard, set, scr) {
   var art = {
     id: work.i, title: work.t, artist: work.a, year: work.yl || (work.y === undefined ? '' : String(work.y)),
@@ -1024,6 +1036,9 @@ function artOf(work, shard, set, scr) {
     else if (inf) { // info on: the work always hangs on its mat (no placard over the art), the info beside it or below
       if (inf.label) { inf.who = whoLine(art) + (art.collection ? ' \u00b7 ' + art.collection : ''); inf.detail = ''; } // the technique is left out when info is on
       geo[v] = inf.fill ? { mode: 'full', fit: 'cover', gallery: null, plate: null, info: inf } : { mode: 'gallery', fit: 'cover', gallery: inf.gallery, plate: null, info: inf };
+    } else if (set.label && v === 'full' && frameProfileOf(scr)) { // label only on the Frame, X or OG: below the work or in a column to its right, whichever leaves the larger whole work
+      var lg0 = galleryFor(art, sw, sh, true, art.kind, art.zoom);
+      geo[v] = { mode: 'gallery', fit: 'cover', gallery: labelColumn(art, sw, sh, frameProfileOf(scr), lg0) || lg0, plate: null, info: null };
     } else if (set.label || modeFor(art, sw, sh, set.fill) === 'gallery') geo[v] = { mode: 'gallery', fit: 'cover', gallery: galleryFor(art, sw, sh, set.label, art.kind, art.zoom), plate: null, info: null }; // the label on: always the mat and the label as a gallery label (a slot too small for it has none); text never lies over the art
     else geo[v] = { mode: 'full', fit: 'cover', gallery: null, plate: null, info: null }; // label off, no info: the work fills the view when that crops little
   }
@@ -1098,7 +1113,7 @@ async function run(input) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    run: run, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
+    run: run, labelColumn: labelColumn, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
     settingsOf: settingsOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
   };
 }
