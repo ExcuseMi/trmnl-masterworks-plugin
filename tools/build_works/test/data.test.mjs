@@ -58,7 +58,7 @@ test('no gallery photos and no sliver shapes in the data', () => {
 });
 
 test('reviewed family-friendly flags are in the data', () => {
-  for (const id of ['Q17491284', 'Q2438357', 'Q2046100']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
+  for (const id of ['Q17491284', 'Q2438357', 'Q2046100', 'Q18891424', 'Q11873950', 'Q9199625']) assert.ok(works.filter((w) => w.i === id).every((w) => w.u), id);
 });
 
 test('every work is not a PNG, or says the thumbnail step to ask for (a PNG thumbnail is a PNG, many MB: Cornard Wood loaded half-drawn)', () => {
