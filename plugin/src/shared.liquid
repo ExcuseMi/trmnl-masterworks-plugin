@@ -37,7 +37,7 @@
       </div>
     </div>{{ gap }}{% endif %}{% endcapture %}
 {% capture w_p %}{% if info.has_weather %}<div class="{{ cell }}" data-info="weather" data-cell="w" data-drop="{% if inrow %}3{% else %}5{% endif %}">{{ lift }}
-      <span class="value {{ c.temp }} {{ ink }} value--tnums text--bold block text--left shrink-0" data-temp="1">{{ info.temp | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
+      <span class="value {% if inrow %}{{ c.tempRow }}{% else %}{{ c.temp }}{% endif %} {{ ink }} value--tnums text--bold block text--left shrink-0" data-temp="1">{{ info.temp | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
       <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-weather="1"{% unless inrow %} data-drop="3"{% endunless %}>{{ info.weather | escape }}</span>
     </div>{{ gap }}{% endif %}{% endcapture %}
 {% capture e_p %}{% if info.has_agenda %}{% for ev in info.agenda.items limit: inf.events %}<div class="{{ cell }}" data-info="agenda" data-event="1" data-cell="e" data-agenda="{{ info.agenda.day }}" data-drop="{% if forloop.first %}2{% else %}1{% endif %}">{{ lift }}

@@ -109,14 +109,14 @@ var FRAME_SHAPE_ERR = 0.012; // the work's box differs from its shape by at most
 // per device class: three sizes in the info (owner 2026-11-18): the day number (sized to the two primary lines beside it: its top on the
 // first line's cap top, its baseline on the second's), the primary lines (weekday, month, temperature, event and painting titles) and the
 // secondary lines one step below (forecast, time, place, artist and year, museum); lh the primary line height (the gap between cells is 1.5 of it); their CSS px (z: the screen's CSS scale, the X draws 1040 CSS px on 1872) for the estimates, the vertical gap between column parts (sep), the column's widest share (infow, %)
-// the temperature (owner 2026-11-19): the largest value size whose forecast line still has its baseline on the month's (measured: Frame xlarge, X and OG small; one step up is 3.6 to 10.7 px too deep); tests/tempsize_spec.rb
+// the temperature (owner 2026-11-19): beside the date (tempRow, one step up from the size that keeps the forecast baseline on the month's; forecast may end a few px below it) and under it (temp, the day number's class); tests/tempsize_spec.rb
 var FRAME_PROFILES = {
-  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 74, ev: 58, title: 58, small: 40, lh: 70,
-    cls: { num: 'value--mega', words: 'value value--large', temp: 'value--xlarge', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge text--regular' } },
-  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 26, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
-    cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'value--small', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge text--regular' } },
-  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 26, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
-    cls: { num: 'value--large', words: 'label label--large', temp: 'value--small', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall text--regular' } },
+  f: { infow: 26, sep: 34, bandEv: 2, num: 170, words: 58, temp: 170, tr: 96, ev: 58, title: 58, small: 40, lh: 70,
+    cls: { num: 'value--mega', words: 'value value--large', temp: 'value--mega', tempRow: 'value--xxlarge', ev: 'value value--large', title: 'value value--large', small: 'title title--xxlarge text--regular' } },
+  x: { z: 1.8, infow: 30, sep: 18, bandEv: 1, num: 74, words: 30, temp: 74, tr: 38, ev: 30, title: 30, small: 26, lh: 36, // one Framework step smaller than 96 / 38 / 30 (owner 2026-11-18)
+    cls: { num: 'value--xlarge', words: 'label label--xxlarge', temp: 'value--xlarge', tempRow: 'value--base', ev: 'label label--xxlarge', title: 'label label--xxlarge', small: 'label label--xlarge text--regular' } },
+  o: { infow: 34, sep: 12, bandEv: 1, num: 58, words: 21, temp: 58, tr: 38, ev: 21, title: 21, small: 20, lh: 25.2, // one step smaller than 74 / 26 / 21 (owner 2026-11-18)
+    cls: { num: 'value--large', words: 'label label--large', temp: 'value--large', tempRow: 'value--base', ev: 'label label--large', title: 'label label--large', small: 'value value--xsmall text--regular' } },
 };
 FRAME_PROFILES.fp = FRAME_PROFILES.f;
 var FRAME_PICK_ASPECT = 2; // the shape a work is picked for on the Frame with info on: wide works (a band) and others (a column) both come up, wider ones a little more
@@ -933,7 +933,7 @@ function framePlan(art, sw, sh, set, key) {
   var z = P.z || 1, cw = sw / z, ch = sh / z, portrait = sh > sw, m = Math.min(128, Math.round(cw * FRAME_MARGIN_PCT / 100)), bandW = 100 - 2 * FRAME_MARGIN_PCT, ln = function (n) { return n * 1.25; };
   var evB = Math.min(events, P.bandEv), hasW = b.weather, out;
   // the row's height: the date, or the tallest cell (the label: two title lines, artist, museum)
-  var rowH = Math.max(b.date ? Math.max(P.num * 1.05, 2 * ln(P.words)) : 0, label ? 2 * ln(P.title) + 2 * ln(P.small) : 0, evB ? 2 * ln(P.small) + ln(P.ev) : 0, hasW ? ln(P.temp) + ln(P.small) : 0);
+  var rowH = Math.max(b.date ? Math.max(P.num * 1.05, 2 * ln(P.words)) : 0, label ? 2 * ln(P.title) + 2 * ln(P.small) : 0, evB ? 2 * ln(P.small) + ln(P.ev) : 0, hasW ? ln(P.tr) + ln(P.small) : 0);
   var restPct = Math.floor(100 * (ch - 3 * m - rowH) / ch);
   var base = { frame: true, tier: key, fit: 'cover', cls: P.cls, label: label, who: whoLine(art).replace(/ \u00b7 /g, '\u00a0\u00b7\u00a0'), coll: art.collection || '', fill: false,
     margin: m, numgap: Math.round(P.words * 0.4), gappx: Math.round(1.5 * P.lh), gap: FRAME_GAP_PCT, sepv: P.sep, bandw: bandW, aspect: Math.round(aspect * 10000) / 10000, portrait: portrait };

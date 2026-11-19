@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The temperature beside the date: cap top level with the day number's, forecast baseline level with the month's, never taller than the number (owner 2026-11-19: "10°" stood taller than the "19" and pushed the forecast line too deep). Stacked layouts (weather under the date) are skipped. Measured in the render from the loaded font.
+# The temperature beside the date: cap top level with the day number's, never taller than the number, forecast baseline 0 to 12 px below the month's (owner 2026-11-19). Weather under the date (stacked): the day number's class and cap height. Measured in the render from the loaded font.
 require 'json'
 
 RSpec.describe 'Masterworks temperature against the day number' do
@@ -56,7 +56,7 @@ RSpec.describe 'Masterworks temperature against the day number' do
   end
 
   { 'frame' => 'Frame', 'v2' => 'X', 'og_png' => 'OG' }.each do |device, name|
-    [2.5, 1.5, 1.0].each do |aspect|
+    [2.5, 1.5, 1.0, 0.6, 0.4].each do |aspect|
       %w[full half_vertical].each do |view|
         it "#{name}, #{aspect}, #{view}: the temperature's cap top is not above the number's and it is not taller" do
           page = render_ts(device, aspect, view)
@@ -64,13 +64,20 @@ RSpec.describe 'Masterworks temperature against the day number' do
           tmp = caps(page, '[data-temp]')
           skip 'date or weather not shown here' unless num && tmp
           side = page.evaluate("(() => { const d = document.querySelector('#{P} [data-cell=\"date\"]'), t = document.querySelector('#{P} [data-temp]'); return !!(d && t && t.getBoundingClientRect().left >= d.getBoundingClientRect().right - 1); })()")
-          skip 'the weather is not beside the date here (stacked)' unless side
+          col = page.evaluate("!!document.querySelector('#{P} [data-cell=\"w\"][data-drop=\"5\"]')")
+          skip 'the older info strip (no Frame cells) or a row' if !side && !col
+          if col
+            cls = ->(sel) { page.evaluate("[...document.querySelector('#{P} #{sel}').classList].filter(c => /^value--(?!tnums)/.test(c)).join(' ')") }
+            expect(cls.call('[data-temp]')).to eq(cls.call('[data-day]')), "stacked: temp class '#{cls.call('[data-temp]')}' not the day number's '#{cls.call('[data-day]')}'"
+            expect((tmp[1] - num[1]).abs).to be <= 0.5, "stacked: temp cap height #{tmp[1].round(1)} not the number's #{num[1].round(1)}"
+            next
+          end
           expect((tmp[0] - num[0]).abs).to be <= 1, "temp cap top #{tmp[0].round(1)} not level with the number's #{num[0].round(1)}"
           expect(tmp[1]).to be <= num[1] + 0.5, "temp cap height #{tmp[1].round(1)} over the number's #{num[1].round(1)}"
           mo = base(page, '[data-month]')
           fc = base(page, '[data-weather]')
           skip 'month or forecast not shown here' unless mo && fc
-          expect((fc - mo).abs).to be <= 1, "forecast baseline #{fc.round(1)} not level with the month's #{mo.round(1)}"
+          expect(fc - mo).to be_between(-1, 12), "forecast baseline #{fc.round(1)} not 0 to 12 px below the month's #{mo.round(1)}"
         end
       end
     end
