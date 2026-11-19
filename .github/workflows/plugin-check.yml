@@ -11,3 +11,4 @@ jobs:
     uses: ExcuseMi/trmnl-plugin-checks/.github/workflows/plugin-check.yml@main
     with:
       plugin-dir: .
+      skip-devices: xteink_x3   # its screen CSS is 800 px wide in a 792 px window: every full-bleed layout overflows there (README, Known limits)

@@ -97,7 +97,7 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 | Series | A work that is part of a famous series (Wikidata `part of the series`, or a short curated list) is as famous as the series: Edo, Tokaido and Fuji prints, Birds of America, Monet's Water Lilies and Haystacks and Rouen Cathedral. The series fixes the genre of its members (`SERIES_GENRE`) and, when Wikidata gives a member no date or technique, says the series' (`SERIES_INFO`: Tokaido 1833–34, Edo 1856–59, Fuji 1830–32, Birds of America 1827–38). A swept series gives at most 25 works; the Japanese and Audubon series, whose members all have their own titles, more. One work is kept once: the most famous version of an artist and normalised title, with the flags of all its versions (`dedupe.mjs`). A series print needs 1200 px on its long side (800 x 1200 is what Commons holds), any other work 1500 px |
 | Public domain | The creator died at least 70 full years before the build year AND the work is at least 96 years old (EU and US rules; both cut-offs are computed from the build date, 1955 and 1930 in 2026). A date uses the latest year it allows. Wikidata's own public-domain statement never lifts the date rule |
 | Images | A bitmap on Commons with a long side of at least 1500 px; thumbnails at 500, 960, 1280 and 1920 px |
-| Updates | A monthly GitHub Action (`.github/workflows/build-data.yml`) rebuilds and commits the data |
+| Updates | By hand: the GitHub Action `.github/workflows/build-data.yml` (manual trigger only, no schedule) or a local build; new works are judged by the curator and looked at before they go to `main`, which is live at once |
 
 ## Known limits
 
@@ -105,7 +105,7 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 |---|---|
 | First thumbnails can be slow | An uncached 1920 px thumbnail is generated on first request. If the picture fails (an error event), a backup work swaps in: a second, famous work with its own label, look and mat, hidden until needed and not fetched until then. A request that hangs without an error is not caught, and the screenshot may be taken before the swap; the state records the primary |
 | Family friendly is careful, not perfect | Hidden: about 12 % of the works (1,123). A work is hidden by Wikidata's subjects, its titles or the curator's sure flag (a curator doubt hides nothing); `tools/build_works/family-review.json` is applied last and holds the decisions made by looking at the picture (`show` or `hide`): the hidden works among the 1,000 most famous and every work only the curator flagged. The rule there: hidden only when clearly not family friendly (a nude as the subject, gore); a draped or distant nude, a battle or a death scene shows. Of the 300 most famous works 23 are hidden (a test holds the number) |
-| xteink_x3 | The shared base check fails there: the model's screen CSS is 800 px wide inside a 792 px window, so any full-bleed layout overflows |
+| xteink_x3 | Left out of the shared base check (`skip-devices` in `.github/workflows/plugin-check.yml`): the model's screen CSS is 800 px wide inside a 792 px window, so any full-bleed layout overflows |
 
 ## Development
 

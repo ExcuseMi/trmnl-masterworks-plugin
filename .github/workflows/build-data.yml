@@ -1,9 +1,8 @@
-# Rebuilds data/*.json from Wikidata and Wikimedia Commons once a month and commits the result.
+# Rebuilds data/*.json from Wikidata and Wikimedia Commons and commits the result. By hand only (owner 2026-11-19): data on main
+# is live for every user at once, and new works must be judged by the curator and looked at first. No schedule.
 name: build-data
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '23 3 1 * *'
 permissions:
   contents: write
 jobs:
@@ -19,9 +18,11 @@ jobs:
         run: node --test tools/build_works/test
       - name: Build the data set
         run: node tools/build_works/build.mjs
+      - name: The new data passes its tests and the plugin's (part counts, limits)
+        run: node --test tools/build_works/test plugin/test
       - name: Commit when it changed
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
-          git add data/works.json data/landscape.json data/portrait.json
-          git diff --cached --quiet || git commit -m "Rebuild data set" && git push
+          git add data
+          git diff --cached --quiet || { git commit -m "Rebuild data set" && git push; }
