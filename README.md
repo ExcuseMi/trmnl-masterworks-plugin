@@ -6,17 +6,17 @@ A famous public-domain artwork on your TRMNL, a new one at every refresh. Made f
 
 ## What it shows
 
-5,000+ public-domain works: paintings, prints, drawings, posters and nature illustrations.
+9,500+ public-domain works: paintings, prints, drawings, posters and nature illustrations.
 
 | Genre | Works | Genre | Works |
 |---|---|---|---|
-| Landscapes | 588 | Everyday scenes | 270 |
-| Portraits | 570 | Flowers and still life | 236 |
-| Religious | 576 | Mythology | 156 |
-| Cities | 414 | Posters and Art Nouveau | 292 |
-| Modern and abstract | 433 | Nature illustration | 301 |
-| Other | 386 | Japanese prints | 330 |
-| Seas | 364 | History | 94 |
+| Landscapes | 679 | Everyday scenes | 662 |
+| Portraits | 1,682 | Flowers and still life | 249 |
+| Religious | 2,059 | Mythology | 423 |
+| Cities | 434 | Posters and Art Nouveau | 287 |
+| Modern and abstract | 448 | Nature illustration | 297 |
+| Other | 1,276 | Japanese prints | 328 |
+| Seas | 431 | History | 329 |
 
 ## How a work is picked
 
@@ -39,7 +39,7 @@ The plugin decides per work and per view; its one display setting is Fill the sc
 |---|---|
 | Label and info off, a fill crops at most 15 % of the work (`FILL_CROP_MAX`; fill off: less than 5 %, `AUTO_CROP_MAX`) | Full screen, nothing over the art |
 | Museum label on (no info) | The whole work in a gallery: a pure white or black mat (by the work's brightness), no outline, the label right-aligned under the picture; a view too small for the label has none. Never full screen, never a placard over the art |
-| Info on, Frame landscape | A band for works 16:9 and wider (`FRAME_BAND_CROP_MAX`): the work covers the band, the strip in its width: day number, then equal columns with a rule on top (weather, up to two events, the label in regular weight). Any other shape: the whole work with a column on its right (a wall label): date, weather, events at the top, the label at the bottom on the work's bottom edge; work and column are one centred group |
+| Info on, Frame landscape | A band for works 16:9 and wider (`FRAME_BAND_ASPECT`, when the band crops at most `FILL_CROP_MAX`): the work covers the band, the strip in its width: day number, then equal columns with a rule on top (weather, up to two events, the label in regular weight). Any other shape: the whole work with a column on its right (a wall label): date, weather, events at the top, the label at the bottom on the work's bottom edge; work and column are one centred group |
 | Info on, other screens | The X, the OG and the Frame in portrait keep the strip (below) |
 
 A scan with a scanner bed, a mount or a pale paper margin round the work carries the curator's box in the data (`x`: x, y, width, height in 1/10000 of the picture; `tools/build_works/curator_crops.mjs`): only the box is shown and every layout is planned on it. The markup has whole-percent sizes only, so up to 2 % of the box more than the margin may be hidden.

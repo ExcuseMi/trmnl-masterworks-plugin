@@ -75,8 +75,7 @@ var LABEL_DETAIL_MIN_H = 300; // the where-it-hangs line needs a slot this high
 // The info (date, weather, agenda) is one strip under the work, full width, never beside it and never cropping it: the work is scaled so the
 // work and the strip fit, centred, with equal outer margins. The strip is one row on one baseline with three groups in fixed positions
 // (date at the left, weather or agenda in the middle, the museum label at the right) and three text sizes (the day number, a medium one for
-// the weekday, month, temperature and title, a small one for the forecast, times and the artist line). When the work is narrower than
-// INFO_NARROW of the slot the groups align to the slot's margins instead of the work's edges. The sizes are tiers named by the slot: "f" is the
+// the weekday, month, temperature and title, a small one for the forecast, times and the artist line). The sizes are tiers named by the slot: "f" is the
 // Frame (2560 wide; the Frame reports screen--md, a TRMNL bug, so its Framework sizes are picked by name), "g" a portrait Frame, xl..s the
 // other screens by the slot's height in CSS px. A slot too small for the smallest tier has no info.
 var INFO_TIERS = [[900, 'xl'], [560, 'l'], [340, 'm'], [0, 's']];
@@ -87,7 +86,6 @@ var INFO_SIZES = { // CSS px: strip height, gap from the work to the strip's cap
   m: { h: 80, gap: 20, m: 18, L: 215, M: 150, R: 230, lift: [7, 9, 12, 12], lm: 36, ls: 22, Ln: 110 }, s: { h: 62, gap: 16, m: 14, L: 150, M: 115, R: 170, lift: [5, 6, 8, 8], lm: 28, ls: 18, Ln: 80 },
 };
 var INFO_TEXT_PX = { f: [58, 32], g: [38, 26], xl: [40, 26], l: [35, 21], m: [30, 18], s: [24, 16] }; // medium and small text size in CSS px per tier: the label's width is estimated from its text
-var INFO_NARROW = 0.55;
 // The Frame, the X and the OG with info on (full view). The info is ONE row or ONE column, never a grid, no rules:
 // BAND (landscape screen, a work 16:9 or wider): the work covers a band inside equal margins that takes all height the row leaves; the row under
 // it in the band's width: the day number with the weekday over the month, then weather, events and the museum label (regular weight, the rest
@@ -99,7 +97,6 @@ var INFO_NARROW = 0.55;
 // What does not fit is dropped in the browser, never shrunk or cut (FIT_ORDER in shared.liquid): the second event, the first, the forecast
 // line, the museum line, the weather, the artist line; never the day number or the label title (then the art is shown alone).
 var FRAME_MARGIN_PCT = 2; // the margin round the group, % of the width (the same in px vertically)
-var FRAME_BAND_CROP_MAX = 0.4; // kept for the tests' import: portrait screens never crop
 var FRAME_BAND_ASPECT = 1.74; // landscape screens: works at least this wide (16:9 and wider) get the band
 var FRAME_STACK_ASPECT = 1.4; // portrait screens: works at least this wide get the full-width work with the column under it
 var FRAME_GAP_PCT = 2; // between the cells of a row, and between the work and the column, % of the width
@@ -380,11 +377,6 @@ function fetchShard(orientation, rnd) {
 }
 
 // ---- label text, drawn as SVG text: sizes are the slot's own pixels ---------------------------------------------------
-
-var cmText = function (z) {
-  var n = function (v) { return String(Math.round(v * 10) / 10).replace(/\.0$/, ''); };
-  return n(z[0]) + ' \u00d7 ' + n(z[1]) + ' cm';
-};
 
 /** The lines of the label: "ARTIST \u00b7 year" in capitals, then "technique \u00b7 where it hangs" (a technique the build could not name is left out). The size stays in the data, not on the label. */
 function whoLine(art) {
@@ -1184,6 +1176,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, labelColumn: labelColumn, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, cropPlan: cropPlan, cropAxis: cropAxis, artOf: artOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS, ICS_PARSE_MS: ICS_PARSE_MS, zoneCalls: function () { return zoneLookups; },
+    settingsOf: settingsOf, cropPlan: cropPlan, cropAxis: cropAxis, artOf: artOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS, ICS_PARSE_MS: ICS_PARSE_MS, zoneCalls: function () { return zoneLookups; },
   };
 }

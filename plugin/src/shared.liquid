@@ -9,16 +9,16 @@
 {% endif %}
 {% comment %} THE ONE PLACE that sizes text by screen. Known TRMNL bug: the Frame (2560 px, screen--frame) carries screen--md, not screen--lg, so lg: prefixes never apply to it and its Framework text is OG-sized on a 2560 px canvas. Until TRMNL fixes the class, a Frame (trmnl.device.model, or art.kind from the reported size) gets the largest Framework sizes; the X is lg and uses lg: prefixes. When the class is fixed, replace this branch with lg: prefixes and delete it. {% endcomment %}
 {% if art.kind == "big" or trmnl.device.model == "frame" %}
-  {% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign dcls = "label--large" %}{% assign lpad = "pt--4" %}{% assign ppad = "px--6 py--4" %}
+  {% assign tcls = "title--xxlarge" %}{% assign acls = "label--xlarge" %}{% assign dcls = "label--large" %}{% assign lpad = "pt--4" %}
 {% else %}
-  {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}{% assign ppad = "px--3 py--2" %}
+  {% assign tcls = "title--small lg:title--base" %}{% assign acls = "label--small lg:label--base" %}{% assign dcls = "label--small" %}{% assign lpad = "pt--2" %}
 {% endif %}
 {% assign inf = gv.info %}
 {% comment %} mat and ink are pinned (dark: swaps the tokens back) so a dark-mode screen does not repaint the work's mat {% endcomment %}
 {% if art.mat == "black" %}
-  {% assign mat = "bg--black dark:bg--white" %}{% assign edge = "bg--white dark:bg--black" %}{% assign ink = "text--white dark:text--black" %}
+  {% assign mat = "bg--black dark:bg--white" %}{% assign ink = "text--white dark:text--black" %}
 {% else %}
-  {% assign mat = "bg--white dark:bg--black" %}{% assign edge = "bg--black dark:bg--white" %}{% assign ink = "text--black dark:text--white" %}
+  {% assign mat = "bg--white dark:bg--black" %}{% assign ink = "text--black dark:text--white" %}
 {% endif %}
 {% if gv.mode == "frame" %}
 {% comment %} Frame, X and OG with info on (layouts in transform.js, FRAME_ constants and FRAME_PROFILES): band (a wide work covers a band, the row under it), below (the whole work, the row under it in its width), column (the whole work, the column on its right, the label at the bottom on the work's bottom edge), stack (portrait screen, wide work: the work in the full width, the column under it). One row or one column, no rules; three sizes (the day number, primary and secondary lines), the events bold, the painting's title regular weight. The fit script in main measures, drops, aligns the baselines and grows the work. {% endcomment %}
