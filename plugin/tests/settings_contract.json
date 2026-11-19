@@ -1,0 +1,104 @@
+{
+  "family_friendly": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "true",
+    "options": []
+  },
+  "genres": {
+    "field_type": "select",
+    "multiple": true,
+    "default": null,
+    "options": [
+      "landscapes",
+      "cities",
+      "flowers_still_life",
+      "nature",
+      "japanese_prints",
+      "modern",
+      "posters",
+      "religious",
+      "history_myth",
+      "everyday",
+      "portraits"
+    ]
+  },
+  "movement": {
+    "field_type": "select",
+    "multiple": false,
+    "default": "all",
+    "options": [
+      "all",
+      "Renaissance",
+      "Baroque",
+      "Impressionism",
+      "Post-Impressionism",
+      "Dutch Golden Age",
+      "Realism",
+      "Mannerism",
+      "Romanticism",
+      "Neoclassicism",
+      "Rococo"
+    ]
+  },
+  "show_date": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "false",
+    "options": []
+  },
+  "show_weather": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "false",
+    "options": []
+  },
+  "show_agenda": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "false",
+    "options": []
+  },
+  "label": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "true",
+    "options": []
+  },
+  "fill": {
+    "field_type": "boolean",
+    "multiple": false,
+    "default": "true",
+    "options": []
+  },
+  "ics_url": {
+    "field_type": "password",
+    "multiple": false,
+    "default": null,
+    "options": []
+  },
+  "weather_location": {
+    "field_type": "string",
+    "multiple": false,
+    "default": null,
+    "options": []
+  },
+  "temperature_unit": {
+    "field_type": "select",
+    "multiple": false,
+    "default": "c",
+    "options": [
+      "c",
+      "f"
+    ]
+  },
+  "time_format": {
+    "field_type": "select",
+    "multiple": false,
+    "default": "24h",
+    "options": [
+      "24h",
+      "12h"
+    ]
+  }
+}
