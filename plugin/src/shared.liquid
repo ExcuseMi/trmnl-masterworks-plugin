@@ -152,8 +152,8 @@
     {% if gl.label %}
     <div class="flex flex--col flex--right gap--none w--full {{ lpad }}" data-label="1">
       <span class="{% if gl.cls %}{{ gl.cls.title }}{% else %}title {{ tcls }}{% endif %} {{ ink }} block w--full text--right" data-title="1" data-clamp="{{ gl.label.lines }}" data-clamp-lg="2">{{ art.title | escape }}</span>
-      {% if gl.label.who != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ acls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
-      {% if gl.label.detail != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ dcls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="1" data-clamp-lg="2">{{ gl.label.detail | escape }}</span>{% endif %}
+      {% if gl.label.who != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ acls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.wl | default: 1 }}" data-clamp-lg="2">{{ gl.label.who | escape }}</span>{% endif %}
+      {% if gl.label.detail != blank %}<span class="{% if gl.cls %}{{ gl.cls.small }}{% else %}label {{ dcls }}{% endif %} {{ ink }} block w--full text--right" data-clamp="{{ gl.label.dl | default: 1 }}" data-clamp-lg="2">{{ gl.label.detail | escape }}</span>{% endif %}
     </div>
     {% endif %}
   </div>

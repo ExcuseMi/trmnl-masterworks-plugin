@@ -700,3 +700,21 @@ test('run: the merge variables stay far under 100 kB and the state under 1 kB, f
   assert.ok(worst < 25000, `merge variables at most ${worst} bytes (limit 100,000)`);
   assert.ok(state < 1000, `state at most ${state} bytes (limit 8,000)`);
 });
+
+// Review 2026-11-19: the Mummy of Herakleides (a work four times as high as wide) on a portrait OG showed "UNKNOWN AR..." and
+// "J. Paul Getty M...": the artist and detail lines had one line under a picture 130 px wide.
+test('label under a narrow picture: the artist and detail lines take a second line where the title may (a slot 700 px high), with room for them', () => {
+  const mummy = { title: 'Mummy of Herakleides', artist: 'Unknown artist', year: '', collection: 'J. Paul Getty Museum', medium: '', w: 2516, h: 9876 };
+  const px = [21, 20, 20];
+  const g = t.galleryFor(mummy, 480, 800, true, 'normal', 1, undefined, { px });
+  assert.deepStrictEqual([g.label.wl, g.label.dl], [2, 2], `under a picture ${g.pw} px wide`);
+  const one = t.galleryFor({ ...mummy, artist: '', collection: '' }, 480, 800, true, 'normal', 1, undefined, { px });
+  assert.ok(g.ph < one.ph, `the picture leaves room for the two more lines (${g.ph} against ${one.ph} px)`);
+  assert.ok(g.ph + 1.25 * px[0] * g.label.lines + 2 * 1.3 * px[1] + 2 * 1.35 * px[2] <= 0.95 * 800, 'picture and label fit the slot');
+  const wide = t.galleryFor({ ...mummy, w: 3000, h: 4000 }, 480, 800, true, 'normal', 1, undefined, { px });
+  assert.deepStrictEqual([wide.label.wl, wide.label.dl], [1, 1], 'a picture wide enough keeps one line each');
+  const low = t.galleryFor(mummy, 800, 480, true, 'normal', 1, undefined, { px });
+  assert.deepStrictEqual([low.label.wl, low.label.dl], [1, 1], 'a low slot keeps one line each (as the title does)');
+  const lg = t.galleryFor({ ...mummy, lg: true }, 1404, 1872, true, 'normal', 1.755);
+  assert.deepStrictEqual([lg.label.wl, lg.label.dl], [1, 1], 'lg screens wrap by their own rule (data-clamp-lg)');
+});

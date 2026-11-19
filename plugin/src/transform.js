@@ -406,8 +406,13 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH, opts) {
   // there needs more room; the picture's CSS width is guessed at 85 % (the zoom is one number for both axes, a device may differ)
   var lg = !!art.lg, whoLen = String(whoLine(art)).length, detLen = hasDetail ? detailLine(art).length : 0;
   var wrap = function (len, size, pwDev, most) { return Math.min(most, Math.max(1, Math.ceil(len * 0.5 * size / Math.max(0.85 * pwDev / zoom, 1)))); };
+  // the other screens: the artist and detail lines take a second line under a picture too narrow for one (a tall work on a portrait OG cut them
+  // to "UNKNOWN AR..."); capitals are wider (0.6 em a letter), the picture's CSS width is exact there
+  // (only where the title may take two as well: a slot at least 700 px high; smaller slots keep one line each)
+  var lines2 = function (len, size, pwDev, em) { return Math.min(maxLines, Math.max(1, Math.ceil(len * em * size * zoom / Math.max(pwDev, 1)))); };
+  var whoN = function (pwDev) { return lg ? 1 : lines2(whoLen, px[1], pwDev, 0.6); }, detN = function (pwDev) { return lg ? 1 : lines2(detLen, px[2], pwDev, 0.5); };
   var floorPx = function (n, pwDev) {
-    var t = lg ? wrap(String(art.title).length, px[0], pwDev, 2) : n, who = lg ? wrap(whoLen, px[1], pwDev, 2) : 1, det = hasDetail ? (lg ? wrap(detLen, px[2], pwDev, 2) : 1) : 0;
+    var t = lg ? wrap(String(art.title).length, px[0], pwDev, 2) : n, who = lg ? wrap(whoLen, px[1], pwDev, 2) : whoN(pwDev), det = hasDetail ? (lg ? wrap(detLen, px[2], pwDev, 2) : detN(pwDev)) : 0;
     return zoom * (t * 1.25 * px[0] + who * 1.3 * px[1] + det * 1.35 * px[2] + 6);
   };
   if (withLabel && floorPx(1, slotW) > LABEL_MAX_SHARE * slotH) withLabel = false; // a slot too small for a readable label
@@ -428,7 +433,7 @@ function galleryFor(art, slotW, slotH, withLabel, kind, zoom, pctH, opts) {
     }
   }
   var out = { a: best.a, b: best.b, pw: Math.round(best.a * pctW / 100), ph: Math.round(best.b * pctH / 100) };
-  if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: hasDetail ? detailLine(art) : '' };
+  if (withLabel) out.label = { lines: lines, who: whoLine(art), detail: hasDetail ? detailLine(art) : '', wl: whoN(pw), dl: hasDetail ? detN(pw) : 1 }; // wl, dl: the lines the artist and detail lines may take
   return out;
 }
 
