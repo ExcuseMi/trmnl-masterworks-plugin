@@ -14,12 +14,12 @@ RSpec.describe 'Masterworks temperature against the day number' do
 
   def fixture(name) = JSON.parse(File.read(File.join(__dir__, 'fixtures', "#{name}.json")))
 
-  def render_ts(device, aspect, view)
+  def render_ts(device, aspect, view, extra = {})
     doc = fixture('one-landscape')
     doc['w'][0].merge!('w' => (aspect * 1000).round, 'h' => 1000)
     shards = BASES_TS.each_with_object({}) { |b, m| (0..15).each { |k| m["#{b}/landscape-#{k}.json"] = { json: doc }; m["#{b}/portrait-#{k}.json"] = { json: doc } } }
     services = { 'https://geocoding-api.open-meteo.com/*' => { json: fixture('geocode') }, 'https://api.open-meteo.com/*' => { json: fixture('weather-rain') } }
-    fields = { 'weather_location' => 'Paris', 'show_date' => 'true', 'show_weather' => 'true', 'label' => 'true' }
+    fields = { 'weather_location' => 'Paris', 'show_date' => 'true', 'show_weather' => 'true', 'label' => 'true' }.merge(extra)
     page = trmnl.render(view:, device:, orientation: 'landscape', mocks: shards.merge(services), custom_fields: fields)
     page.has_css?('img.image')
     page
@@ -80,6 +80,16 @@ RSpec.describe 'Masterworks temperature against the day number' do
           expect(fc - mo).to be_between(-1, 12), "forecast baseline #{fc.round(1)} not 0 to 12 px below the month's #{mo.round(1)}"
         end
       end
+    end
+  end
+
+  # no date: nothing to sit beside, the temperature keeps the day number's class (the Frame mega, the X xlarge, the OG large)
+  { 'frame' => ['Frame', 'value--mega'], 'v2' => ['X', 'value--xlarge'], 'og_png' => ['OG', 'value--large'] }.each do |device, (name, want)|
+    it "#{name}: weather without the date is the day number's class" do
+      page = render_ts(device, 1.5, 'full', 'show_date' => 'false')
+      got = page.evaluate("(() => { const e = document.querySelector('#{P} [data-temp]'); return e ? [...e.classList].filter(c => /^value--(?!tnums)/.test(c)).join(' ') : null; })()")
+      skip 'weather not shown here' unless got
+      expect(got).to eq(want)
     end
   end
 end
