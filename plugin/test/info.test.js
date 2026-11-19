@@ -118,6 +118,25 @@ test('fetchWeather: no location, an unknown place, a bad answer: null (the date 
   assert.strictEqual(await t.fetchWeather({ ...SET, weather_location: '1,2' }, 'en', { zone: 'UTC', shift: 0 }, '2026-11-17T08:00', null), null, 'the forecast has the wrong shape');
 });
 
+// Review 2026-11-19: "Cambridge, UK" found no weather. Open-Meteo's search knows names, not "name, country" (it copes with some), so
+// a place with a comma that finds nothing is asked again by its first part and the rest picks among the answers.
+test('fetchWeather: "Cambridge, UK" is found by its name, the rest picks the country or region; nothing found twice is still null', async () => {
+  const CAMS = { results: [{ name: 'Cambridge', latitude: 42.37, longitude: -71.1, country_code: 'US', country: 'United States', admin1: 'Massachusetts' },
+    { name: 'Cambridge', latitude: 52.2, longitude: 0.12, country_code: 'GB', country: 'United Kingdom', admin1: 'England' }, { name: 'Cambridge', latitude: 43.36, longitude: -80.31, country_code: 'CA', country: 'Canada', admin1: 'Ontario' }] };
+  const where = async (q) => {
+    const asked = [];
+    globalThis.fetch = async (url) => { asked.push(decodeURIComponent(url)); return reply(/geocoding/.test(url) ? (/name=Cambridge&/.test(url) ? CAMS : {}) : FORECAST)(); };
+    const w = await t.fetchWeather({ ...SET, weather_location: q }, 'en', { zone: 'UTC', shift: 0 }, '2026-11-17T08:00', null);
+    return w ? [w.loc.lat, w.loc.q, asked.filter((u) => /geocoding/.test(u)).length] : null;
+  };
+  assert.deepStrictEqual(await where('Cambridge, UK'), [52.2, 'Cambridge, UK', 2], 'UK is the United Kingdom; the saved location keeps the setting\'s text, so it is looked up once');
+  assert.deepStrictEqual(await where('Cambridge, Ontario'), [43.36, 'Cambridge, Ontario', 2], 'a region');
+  assert.deepStrictEqual(await where('Cambridge, United States'), [42.37, 'Cambridge, United States', 2], 'a country by name');
+  assert.deepStrictEqual(await where('Cambridge, Narnia'), [42.37, 'Cambridge, Narnia', 2], 'an unknown rest: the first answer');
+  assert.strictEqual(await where('Nowhere, UK'), null, 'nothing under the name either');
+  assert.strictEqual(await where('Nowhere'), null);
+});
+
 // run(): the whole thing on a one-work shard
 const fs = require('node:fs');
 const path = require('node:path');

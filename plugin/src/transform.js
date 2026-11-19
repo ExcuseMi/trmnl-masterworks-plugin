@@ -564,6 +564,23 @@ async function getJson(url) {
   return res.json();
 }
 
+var COUNTRY_ALIASES = { uk: 'gb', 'u.k.': 'gb', england: 'gb', scotland: 'gb', wales: 'gb', usa: 'us', 'u.s.': 'us', 'u.s.a.': 'us', america: 'us', holland: 'nl' };
+/**
+ * The place of a name: Open-Meteo's first answer. Its search knows names, not "name, country" (some work, "Cambridge, UK" does not): a
+ * text with a comma that finds nothing is asked again by its first part, and the rest picks the answer of that country or region.
+ */
+async function geocode(text) {
+  var url = function (name, n) { return 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=' + n + '&language=en&format=json'; };
+  var g = await getJson(url(text, 1)), r = g && g.results && g.results[0], cut = text.indexOf(',');
+  if (r || cut < 1) return r;
+  var rest = text.slice(cut + 1).split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  g = await getJson(url(text.slice(0, cut).trim(), 10));
+  var list = (g && g.results) || [], is = function (v, x) { return String(v || '').toLowerCase() === x; };
+  return list.filter(function (c) {
+    return rest.some(function (x) { return is(c.country, x) || is(c.country_code, x) || is(c.country_code, COUNTRY_ALIASES[x]) || is(c.admin1, x) || is(c.admin2, x); });
+  })[0] || list[0];
+}
+
 /** { temp: "8°", text: "Rain by noon", loc } or null on any failure or without a location. loc: the place found (kept in the state). */
 async function fetchWeather(set, locale, z, nowIso, saved) {
   if (!set.weather_location) return null;
@@ -571,8 +588,7 @@ async function fetchWeather(set, locale, z, nowIso, saved) {
   if (loc) loc = { q: set.weather_location, lat: loc.lat, lon: loc.lon };
   else if (saved && saved.q === set.weather_location) loc = saved;
   else {
-    var g = await getJson('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(set.weather_location) + '&count=1&language=en&format=json');
-    var r = g && g.results && g.results[0];
+    var r = await geocode(set.weather_location);
     if (!r || !isFinite(r.latitude) || !isFinite(r.longitude)) return null;
     loc = { q: set.weather_location, lat: Number(r.latitude), lon: Number(r.longitude) };
   }
