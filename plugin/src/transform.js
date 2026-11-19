@@ -609,6 +609,7 @@ var ICS_DEADLINE_MS = 3200;
 var AGENDA_ITEMS = 2;
 var AGENDA_TOMORROW_FROM = 18; // from this hour the agenda shows tomorrow's events (when there are any)
 var RECUR_LOOP_CAP = 6000; // periods looked at per rule
+var ICS_PARSE_MS = 500; // the parse is synchronous, so no deadline can interrupt it: it stops itself after this long (no agenda) and the run keeps its 5 s
 var WINDOWS_ZONES = { // what Outlook writes as TZID: the common ones
   'W. Europe Standard Time': 'Europe/Berlin', 'Romance Standard Time': 'Europe/Paris', 'GMT Standard Time': 'Europe/London', 'Central Europe Standard Time': 'Europe/Budapest',
   'Central European Standard Time': 'Europe/Warsaw', 'E. Europe Standard Time': 'Europe/Bucharest', 'FLE Standard Time': 'Europe/Kiev', 'Russian Standard Time': 'Europe/Moscow',
@@ -633,8 +634,10 @@ function zoneFmt(zone) {
   return zoneFormatters[zone];
 }
 /** The zone's offset from UTC at an instant, in ms. */
+var zoneLookups = 0; // counted for the test that keeps a large calendar cheap
 function offsetAt(ms, zone) {
   var p = {};
+  zoneLookups++;
   zoneFmt(zone).formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = Number(x.value); });
   return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
 }
@@ -702,7 +705,7 @@ function civilOf(dayN) { var t = new Date(dayN * 864e5); return { y: t.getUTCFul
 var DAY_CODES = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
 function parseRule(value) {
-  var r = { freq: '', interval: 1, count: 0, until: '', byday: [], bymonthday: [], bymonth: [], wkst: 1 };
+  var r = { freq: '', interval: 1, count: 0, until: '', byday: [], bymonthday: [], bymonth: [], bysetpos: [], wkst: 1 }, unknown = false;
   String(value).split(';').forEach(function (kv) {
     var e = kv.indexOf('='), k = kv.slice(0, e).toUpperCase(), v = kv.slice(e + 1);
     if (k === 'FREQ') r.freq = v.toUpperCase();
@@ -713,7 +716,11 @@ function parseRule(value) {
     else if (k === 'BYMONTHDAY') r.bymonthday = v.split(',').map(Number).filter(function (n) { return n && Math.abs(n) <= 31; });
     else if (k === 'BYMONTH') r.bymonth = v.split(',').map(Number).filter(function (n) { return n >= 1 && n <= 12; });
     else if (k === 'WKST') r.wkst = DAY_CODES[v.toUpperCase()] === undefined ? 1 : DAY_CODES[v.toUpperCase()];
+    else if (k === 'BYSETPOS') r.bysetpos = v.split(',').map(Number).filter(function (n) { return n && Math.abs(n) <= 366; });
+    else if (/^BY(WEEKNO|YEARDAY|HOUR|MINUTE|SECOND)$/.test(k)) unknown = true;
   });
+  // a part that is not expanded (BYWEEKNO, BYYEARDAY, the BY-times; BYSETPOS outside a month or year) would give wrong days: no rule, the event shows at its start only
+  if (unknown || (r.bysetpos.length && r.freq !== 'MONTHLY' && r.freq !== 'YEARLY')) return null;
   return ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].indexOf(r.freq) >= 0 ? r : null;
 }
 
@@ -736,25 +743,30 @@ function monthDays(r, y, mo, startDom) {
  * The days an RRULE gives from the start day on, those within [fromDay, toDay]. A rule with COUNT is counted from its first day; one
  * without jumps near the window. Wall-clock days: the time of day is the caller's (so a DST change keeps "09:00 on Mondays").
  */
-function ruleDays(r, startDay, fromDay, toDay, untilDay) {
-  var st = civilOf(startDay), out = [], n = 0, k, i, per = r.freq === 'DAILY' ? 1 : r.freq === 'WEEKLY' ? 7 : r.freq === 'MONTHLY' ? 28 : 365;
+function ruleDays(r, startDay, fromDay, toDay, untilDay, tick) {
+  // per: the LONGEST a period can be, so the jump to the window never lands after it (28 for a month overshot once a series was two years old)
+  var st = civilOf(startDay), out = [], n = 0, k, i, per = r.freq === 'DAILY' ? 1 : r.freq === 'WEEKLY' ? 7 : r.freq === 'MONTHLY' ? 31 : 366;
+  var wdOk = function (d) { return !r.byday.length || r.byday.some(function (b) { return b.wd === civilOf(d).wd; }); };
+  var moOk = function (d) { return !r.bymonth.length || r.bymonth.indexOf(civilOf(d).mo) >= 0; };
+  var setPos = function (days) { return !r.bysetpos.length ? days : r.bysetpos.map(function (p) { return p > 0 ? days[p - 1] : days[days.length + p]; }).filter(function (d) { return d !== undefined; }).sort(function (a, b) { return a - b; }); };
   var k0 = r.count ? 0 : Math.max(0, Math.floor((fromDay - startDay) / (per * r.interval)) - 2);
   for (k = k0; k < k0 + RECUR_LOOP_CAP; k++) {
     var days = [], ps;
-    if (r.freq === 'DAILY') { days = [startDay + k * r.interval]; ps = days[0]; }
+    if (tick) tick();
+    if (r.freq === 'DAILY') { ps = startDay + k * r.interval; if (wdOk(ps) && moOk(ps)) days = [ps]; } // "every weekday" is written FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR
     else if (r.freq === 'WEEKLY') {
       ps = startDay - ((st.wd - r.wkst + 7) % 7) + 7 * r.interval * k;
       (r.byday.length ? r.byday.map(function (b) { return b.wd; }) : [st.wd]).forEach(function (wd) { days.push(ps + ((wd - r.wkst + 7) % 7)); });
-      days.sort(function (a, b) { return a - b; });
+      days = days.filter(moOk).sort(function (a, b) { return a - b; });
     } else if (r.freq === 'MONTHLY') {
       var m0 = st.y * 12 + (st.mo - 1) + k * r.interval;
       ps = dayNumber(Math.floor(m0 / 12), (m0 % 12) + 1, 1);
-      if (!r.bymonth.length || r.bymonth.indexOf((m0 % 12) + 1) >= 0) days = monthDays(r, Math.floor(m0 / 12), (m0 % 12) + 1, st.d);
+      if (!r.bymonth.length || r.bymonth.indexOf((m0 % 12) + 1) >= 0) days = setPos(monthDays(r, Math.floor(m0 / 12), (m0 % 12) + 1, st.d));
     } else {
       var y = st.y + k * r.interval;
       ps = dayNumber(y, 1, 1);
       (r.bymonth.length ? r.bymonth : [st.mo]).forEach(function (mo) { days = days.concat(monthDays(r, y, mo, st.d)); });
-      days.sort(function (a, b) { return a - b; });
+      days = setPos(days.sort(function (a, b) { return a - b; }));
     }
     if (ps > toDay + 1 && days.every(function (d) { return d > toDay; })) break;
     for (i = 0; i < days.length; i++) {
@@ -781,8 +793,12 @@ function icsDuration(v) {
  * startDay, endDay (exclusive), title, location }]. Cancelled events are skipped, EXDATEs removed, RECURRENCE-ID overrides replace the
  * occurrence they name.
  */
-function icsOccurrences(text, zoneName, firstDay, lastDay) {
+function icsOccurrences(text, zoneName, firstDay, lastDay, budgetMs) {
+  var t0 = Date.now(), ticks = 0, tick = function () { if (budgetMs && (++ticks & 63) === 0 && Date.now() - t0 > budgetMs) throw new Error('agenda budget'); };
   var events = icsEvents(text), out = [], masters = [], overrides = {};
+  // A wall-clock day is at most two days from the same instant's day in the account's zone (zones span 26 hours): a time further
+  // than that from the window cannot touch it and is not converted (the zone arithmetic is the costly part of a large calendar).
+  var FAR = 2, civ = function (t) { return dayNumber(t.y, t.mo, t.d); }, far = function (t) { var d = civ(t); return d < firstDay - 3 - FAR || d > lastDay + 1 + FAR; };
   var one = function (ev, name) { return (ev[name] || [])[0]; };
   var cancelled = function (ev) { var s = one(ev, 'STATUS'); return !!s && /^CANCELLED$/i.test(s.value.trim()); };
   var dayStartAt = function (dayN) { var c = civilOf(dayN); return wallToEpoch(c.y, c.mo, c.d, 0, 0, 0, zoneName); };
@@ -805,27 +821,34 @@ function icsOccurrences(text, zoneName, firstDay, lastDay) {
     var ds = one(ev, 'DTSTART'), uid = (one(ev, 'UID') || {}).value;
     if (!ds || !icsTime(ds, zoneName)) return;
     var rid = one(ev, 'RECURRENCE-ID');
+    tick();
     if (rid && icsTime(rid, zoneName)) {
       var rt = icsTime(rid, zoneName);
-      (overrides[uid] = overrides[uid] || {})[key(rt)] = true;
+      if (!far(rt)) (overrides[uid] = overrides[uid] || {})[key(rt)] = true; // the occurrences looked at start within the window's reach
       if (!cancelled(ev)) masters.push({ ev: ev, single: true });
     } else if (!cancelled(ev)) masters.push({ ev: ev, uid: uid });
   });
   masters.forEach(function (m) {
     var ev = m.ev, st = icsTime(one(ev, 'DTSTART'), zoneName), rr = one(ev, 'RRULE'), rule = rr && !m.single ? parseRule(rr.value) : null;
+    tick();
     if (!rule) {
+      // a single event: skipped unconverted when it starts after the window or ends before it, by its own wall-clock days
+      var et = one(ev, 'DTEND') && icsTime(one(ev, 'DTEND'), zoneName), du = one(ev, 'DURATION') ? icsDuration(one(ev, 'DURATION').value) : 0;
+      var lastCivil = Math.max(civ(st), et ? civ(et) : civ(st) + Math.ceil(Math.max(0, du) / 864e5));
+      if (civ(st) > lastDay + FAR || lastCivil < firstDay - FAR) return;
       var o = st.allDay ? shape(ev, st, dayNumber(st.y, st.mo, st.d)) : shape(ev, st);
       out.push(o);
       return;
     }
     var ex = {};
-    (ev.EXDATE || []).forEach(function (p) { p.value.split(',').forEach(function (v) { var t = icsTime({ value: v, params: p.params }, zoneName); if (t) ex[key(t)] = true; }); });
+    (ev.EXDATE || []).forEach(function (p) { p.value.split(',').forEach(function (v) { var t = icsTime({ value: v, params: p.params }, zoneName); if (t && !far(t)) ex[key(t)] = true; }); });
     var ov = overrides[m.uid] || {};
     var untilT = rule.until ? icsTime({ value: rule.until, params: {} }, zoneName) : null;
-    var untilDay = untilT ? dayNumber(untilT.y, untilT.mo, untilT.d) : null;
+    // UNTIL as an instant (a UTC time) is checked exactly below; its UTC day can be the day before the last occurrence's own day (Tokyo 08:00 is 23:00 UTC), so the day limit is one later
+    var untilDay = untilT ? dayNumber(untilT.y, untilT.mo, untilT.d) + (!untilT.allDay && !st.allDay ? 1 : 0) : null;
     var untilEpoch = untilT && !untilT.allDay ? wallToEpoch(untilT.y, untilT.mo, untilT.d, untilT.h, untilT.mi, untilT.s, untilT.zone) : null;
     var startDay = dayNumber(st.y, st.mo, st.d);
-    ruleDays(rule, startDay, firstDay - 3, lastDay + 1, untilDay).forEach(function (dn) {
+    ruleDays(rule, startDay, firstDay - 3, lastDay + 1, untilDay, tick).forEach(function (dn) {
       var c = civilOf(dn), occ = { allDay: st.allDay, y: c.y, mo: c.mo, d: c.d, h: st.h, mi: st.mi, s: st.s, zone: st.zone };
       var k = key(occ);
       if (ex[k] || ov[k]) return;
@@ -847,7 +870,7 @@ function icsOccurrences(text, zoneName, firstDay, lastDay) {
 /** The next AGENDA_ITEMS events to show: today's that are not over, from AGENDA_TOMORROW_FROM (or when none is left) tomorrow's. { day, items } or null. */
 function pickAgenda(text, userZ, nowMs, local, timeFmt) {
   var zoneName = userZ.zone, today = dayNumber(+local.iso.slice(0, 4), +local.iso.slice(5, 7), +local.iso.slice(8, 10));
-  var occ = icsOccurrences(text, zoneName, today, today + 1), dayStart = function (dn) { var c = civilOf(dn); return wallToEpoch(c.y, c.mo, c.d, 0, 0, 0, zoneName); };
+  var occ = icsOccurrences(text, zoneName, today, today + 1, ICS_PARSE_MS), dayStart = function (dn) { var c = civilOf(dn); return wallToEpoch(c.y, c.mo, c.d, 0, 0, 0, zoneName); };
   var onDay = function (dn) {
     var a = dayStart(dn), b = dayStart(dn + 1);
     return occ.filter(function (o) { return o.allDay ? o.startDay <= dn && o.endDay > dn : (o.end > o.start ? o.start < b && o.end > a : o.start >= a && o.start < b); })
@@ -1161,6 +1184,6 @@ async function run(input) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     run: run, labelColumn: labelColumn, md5: md5, thumbUrl: thumbUrl, thumbWidth: thumbWidth, choose: choose, weightOf: weightOf, screenOf: screenOf,
-    settingsOf: settingsOf, cropPlan: cropPlan, cropAxis: cropAxis, artOf: artOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS,
+    settingsOf: settingsOf, cropPlan: cropPlan, cropAxis: cropAxis, artOf: artOf, framePlan: framePlan, frameBox: frameBox, frameProfileOf: frameProfileOf, FRAME_BAND_CROP_MAX: FRAME_BAND_CROP_MAX, AGENDA_ITEMS: AGENDA_ITEMS, FILL_CROP_MAX: FILL_CROP_MAX, icsOccurrences: icsOccurrences, pickAgenda: pickAgenda, fetchAgenda: fetchAgenda, icsUrl: icsUrl, dayNumber: dayNumber, wallToEpoch: wallToEpoch, forecastLine: forecastLine, dayInfo: dayInfo, infoPlace: infoPlace, weatherSentence: weatherSentence, INFO_SIZES: INFO_SIZES, INFO_NARROW: INFO_NARROW, fetchWeather: fetchWeather, latLon: latLon, userZone: userZone, userLocale: userLocale, unitOf: unitOf, validShard: validShard, pick: pick, pickBackup: pickBackup, DATA_BASES: DATA_BASES, cropShare: cropShare, modeFor: modeFor, flag: flag, AUTO_CROP_MAX: AUTO_CROP_MAX, galleryFor: galleryFor, whoLine: whoLine, detailLine: detailLine, srcsetOf: srcsetOf, artOf: artOf, HISTORY: HISTORY, SHARDS: SHARDS, ICS_PARSE_MS: ICS_PARSE_MS, zoneCalls: function () { return zoneLookups; },
   };
 }

@@ -79,7 +79,7 @@ The groups stand on the work's edges (when it is at least 55 % of the slot wide 
 | Text sizes | Tiers xl, l, m, s are named by the slot's height in CSS px; `INFO_SIZES` has the strip height, gap, margin and the widths of the groups per tier. A slot lower than 300 CSS px has no info |
 | No location from TRMNL | `trmnl.user` has a language, a time zone and an offset, no coordinates: the weather location is a setting, looked up once and kept in the state |
 | Weather and calendar are best effort | One request each, run while the data is fetched, a 3.2 s deadline; a failure leaves that part out and never shows an error |
-| Calendar size | At most 2 MB is read (a calendar with years of history may be larger: no agenda). Recurring events are expanded for today and tomorrow only: DAILY, WEEKLY, MONTHLY, YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (also 1MO, -1FR), BYMONTHDAY, BYMONTH; EXDATE, RECURRENCE-ID and STATUS:CANCELLED are honoured. Outlook's Windows time zone names are mapped for the common zones |
+| Calendar size | At most 2 MB is read (a calendar with years of history may be larger: no agenda). Recurring events are expanded for today and tomorrow only: DAILY, WEEKLY, MONTHLY, YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (also 1MO, -1FR; with DAILY: every weekday), BYMONTHDAY, BYMONTH, BYSETPOS (monthly and yearly); a rule with a part that is not expanded (BYWEEKNO, BYYEARDAY, the BY-times) shows its first occurrence only, never a wrong day. The parse stops itself after 0.5 s (`ICS_PARSE_MS`: no agenda), events far from today cost nothing. EXDATE, RECURRENCE-ID and STATUS:CANCELLED are honoured. Outlook's Windows time zone names are mapped for the common zones |
 
 ## The Frame
 

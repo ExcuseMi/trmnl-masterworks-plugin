@@ -213,3 +213,63 @@ test('run: the calendar link is never in the merge variables, the state or an er
   const out = await t.run({ trmnl: { device: { width: 800, height: 480 }, plugin_settings: { custom_fields_values: { show_agenda: 'true', ics_url: ICSURL } } } });
   assert.ok(!JSON.stringify(out).includes('SECRET-TOKEN'));
 });
+
+// Review 2026-11-19: recurrence faults found by probing real calendar shapes (each assertion was red before its fix).
+test('RRULE MONTHLY: a series that began years ago still shows (the jump to the window counted 28-day months and overshot after two years)', () => {
+  const r = (rule, start) => cal(['UID:old', `DTSTART;TZID=Europe/Brussels:${start}T090000`, `RRULE:${rule}`, 'SUMMARY:Old']);
+  assert.strictEqual(on(r('FREQ=MONTHLY', '20190117'), '2026-11-17').length, 1, 'monthly since 2019');
+  assert.strictEqual(on(r('FREQ=MONTHLY;BYDAY=3TU', '20120117'), '2026-11-17').length, 1, 'the third Tuesday since 2012');
+  assert.strictEqual(on(r('FREQ=MONTHLY;INTERVAL=3', '20170217'), '2026-11-17').length, 1, 'every quarter since 2017');
+  assert.strictEqual(on(r('FREQ=MONTHLY;INTERVAL=3', '20170217'), '2026-10-17').length, 0, 'not in the months between');
+  assert.strictEqual(on(r('FREQ=YEARLY', '19701117'), '2026-11-17').length, 1, 'a birthday since 1970');
+  assert.strictEqual(on(r('FREQ=WEEKLY;INTERVAL=2;BYDAY=TU', '20100105'), '2026-11-17').length + on(r('FREQ=WEEKLY;INTERVAL=2;BYDAY=TU', '20100105'), '2026-11-24').length, 1, 'every second Tuesday since 2010: one of two weeks');
+});
+
+test('RRULE DAILY with BYDAY (every weekday, as Outlook and Thunderbird write it): not on the weekend, COUNT counts the weekdays', () => {
+  const r = (rule) => cal(['UID:wd', 'DTSTART;TZID=Europe/Brussels:20261102T090000', `RRULE:${rule}`, 'SUMMARY:Standup']);
+  assert.strictEqual(on(r('FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR'), '2026-11-20').length, 1, 'Friday');
+  assert.strictEqual(on(r('FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR'), '2026-11-21', '2026-11-22').length, 0, 'Saturday and Sunday');
+  assert.strictEqual(on(r('FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR;COUNT=6'), '2026-11-09').length, 1, 'the sixth weekday is Monday the 9th');
+  assert.strictEqual(on(r('FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR;COUNT=6'), '2026-11-10').length, 0);
+  assert.strictEqual(on(r('FREQ=DAILY;BYMONTH=12'), '2026-11-20').length, 0, 'BYMONTH limits a daily rule');
+  assert.strictEqual(on(r('FREQ=WEEKLY;BYDAY=FR;BYMONTH=12'), '2026-11-20').length, 0, 'and a weekly one');
+});
+
+test('RRULE BYSETPOS: the last weekday of the month is one day, not every weekday; a rule part the parser does not know shows the first occurrence only', () => {
+  const r = (rule, start = '20260130') => cal(['UID:sp', `DTSTART;TZID=Europe/Brussels:${start}T090000`, `RRULE:${rule}`, 'SUMMARY:Payday']);
+  assert.strictEqual(on(r('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1'), '2026-11-16', '2026-11-29').length, 0, 'no weekday before the last');
+  assert.strictEqual(on(r('FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1'), '2026-11-30').length, 1, 'Monday the 30th');
+  assert.strictEqual(on(r('FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2', '20260113'), '2026-11-10').length, 1, 'the second Tuesday, as Outlook writes it');
+  assert.strictEqual(on(r('FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2', '20260113'), '2026-11-17').length, 0);
+  assert.strictEqual(on(r('FREQ=YEARLY;BYWEEKNO=47;BYDAY=TU', '20250107'), '2026-11-01', '2026-11-30').length, 0, 'BYWEEKNO is not expanded: never a wrong day');
+  assert.strictEqual(on(r('FREQ=YEARLY;BYWEEKNO=47;BYDAY=TU', '20261117'), '2026-11-17').length, 1, 'its first occurrence still shows');
+});
+
+test('RRULE UNTIL as a UTC instant: the last occurrence stays when its local day is one after the UTC day (zones east of Greenwich)', () => {
+  const text = cal(['UID:u', 'DTSTART;TZID=Asia/Tokyo:20261101T080000', 'RRULE:FREQ=DAILY;UNTIL=20261119T230000Z', 'SUMMARY:Run']); // the last one is 20 Nov 08:00 in Tokyo
+  const tokyo = (d) => t.icsOccurrences(text, 'Asia/Tokyo', day(d), day(d)).length;
+  assert.strictEqual(tokyo('2026-11-20'), 1, 'the occurrence at the UNTIL instant');
+  assert.strictEqual(tokyo('2026-11-21'), 0, 'none after it');
+});
+
+test('a calendar at the 2 MB cap is parsed fast: events far from today and tomorrow cost no zone arithmetic', () => {
+  const far = [];
+  for (let i = 0; i < 7000; i++) far.push(['UID:f' + i, `DTSTART;TZID=Europe/Brussels:20${10 + (i % 16)}0${1 + (i % 9)}1${i % 9}T1${i % 9}0000`, `DTEND;TZID=Europe/Brussels:20${10 + (i % 16)}0${1 + (i % 9)}1${i % 9}T1${i % 9}3000`, 'SUMMARY:Past event number ' + i, 'DESCRIPTION:' + 'x'.repeat(150)]);
+  const text = cal(...far, ['UID:now', 'DTSTART;TZID=Europe/Brussels:20261117T090000', 'DTEND;TZID=Europe/Brussels:20261117T100000', 'SUMMARY:Today'],
+    ['UID:span', 'DTSTART;TZID=Europe/Brussels:20261110T090000', 'DTEND;TZID=Europe/Brussels:20261120T100000', 'SUMMARY:Ten days'], ['UID:late', 'DTSTART;TZID=America/Los_Angeles:20261116T230000', 'SUMMARY:From another zone']);
+  assert.ok(text.length > 1800000, 'about 2 MB');
+  const calls = t.zoneCalls(), got = on(text, '2026-11-17');
+  assert.deepStrictEqual(got, ['08:00 From another zone', '09:00 Ten days', '09:00 Today'], 'the events of the day are all found: a long one, one whose day differs in its own zone');
+  assert.ok(t.zoneCalls() - calls < 200, `zone lookups for 7,003 events: ${t.zoneCalls() - calls} (was 4 per event)`);
+});
+
+test('a calendar that would take too long gives no agenda instead of holding the run (the 5 s limit): the parse has its own time budget', async () => {
+  const heavy = [];
+  for (let i = 0; i < 4000; i++) heavy.push(['UID:h' + i, 'DTSTART:20000103T090000Z', 'RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;COUNT=99999', 'SUMMARY:H' + i]);
+  const text = cal(...heavy), t0 = Date.now();
+  assert.throws(() => t.pickAgenda(text, { zone: Z, shift: 0 }, nowAt('2026-11-17T08:00'), local('2026-11-17T08:00'), (ms) => hhmm(ms)), /agenda budget/);
+  assert.ok(Date.now() - t0 < t.ICS_PARSE_MS + 400, `stopped after ${Date.now() - t0} ms`);
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => text });
+  const out = await t.run({ trmnl: { device: { width: 800, height: 480 }, plugin_settings: { custom_fields_values: { show_agenda: 'true', show_date: 'true', ics_url: ICSURL } } } });
+  assert.ok(out.info && out.info.has_date && !out.info.has_agenda, 'the date stays, the agenda is left out');
+});
