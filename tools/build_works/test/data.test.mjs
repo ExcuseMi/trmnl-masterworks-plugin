@@ -32,6 +32,12 @@ test('artist fixes are in the data (Wikidata named an actor born in 1992 as the 
   assert.deepStrictEqual([...new Set(works.filter((w) => w.i === 'Q3921861').map((w) => `${w.a}: ${w.t}`))], ['Wassily Kandinsky: First Abstract Watercolor']);
 });
 
+test('label fixes are in the data: a painter born after the work, a year that is a typo, the year of the event or zero', () => {
+  const label = (id) => [...new Set(works.filter((w) => w.i === id).map((w) => `${w.a}, ${w.yl || (w.y === undefined ? 'no year' : w.y)}`))].join(' / ');
+  assert.deepStrictEqual(['Q6043547', 'Q11092366', 'Q1450935', 'Q29328965', 'Q21614085', 'Q111417085'].map(label),
+    ['Francisco Goya, 1786', 'François Boucher, 1739', 'Raphael, 1516–17', 'Eugène Delacroix, 1836', 'Jan van Amstel, no year', 'Unknown artist, no year']);
+});
+
 // Round 2 review 2026-11-17: Wikidata held The Sick Child six times, Munch's Madonna four times, Water Lilies thirteen.
 import { titleKey } from '../dedupe.mjs';
 import { YEAR_LABEL_RE } from '../dates.mjs';

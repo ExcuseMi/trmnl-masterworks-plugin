@@ -147,7 +147,11 @@ const imageOf = (p) => {
   return preferNonPng(ok); // a JPEG, TIFF or WebP file is far lighter than a PNG of the same picture (see commons.mjs)
 };
 const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
-const ARTIST_FIXES = { Q3921861: 'Wassily Kandinsky' }; // Wikidata named an actor born in 1992 as the creator (review 2026-11-19)
+// Review 2026-11-19 (every creator's birth year against the work's year): Wikidata named an actor born in 1992 as the painter of the
+// Kandinsky, a man born in 1976 as the painter of Goya's Boys with Mastiffs; five inception dates are a typo, the year of the event or zero
+const ARTIST_FIXES = { Q3921861: 'Wassily Kandinsky', Q6043547: 'Francisco Goya' };
+const YEAR_FIXES = { Q11092366: { year: 1739, label: '1739' }, Q1450935: { year: 1516, label: '1516–17' }, Q29328965: { year: 1836, label: '1836' }, Q21614085: { year: undefined, label: '' }, Q111417085: { year: undefined, label: '' } };
+const yearOfWork = (p) => YEAR_FIXES[p.id] || { year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), label: yearInfo(tags[p.id].dates).label };
 const artistOf = (p) => ARTIST_FIXES[p.id] || p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
 const curatorSuspects = loadSuspects();
 const curatorCrops = loadCrops();
@@ -173,7 +177,7 @@ for (const p of picked) {
   works.push({
     id: p.id, title, artist, sl: p.sl, file: info.file, w: info.w, h: info.h,
     crop: cropFor(curatorCrops, p.id, info.file) || undefined, // a scanner bed or paper margin round the work is not shown
-    year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), yearLabel: yearInfo(tags[p.id].dates).label,
+    year: yearOfWork(p).year, yearLabel: yearOfWork(p).label,
     genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
     reasons: [...(once.reasons.get(p.id) || []), ...(curatorSuspects[p.id] ? [`curator ${curatorSuspects[p.id]}`] : [])], // the curator's safety suspects are flagged too (owner 2026-11-18)
     locations: tags[p.id].locations, collections: p.d.coll,
