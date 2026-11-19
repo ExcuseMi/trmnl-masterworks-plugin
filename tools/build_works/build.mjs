@@ -33,7 +33,9 @@ const BUILD_YEAR = new Date().getUTCFullYear();
 // the work list must hold these (the gap report's five): the build stops, and writes nothing, when one is missing
 // Wikidata labels with a known error; the fix belongs on Wikidata, this keeps the data set right until then
 // Wikidata labels that are wrong or vandalized (Q311243 read "Wanderer above the Sea younes non non non ..." on 2026-11-17).
-const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa', Q311243: 'Wanderer above the Sea of Fog', Q3921861: 'First Abstract Watercolor', Q27970998: 'Madonna and Child with Four Angels' /* Wikidata's label has a Cyrillic A */ }; // the last: 'Untitled' on Wikidata, the name it is known by (and one of two Untitled by Kandinsky)
+// reviewed by hand, in data files: titles (Wikidata's label is wrong, vandalised or has no English: 31 Japanese titles translated 2026-11-19) and the
+// curator exclusions the owner looked at ('keep': the work stays in spite of the curator's score)
+const TITLE_FIXES = JSON.parse(readFileSync(join(here, 'title-fixes.json'), 'utf8')), EXCLUDE_REVIEW = JSON.parse(readFileSync(join(here, 'exclude-review.json'), 'utf8'));
 const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens' };
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
 
@@ -187,7 +189,7 @@ for (const p of picked) {
 // Owner 2026-11-18, after the list is cut (so no work the curator has not judged moves in): the curator's sure quality
 // exclusions, what is no picture (map, plan, banknote, ostracon, object) and the lesser of two same-picture works leave
 const curatorOut = loadExclusions(), gone = { quality: [], notAPicture: [], samePicture: [] };
-const kept1 = works.filter((w) => { if (curatorOut[w.id]) { gone.quality.push(w.id); return false; } if (isNotAPicture(tags[w.id].classes)) { gone.notAPicture.push(w.id); return false; } return true; });
+const kept1 = works.filter((w) => { if (curatorOut[w.id] && EXCLUDE_REVIEW[w.id] !== 'keep') { gone.quality.push(w.id); return false; } if (isNotAPicture(tags[w.id].classes)) { gone.notAPicture.push(w.id); return false; } return true; });
 const samePic = samePictureDrops(JSON.parse(readFileSync(join(here, 'curator-pairs.json'), 'utf8')), kept1);
 gone.samePicture = [...samePic];
 works.splice(0, works.length, ...kept1.filter((w) => !samePic.has(w.id)));

@@ -19,8 +19,13 @@ test('no title has a word repeated three times in a row (vandalism)', () => {
 
 test('title fixes are in the data', () => {
   assert.ok(works.filter((w) => w.i === 'Q311243').every((w) => w.t === 'Wanderer above the Sea of Fog'));
-  assert.ok(works.filter((w) => w.i === 'Q27970998').every((w) => w.t === 'Madonna and Child with Four Angels'), 'Latin letters only (the label had a Cyrillic A)');
-  // review 2026-11-19: a title in another script stays only where Wikidata has no English label (32 Japanese prints and paintings, one icon)
+  // title-fixes.json: every fix is in the data; owner 2026-11-19: the 31 Japanese titles are translated by hand (Wikidata has no English
+  // label for them); TRMNL's own fonts hold Cyrillic (Inter) and Japanese (Noto Sans CJK), so the one Russian title stays
+  const fixes = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../title-fixes.json'), 'utf8'));
+  assert.ok(Object.keys(fixes).length >= 35);
+  assert.deepStrictEqual(works.filter((w) => fixes[w.i] && w.t !== fixes[w.i]).map((w) => `${w.f} ${w.i} ${w.t}`), []);
+  assert.deepStrictEqual(Object.keys(fixes).filter((q) => !works.some((w) => w.i === q)), [], 'a fix for a work that is not in the data');
+  assert.deepStrictEqual(works.filter((w) => /[\u3040-\u30ff\u4e00-\u9fff]/.test(w.t)).map((w) => `${w.i} ${w.t}`), [], 'no Japanese title left');
   const mixed = works.filter((w) => /[A-Za-z]/.test(w.t) && /[\u0400-\u04ff\u3040-\u30ff\u4e00-\u9fff]/.test(w.t)).map((w) => `${w.i} ${w.t}`);
   assert.deepStrictEqual(mixed, [], 'no title mixes Latin letters with another script');
 });
@@ -143,7 +148,20 @@ test('no work the curator surely excludes is in the data (museum photo or chart 
   const ex = loadExclusions();
   assert.ok(!isSure('museum photo 0.63; chart/label 0.67') && isSure('museum photo 0.70') && isSure('chart/label 0.96') && !isSure('chart/label 0.89') && !isSure('blur 38'));
   assert.ok(Object.keys(ex).length > 20, `${Object.keys(ex).length} exclusions`);
-  assert.deepStrictEqual(works.filter((w) => ex[w.i]).map((w) => `${w.i} ${ex[w.i]}`), []);
+  const looked = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../exclude-review.json'), 'utf8'));
+  assert.deepStrictEqual(works.filter((w) => ex[w.i] && looked[w.i] !== 'keep').map((w) => `${w.i} ${ex[w.i]}`), []);
+});
+
+// Owner 2026-11-19, on a sheet of the 11 exclusions that looked like flat reproductions: six stay in the data (exclude-review.json
+// 'keep'), five stay out ('out': four show a frame, Eckhout's Mulher Africana by choice).
+test('the exclusions the owner looked at: the six kept are in the data, the five left out are not', () => {
+  const looked = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../exclude-review.json'), 'utf8')), ids = new Set(works.map((w) => w.i));
+  const of = (v) => Object.keys(looked).filter((q) => looked[q] === v);
+  assert.deepStrictEqual([of('keep').length, of('out').length], [6, 5]);
+  assert.deepStrictEqual(of('keep').filter((q) => !ids.has(q)), [], 'kept by the owner, missing from the data');
+  assert.deepStrictEqual(of('out').filter((q) => ids.has(q)), [], 'left out by the owner, in the data');
+  assert.ok(!ids.has('Q20052489'), 'Mulher Africana stays out');
+  for (const q of of('keep')) for (const w of works.filter((x) => x.i === q)) assert.ok(w.f && w.w > 0 && w.p > 0 && w.t && w.a && !w.u, `${q} is whole and shows with Family friendly on`);
 });
 
 test('the exclusion rule takes the sure set only, not the doubtful', () => {
