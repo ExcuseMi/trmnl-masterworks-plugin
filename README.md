@@ -54,7 +54,7 @@ A work takes up to 80 % of the dimension that is not its limit; a panorama may t
 |---|---|---|---|
 | (none) | Fill the screen | On | Appears only with the label, the date, the weather and the agenda all off. On: a work whose fill crops at most 15 % (`FILL_CROP_MAX`) fills the screen edge to edge; the rest hang on the mat. Off: only under 5 % (`AUTO_CROP_MAX`) fills |
 | (none) | Museum label | On | On or off; on hides Fill the screen |
-| Selection | Family friendly | On | Leaves out works whose subject is nudity or graphic violence |
+| Selection | Family friendly | On | Leaves out works that clearly show nudity or graphic violence (see Known limits) |
 | Selection | Genres | Nothing ticked (the default mix) | A multiple choice: Landscapes and seas, Cities, Flowers and still life, Nature illustration, Japanese prints, Modern and abstract, Posters and Art Nouveau, Religious, History and mythology, Everyday scenes, Portraits. Several ticked: works of any of them, by fame. Too few works of the ticked kinds: the default mix for that refresh |
 | Selection | Period | All | Ten movements, such as Renaissance, Baroque, Impressionism |
 | Info | Show the date, Show the weather, Show the agenda | Off, off, off | Three independent toggles; the info appears when any part has something to show; each one on hides Fill the screen |
@@ -104,7 +104,7 @@ The picture's width is the browser's choice (`srcset` with `sizes`), so a wrongl
 | Limit | Detail |
 |---|---|
 | First thumbnails can be slow | An uncached 1920 px thumbnail is generated on first request. If the picture fails (an error event), a backup work swaps in: a second, famous work with its own label, look and mat, hidden until needed and not fetched until then. A request that hangs without an error is not caught, and the screenshot may be taken before the swap; the state records the primary |
-| Family friendly is careful, not perfect | It uses Wikidata's subjects, the titles in several languages and a short reviewed list |
+| Family friendly is careful, not perfect | Hidden: about 12 % of the works (1,123). A work is hidden by Wikidata's subjects, its titles or the curator's sure flag (a curator doubt hides nothing); `tools/build_works/family-review.json` is applied last and holds the decisions made by looking at the picture (`show` or `hide`): the hidden works among the 1,000 most famous and every work only the curator flagged. The rule there: hidden only when clearly not family friendly (a nude as the subject, gore); a draped or distant nude, a battle or a death scene shows. Of the 300 most famous works 23 are hidden (a test holds the number) |
 | xteink_x3 | The shared base check fails there: the model's screen CSS is 800 px wide inside a 792 px window, so any full-bleed layout overflows |
 
 ## Development

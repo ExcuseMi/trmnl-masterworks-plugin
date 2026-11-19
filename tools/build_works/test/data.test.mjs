@@ -83,27 +83,49 @@ test('every work is not a PNG, or says the thumbnail step to ask for (a PNG thum
   assert.deepStrictEqual(bad, []);
 });
 
-// Owner 2026-11-18, error on the side of caution: every work the curator flagged or found borderline on safety has the
-// family flag (the snapshot is made from the server's index export, overrides applied). Q19967004 (Schiele, The Embrace)
-// showed with Family friendly on.
-import { suspects, suspectOf, loadSuspects } from '../curator_safety.mjs';
+// Owner 2026-11-19 (was 2026-11-18, error on the side of caution: every suspect hidden, which hid 30 % of the works and 113 of the
+// 300 most famous): only sure cases hide a work. The curator's flag does, its doubt does not, and family-review.json (decisions made
+// by looking at each picture: the 300 most famous hidden works, all hidden works of the 1,000 most famous, every work only the
+// curator flagged) is applied last. Q19967004 (Schiele, The Embrace) showed with Family friendly on once: it stays hidden.
+import { suspects, suspectOf, loadSuspects, loadReview, familyReasons } from '../curator_safety.mjs';
 
-test('every curator safety suspect has the family flag, and Q19967004 too', () => {
-  const sus = loadSuspects(), ids = new Set(works.map((w) => w.i));
-  assert.ok(Object.keys(sus).length > 1200, `${Object.keys(sus).length} suspects`);
-  const bad = Object.keys(sus).filter((q) => ids.has(q) && !works.filter((w) => w.i === q).every((w) => w.u));
-  assert.deepStrictEqual(bad, []);
-  assert.ok(works.filter((w) => w.i === 'Q19967004').every((w) => w.u));
-  assert.ok(sus.Q19967004, 'the curator flagged it');
+const unique = [...new Map(works.map((w) => [w.i, w])).values()];
+const famous = (n) => [...unique].sort((a, b) => b.s - a.s || Number(a.i.slice(1)) - Number(b.i.slice(1))).slice(0, n);
+
+test('family flags follow the rule: a curator flag hides unless the review says show; a review decision always holds', () => {
+  const sus = loadSuspects(), review = loadReview();
+  assert.ok(Object.keys(sus).length > 1200 && Object.keys(review).length > 500, `${Object.keys(sus).length} suspects, ${Object.keys(review).length} reviewed`);
+  assert.deepStrictEqual(unique.filter((w) => sus[w.i] === 'flag' && review[w.i] !== 'show' && !w.u).map((w) => w.i), [], 'flagged by the curator, not cleared by a look: hidden');
+  assert.deepStrictEqual(unique.filter((w) => review[w.i] === 'show' && w.u).map((w) => `${w.i} ${w.t}`), [], 'looked at and cleared: shown');
+  assert.deepStrictEqual(unique.filter((w) => review[w.i] === 'hide' && !w.u).map((w) => `${w.i} ${w.t}`), [], 'looked at and kept: hidden');
+  assert.deepStrictEqual(Object.values(review).filter((v) => v !== 'show' && v !== 'hide'), []);
+  assert.ok(works.filter((w) => w.i === 'Q19967004').every((w) => w.u) && review.Q19967004 === 'hide');
 });
 
-test('the suspect rule: a flag or a safety doubt, nothing else; an override that clears both un-flags', () => {
+test('the famous works show with Family friendly on: of the 300 most famous exactly the 23 looked at and kept are hidden, none on a curator doubt', () => {
+  const review = loadReview(), hidden = famous(300).filter((w) => w.u);
+  assert.deepStrictEqual(hidden.filter((w) => review[w.i] !== 'hide').map((w) => `${w.i} ${w.t}`), [], 'a famous work is hidden only by a decision made on its picture');
+  assert.strictEqual(hidden.length, FAMOUS_HIDDEN, `${hidden.length} of the 300 most famous are hidden`);
+  const shown = (t) => unique.filter((w) => w.t === t && !w.u).length > 0;
+  for (const t of ['The Scream', 'The Night Watch', 'The Creation of Adam', 'The Kiss', 'The Birth of Venus', 'The Raft of the Medusa', 'The Third of May 1808']) assert.ok(shown(t), t);
+  const share = unique.filter((w) => w.u).length / unique.length;
+  assert.ok(share < 0.15, `${(100 * share).toFixed(1)} % of all works are hidden (was 30 %)`);
+});
+const FAMOUS_HIDDEN = 23; // decided 2026-11-19 by looking at each of the 72 the rule still hid (113 before); change only with family-review.json
+
+test('the family rule: a curator flag counts, a doubt does not; the review is applied last', () => {
   assert.strictEqual(suspectOf({ flag: 'nudity', doubt: [] }), 'flag');
   assert.strictEqual(suspectOf({ flag: null, doubt: ['genre', 'safety'] }), 'doubt');
   assert.strictEqual(suspectOf({ flag: null, doubt: ['quality'] }), null);
   assert.strictEqual(suspectOf({ flag: null, doubt: [] }), null);
   assert.strictEqual(suspectOf(undefined), null);
   assert.deepStrictEqual(suspects([{ qid: 'Q2', cur: { flag: 'violence', doubt: [] } }, { qid: 'Q1', cur: { flag: null, doubt: [] } }]), { Q2: 'flag' });
+  assert.deepStrictEqual(familyReasons([], 'doubt'), [], 'a doubt alone hides nothing');
+  assert.deepStrictEqual(familyReasons([], 'flag'), ['curator flag']);
+  assert.deepStrictEqual(familyReasons(['nudity'], 'doubt'), ['nudity'], 'the data\'s own reason stands');
+  assert.deepStrictEqual(familyReasons(['nudity'], 'flag', 'show'), [], 'looked at and cleared');
+  assert.deepStrictEqual(familyReasons([], undefined, 'hide'), ['review'], 'looked at and kept');
+  assert.deepStrictEqual(familyReasons(undefined, undefined, undefined), []);
 });
 
 // Owner 2026-11-18, generic rules for old and new works: the curator's sure quality exclusions, what is no picture, and

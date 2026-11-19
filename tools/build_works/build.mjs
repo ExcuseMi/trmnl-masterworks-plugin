@@ -16,7 +16,7 @@ import { DEPICTS_RE, SERIES_GENRE, genreOf, is2dArtwork, isNotAPicture, unfriend
 import { latestYear, yearInfo } from './dates.mjs';
 import { venueOf } from './names.mjs';
 import { normalizeMedium } from './media.mjs';
-import { loadSuspects } from './curator_safety.mjs';
+import { loadSuspects, loadReview, familyReasons } from './curator_safety.mjs';
 import { cropFor, loadCrops } from './curator_crops.mjs';
 import { loadExclusions } from './curator_exclude.mjs';
 import { landscapeOf, pack, portraitOf, splitParts } from './shards.mjs';
@@ -153,7 +153,7 @@ const ARTIST_FIXES = { Q3921861: 'Wassily Kandinsky', Q6043547: 'Francisco Goya'
 const YEAR_FIXES = { Q11092366: { year: 1739, label: '1739' }, Q1450935: { year: 1516, label: '1516–17' }, Q29328965: { year: 1836, label: '1836' }, Q21614085: { year: undefined, label: '' }, Q111417085: { year: undefined, label: '' } };
 const yearOfWork = (p) => YEAR_FIXES[p.id] || { year: yearInfo(tags[p.id].dates).year ?? (p.d.years.length ? Math.min(...p.d.years) : undefined), label: yearInfo(tags[p.id].dates).label };
 const artistOf = (p) => ARTIST_FIXES[p.id] || p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
-const curatorSuspects = loadSuspects();
+const curatorSuspects = loadSuspects(), familyReview = loadReview();
 const curatorCrops = loadCrops();
 const reasonsOf = (p) => unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title: titleOf(p), genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, titleOf(p), yearInfo(tags[p.id].dates).year)) });
 // one work once: the most famous version of an artist + title is kept, with the flags of all its versions
@@ -179,7 +179,7 @@ for (const p of picked) {
     crop: cropFor(curatorCrops, p.id, info.file) || undefined, // a scanner bed or paper margin round the work is not shown
     year: yearOfWork(p).year, yearLabel: yearOfWork(p).label,
     genre: genreOf(genreInput(p, title, yearInfo(tags[p.id].dates).year)),
-    reasons: [...(once.reasons.get(p.id) || []), ...(curatorSuspects[p.id] ? [`curator ${curatorSuspects[p.id]}`] : [])], // the curator's safety suspects are flagged too (owner 2026-11-18)
+    reasons: familyReasons(once.reasons.get(p.id), curatorSuspects[p.id], familyReview[p.id]), // the data's reasons, the curator's sure flags, then the decisions made by looking (owner 2026-11-19)
     locations: tags[p.id].locations, collections: p.d.coll,
     coll: venueOf({ collections: p.d.coll, locations: tags[p.id].locations }), mov: pickMovement(p.d.mov) || pickMovement(p.d.creators.flatMap((c) => c.mov)),
   });

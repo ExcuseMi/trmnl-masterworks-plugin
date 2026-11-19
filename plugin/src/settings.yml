@@ -27,7 +27,7 @@ custom_fields:
   name: Family friendly
   default: 'true'
   optional: true
-  help_text: "<ul><li><b>On</b> (default): leaves out works whose subject is nudity or graphic violence (nudes, bathers, Venus, beheadings, massacres, executions, martyrdoms, battles). The list comes from Wikidata's subjects and the titles, so it is careful but not perfect.</li><li><b>Off</b>: all works.</li></ul>"
+  help_text: "<ul><li><b>On</b> (default): leaves out works that clearly show nudity or graphic violence (a nude as the subject, a beheading). Famous works with a draped or distant nude, a battle or a death scene stay. Careful, but not perfect.</li><li><b>Off</b>: all works.</li></ul>"
 - keyname: genres
   group: Selection
   field_type: select
