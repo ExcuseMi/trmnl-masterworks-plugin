@@ -718,3 +718,14 @@ test('label under a narrow picture: the artist and detail lines take a second li
   const lg = t.galleryFor({ ...mummy, lg: true }, 1404, 1872, true, 'normal', 1.755);
   assert.deepStrictEqual([lg.label.wl, lg.label.dl], [1, 1], 'lg screens wrap by their own rule (data-clamp-lg)');
 });
+
+// The shared base checks (plugin-check CI) read tests/mocks.json. It named parts 0 to 7 only while the data has 12 and 13: a run that
+// picked part 8 or higher was not mocked, so the light and the dark render of one check showed two different works ("dark mode
+// keeps 3 % of its content", 2026-11-19). Every part the transform can ask for must be mocked.
+test('tests/mocks.json answers every part the transform can ask for (SHARDS), for both orientations', () => {
+  const fs = require('node:fs');
+  const keys = Object.keys(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'tests', 'mocks.json'), 'utf8'))).filter((k) => k.startsWith('re:')).map((k) => new RegExp(k.slice(3)));
+  const missing = [];
+  for (const [o, n] of Object.entries(t.SHARDS)) for (let k = 0; k < n + 3; k++) if (!keys.some((re) => re.test(`${t.DATA_BASES[0]}${o}-${k}.json`))) missing.push(`${o}-${k}`);
+  assert.deepStrictEqual(missing, [], 'unmocked parts (three more than SHARDS are asked for, for the next data set)');
+});

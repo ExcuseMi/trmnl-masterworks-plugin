@@ -1,50 +1,8 @@
 {
-  "re:/data/landscape-0\\.json": {
+  "re:/data/landscape-\\d+\\.json": {
     "json_file": "tests/fixtures/one-landscape.json"
   },
-  "re:/data/landscape-1\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/landscape-2\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/landscape-3\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/landscape-4\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/landscape-5\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/portrait-0\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-1\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-2\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-3\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-4\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-5\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/landscape-6\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/landscape-7\\.json": {
-    "json_file": "tests/fixtures/one-landscape.json"
-  },
-  "re:/data/portrait-6\\.json": {
-    "json_file": "tests/fixtures/one-portrait.json"
-  },
-  "re:/data/portrait-7\\.json": {
+  "re:/data/portrait-\\d+\\.json": {
     "json_file": "tests/fixtures/one-portrait.json"
   },
   "re:api\\.open-meteo\\.com/v1/forecast": {
