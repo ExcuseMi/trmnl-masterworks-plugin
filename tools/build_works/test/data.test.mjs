@@ -19,6 +19,10 @@ test('no title has a word repeated three times in a row (vandalism)', () => {
 
 test('title fixes are in the data', () => {
   assert.ok(works.filter((w) => w.i === 'Q311243').every((w) => w.t === 'Wanderer above the Sea of Fog'));
+  assert.ok(works.filter((w) => w.i === 'Q27970998').every((w) => w.t === 'Madonna and Child with Four Angels'), 'Latin letters only (the label had a Cyrillic A)');
+  // review 2026-11-19: a title in another script stays only where Wikidata has no English label (32 Japanese prints and paintings, one icon)
+  const mixed = works.filter((w) => /[A-Za-z]/.test(w.t) && /[\u0400-\u04ff\u3040-\u30ff\u4e00-\u9fff]/.test(w.t)).map((w) => `${w.i} ${w.t}`);
+  assert.deepStrictEqual(mixed, [], 'no title mixes Latin letters with another script');
 });
 
 // Review 2026-11-19: found in the live data by asking Wikidata for every creator's death year. The data holds no death years, so
