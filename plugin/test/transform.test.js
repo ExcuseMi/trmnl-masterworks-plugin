@@ -674,3 +674,29 @@ test('keyline: a fine line around the work on its mat only when the work carries
   assert.strictEqual(await line({ n: 1, lb: 1 }), true, 'a black mat with lb');
   assert.strictEqual(await line({ lw: 0 }), false);
 });
+
+// TRMNL limits a plugin's merge variables (100 kB) and its state (8 kB). The run hands back two planned works, the info and the
+// settings: checked on the real data with the longest strings there are, so a field that grows (or a shard that leaks into the
+// output) is seen here and not as an empty screen on the devices.
+test('run: the merge variables stay far under 100 kB and the state under 1 kB, for the wordiest works of the real data with every info part on', async () => {
+  const fs = require('node:fs'), dir = path.join(__dirname, '..', '..', 'data');
+  const long = 'A very long calendar entry title that goes on and on, with a room and a dial-in '.repeat(4);
+  const ics = `BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:1\r\nDTSTART;VALUE=DATE:20000101\r\nRRULE:FREQ=DAILY\r\nSUMMARY:${long}\r\nLOCATION:${long}\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:2\r\nDTSTART;VALUE=DATE:20000101\r\nRRULE:FREQ=DAILY\r\nSUMMARY:${long}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
+  const hours = Array.from({ length: 48 }, (_, k) => `2026-11-${17 + Math.floor(k / 24)}T${String(k % 24).padStart(2, '0')}:00`);
+  const forecast = { current: { temperature_2m: -12.4, weather_code: 3, time: '2026-11-17T08:00' }, hourly: { time: hours, weather_code: hours.map(() => 3) }, daily: { temperature_2m_min: [-14], temperature_2m_max: [-2] } };
+  let worst = 0, state = 0;
+  for (const name of fs.readdirSync(dir).filter((f) => /^(landscape|portrait)-\d+\.json$/.test(f))) {
+    const sh = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+    const size = (w) => JSON.stringify(w).length + String(sh.col[w.c] || '').length;
+    const two = sh.w.slice().sort((a, b) => size(b) - size(a)).slice(0, 2); // the two wordiest are the primary and its backup: every other work is flagged and family friendly is on
+    sh.w.forEach((w) => { if (two.indexOf(w) < 0) w.u = 1; else delete w.u; });
+    globalThis.fetch = async (url) => (/\.ics$/.test(url) ? { ok: true, status: 200, text: async () => ics } : answer(/geocoding/.test(url) ? { results: [{ latitude: 1, longitude: 2 }] } : /open-meteo/.test(url) ? forecast : sh)());
+    const portrait = name.startsWith('portrait');
+    const out = await t.run({ trmnl: { device: { width: portrait ? 1440 : 2560, height: portrait ? 2560 : 1440, model: 'frame' }, user: { locale: 'de', time_zone_iana: 'Europe/Berlin' }, state: { h: Array.from({ length: 600 }, (_, k) => 135000000 + k), loc: { q: 'x'.repeat(80), lat: -33.123456, lon: -151.123456 } },
+      plugin_settings: { custom_fields_values: { family_friendly: 'true', show_date: 'true', show_weather: 'true', show_agenda: 'true', weather_location: 'y'.repeat(200), ics_url: 'https://calendar.example.org/a.ics' } } } });
+    assert.ok(out.art && out.backup && out.info.has_agenda && out.info.has_weather, name + ': both works and every info part are in the output');
+    worst = Math.max(worst, JSON.stringify(out).length); state = Math.max(state, JSON.stringify(out.trmnl_state).length);
+  }
+  assert.ok(worst < 25000, `merge variables at most ${worst} bytes (limit 100,000)`);
+  assert.ok(state < 1000, `state at most ${state} bytes (limit 8,000)`);
+});
