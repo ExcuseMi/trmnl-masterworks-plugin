@@ -37,7 +37,7 @@
       </div>
     </div>{{ gap }}{% endif %}{% endcapture %}
 {% capture w_p %}{% if info.has_weather %}<div class="{{ cell }}" data-info="weather" data-cell="w" data-drop="{% if inrow %}3{% else %}5{% endif %}">{{ lift }}
-      <span class="{{ c.temp }} {{ ink }} block text--left shrink-0" data-temp="1">{{ info.temp | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
+      <span class="value {{ c.temp }} {{ ink }} value--tnums text--bold block text--left shrink-0" data-temp="1">{{ info.temp | escape }}</span><div class="w--full h--[0px] shrink-0" data-lift2="1" data-adj="1"></div>
       <span class="{{ c.small }} {{ ink }} block text--left shrink-0" data-weather="1"{% unless inrow %} data-drop="3"{% endunless %}>{{ info.weather | escape }}</span>
     </div>{{ gap }}{% endif %}{% endcapture %}
 {% capture e_p %}{% if info.has_agenda %}{% for ev in info.agenda.items limit: inf.events %}<div class="{{ cell }}" data-info="agenda" data-event="1" data-cell="e" data-agenda="{{ info.agenda.day }}" data-drop="{% if forloop.first %}2{% else %}1{% endif %}">{{ lift }}
@@ -332,10 +332,13 @@
     }
     if (!row) return;
     cells = [].filter.call(row.children, function (k) { return k.hasAttribute('data-cell') && k.getAttribute('data-cell') !== 'date' && vis(k); });
-    var bs = cells.map(function (k) { var sp = firstVis(k); return sp ? by(sp) : null; });
+    var wc = d && vis(d) ? cells.filter(function (k) { return k.getAttribute('data-cell') === 'w'; })[0] : null, wsp = wc ? firstVis(wc) : null, wl = wc ? wc.querySelector('[data-lift="1"]') : null;
+    if (wsp) setH(wl, 0, lay); // the temperature is placed by its cap top on the number's below, not on the weekday's baseline
+    var bs = cells.map(function (k) { var sp = firstVis(k); return sp && !(wsp && k === wc) ? by(sp) : null; });
     T = Math.max.apply(null, [wk ? by(wk) : -1e9].concat(bs.filter(function (b) { return b !== null; })));
     cells.forEach(function (k, i) { if (bs[i] !== null) setH(k.querySelector('[data-lift="1"]'), T - bs[i], lay); });
     if (wk && T > by(wk) + 0.5) { dd = T - by(wk); ['num', 'words'].forEach(function (n) { var l = d.querySelector('[data-lift="' + n + '"]'); setH(l, rect(l).height + dd, lay); }); }
+    if (wsp) setH(wl, topOf(d.querySelector('[data-day]')) - topOf(wsp), lay); // never above the number: the temperature is no larger than it
     if (!mo) return;
     N = by(mo);
     cells.forEach(function (k) {
