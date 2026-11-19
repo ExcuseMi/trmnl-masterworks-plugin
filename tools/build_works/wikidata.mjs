@@ -275,8 +275,8 @@ export const PUBLIC_DOMAIN = 'Q19652'; // P6216 copyright status: public domain
  *   EU/life rule: a creator died at least 70 full years before 1 January of the build year, so death year <= year - 71.
  *   US rule: a work published in year Y is public domain from 1 January of Y + 96, so work year <= year - 96.
  * (2026: died 1955 or earlier, made 1930 or earlier; American Gothic, 1930, passes, a 1931 work does not.)
- * A work must pass the US rule on its date, and the life rule by its creators' death years or by Wikidata's own
- * "public domain" statement (P6216). A rights statement without "public domain" among its values rules a work out.
+ * A work must pass the US rule on its date, and the life rule by its creators' death years; Wikidata's own
+ * "public domain" statement (P6216) stands in only for a creator whose death year Wikidata does not have. A rights statement without "public domain" among its values rules a work out.
  * No creator named: only when dated before ANONYMOUS_BEFORE. No date: only when every creator died before UNDATED_DIED_BEFORE.
  */
 export const ANONYMOUS_BEFORE = 1850;
@@ -289,7 +289,8 @@ export function isPublicDomain(d, buildYear = new Date().getUTCFullYear()) {
   const deaths = d.creators.map((c) => (c.death.length ? Math.max(...c.death) : undefined));
   if (d.rights.length && !d.rights.includes(PUBLIC_DOMAIN)) return false;
   if (year !== undefined ? year > madeBy : !(deaths.length && deaths.every((x) => x !== undefined && x < UNDATED_DIED_BEFORE))) return false;
-  if (d.rights.includes(PUBLIC_DOMAIN)) return true;
+  if (deaths.some((x) => x !== undefined && x > diedBy)) return false; // a known death year decides: P6216 often means the United States only (Chagall, died 1985, carried it)
+  if (d.rights.includes(PUBLIC_DOMAIN)) return true; // the statement stands in for a missing death date only
   if (!d.creators.length) return year !== undefined && year < ANONYMOUS_BEFORE;
   return deaths.every((x) => x !== undefined && x <= diedBy);
 }

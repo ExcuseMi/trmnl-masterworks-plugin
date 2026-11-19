@@ -33,7 +33,7 @@ const BUILD_YEAR = new Date().getUTCFullYear();
 // the work list must hold these (the gap report's five): the build stops, and writes nothing, when one is missing
 // Wikidata labels with a known error; the fix belongs on Wikidata, this keeps the data set right until then
 // Wikidata labels that are wrong or vandalized (Q311243 read "Wanderer above the Sea younes non non non ..." on 2026-11-17).
-const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa', Q311243: 'Wanderer above the Sea of Fog' };
+const TITLE_FIXES = { Q252485: 'The Great Wave off Kanagawa', Q311243: 'Wanderer above the Sea of Fog', Q3921861: 'First Abstract Watercolor' }; // the last: 'Untitled' on Wikidata, the name it is known by (and one of two Untitled by Kandinsky)
 const MUST_HAVE = { Q252485: 'The Great Wave off Kanagawa', Q3565037: 'Red Fuji (Fine Wind, Clear Morning)', Q500242: 'The Creation of Adam (Sistine Chapel ceiling)', Q186953: 'The School of Athens' };
 const log = (...a) => console.error(new Date().toISOString().slice(11, 19), ...a);
 
@@ -147,7 +147,8 @@ const imageOf = (p) => {
   return preferNonPng(ok); // a JPEG, TIFF or WebP file is far lighter than a PNG of the same picture (see commons.mjs)
 };
 const titleOf = (p) => TITLE_FIXES[p.id] || p.title;
-const artistOf = (p) => p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
+const ARTIST_FIXES = { Q3921861: 'Wassily Kandinsky' }; // Wikidata named an actor born in 1992 as the creator (review 2026-11-19)
+const artistOf = (p) => ARTIST_FIXES[p.id] || p.d.creators.slice(0, 2).map((c) => c.name).filter((n) => n && !/^Q\d+$/.test(n)).join(', ') || 'Unknown artist';
 const curatorSuspects = loadSuspects();
 const curatorCrops = loadCrops();
 const reasonsOf = (p) => unfriendlyReasons({ id: p.id, series: (seriesOf.get(p.id) || [])[0], title: titleOf(p), genres: tags[p.id].genres, depicts: tags[p.id].depicts, genre: genreOf(genreInput(p, titleOf(p), yearInfo(tags[p.id].dates).year)) });

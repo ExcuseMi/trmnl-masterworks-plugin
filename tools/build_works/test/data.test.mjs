@@ -21,6 +21,17 @@ test('title fixes are in the data', () => {
   assert.ok(works.filter((w) => w.i === 'Q311243').every((w) => w.t === 'Wanderer above the Sea of Fog'));
 });
 
+// Review 2026-11-19: found in the live data by asking Wikidata for every creator's death year. The data holds no death years, so
+// the works found are named here; the rule that let them in is fixed in isPublicDomain (build.test.mjs).
+test('no work whose creator died after the cut-off is in the data', () => {
+  const notFree = { Q21711833: 'Marc Chagall, died 1985', Q43485263: 'Georgina de Albuquerque, died 1962', Q131675026: 'Frederick Strothmann, died 1958' };
+  assert.deepStrictEqual(works.filter((w) => notFree[w.i]).map((w) => `${w.f} ${w.i} ${w.a}: ${notFree[w.i]}`), []);
+});
+
+test('artist fixes are in the data (Wikidata named an actor born in 1992 as the painter of a Kandinsky of 1910)', () => {
+  assert.deepStrictEqual([...new Set(works.filter((w) => w.i === 'Q3921861').map((w) => `${w.a}: ${w.t}`))], ['Wassily Kandinsky: First Abstract Watercolor']);
+});
+
 // Round 2 review 2026-11-17: Wikidata held The Sick Child six times, Munch's Madonna four times, Water Lilies thirteen.
 import { titleKey } from '../dedupe.mjs';
 import { YEAR_LABEL_RE } from '../dates.mjs';

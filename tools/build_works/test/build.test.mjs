@@ -34,6 +34,16 @@ test('public domain, life rule: died 1955 or earlier in 2026; the Wikidata state
   assert.ok(!isPublicDomain(d({ years: [1600], rights: ['Q50423863'], creators: [cr(1500)] }), Y), 'a rights statement without public domain rules out');
 });
 
+// Review 2026-11-19: three works were in the data whose creator died after the cut-off (Chagall 1985, Georgina de Albuquerque 1962,
+// Strothmann 1958). Wikidata calls them public domain (a statement that mostly means the United States), and the statement stood in
+// for the life rule even when the death year was known.
+test('public domain, life rule: a known death year after the cut-off rules out, whatever Wikidata\'s statement says', () => {
+  assert.ok(!isPublicDomain(d({ years: [1917], rights: ['Q19652'], creators: [cr(1985)] }), Y), 'Chagall, The House in Grey');
+  assert.ok(!isPublicDomain(d({ years: [1918], rights: ['Q19652'], creators: [cr(1900), cr(1958)] }), Y), 'one of two creators');
+  assert.ok(isPublicDomain(d({ years: [1918], rights: ['Q19652'], creators: [cr(1900), cr()] }), Y), 'the statement still stands in for a missing death date');
+  assert.ok(isPublicDomain(d({ years: [1917], rights: ['Q19652'], creators: [cr(1955)] }), Y));
+});
+
 test('public domain: no creator only when dated before 1850; no date only when every creator died before 1900', () => {
   assert.ok(isPublicDomain(d({ years: [1400] }), Y));
   assert.ok(!isPublicDomain(d({ years: [1900] }), Y));
