@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# The temperature is never bigger or higher than the day number (owner 2026-11-19: on the X "10°" stood taller than the "19" and its top
-# above it). Measured in the render from the loaded font: cap top of each, and its cap height.
+# The temperature beside the date: cap top level with the day number's, forecast baseline level with the month's, never taller than the number (owner 2026-11-19: "10°" stood taller than the "19" and pushed the forecast line too deep). Stacked layouts (weather under the date) are skipped. Measured in the render from the loaded font.
 require 'json'
 
 RSpec.describe 'Masterworks temperature against the day number' do
@@ -34,9 +33,24 @@ RSpec.describe 'Masterworks temperature against the day number' do
         if (!e || !e.offsetParent) return null;
         const st = getComputedStyle(e), fs = parseFloat(st.fontSize), cv = document.createElement('canvas').getContext('2d');
         cv.font = st.fontStyle + ' ' + st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily;
-        const m = cv.measureText('H'), A = m.fontBoundingBoxAscent, D = m.fontBoundingBoxDescent;
+        const m = cv.measureText('0'), A = m.fontBoundingBoxAscent, D = m.fontBoundingBoxDescent;
         const lh = parseFloat(st.lineHeight) || (A + D), r = e.getBoundingClientRect(), k = r.width / e.offsetWidth;
         return [r.top + ((lh - A - D) / 2 + A - m.actualBoundingBoxAscent) * k, m.actualBoundingBoxAscent * k];
+      })()
+    JS
+  end
+
+  # baseline y in screen px of the span's first line
+  def base(page, sel)
+    page.evaluate(<<~JS)
+      (() => {
+        const e = document.querySelector('#{P} #{sel}');
+        if (!e || !e.offsetParent) return null;
+        const st = getComputedStyle(e), fs = parseFloat(st.fontSize), cv = document.createElement('canvas').getContext('2d');
+        cv.font = st.fontStyle + ' ' + st.fontWeight + ' ' + st.fontSize + ' ' + st.fontFamily;
+        const m = cv.measureText('0'), A = m.fontBoundingBoxAscent, D = m.fontBoundingBoxDescent;
+        const lh = parseFloat(st.lineHeight) || (A + D), r = e.getBoundingClientRect(), k = r.width / e.offsetWidth;
+        return r.top + ((lh - A - D) / 2 + A) * k;
       })()
     JS
   end
@@ -49,8 +63,14 @@ RSpec.describe 'Masterworks temperature against the day number' do
           num = caps(page, '[data-day]')
           tmp = caps(page, '[data-temp]')
           skip 'date or weather not shown here' unless num && tmp
-          expect(tmp[0]).to be >= num[0] - 1, "temp cap top #{tmp[0].round(1)} above the number's #{num[0].round(1)}"
+          side = page.evaluate("(() => { const d = document.querySelector('#{P} [data-cell=\"date\"]'), t = document.querySelector('#{P} [data-temp]'); return !!(d && t && t.getBoundingClientRect().left >= d.getBoundingClientRect().right - 1); })()")
+          skip 'the weather is not beside the date here (stacked)' unless side
+          expect((tmp[0] - num[0]).abs).to be <= 1, "temp cap top #{tmp[0].round(1)} not level with the number's #{num[0].round(1)}"
           expect(tmp[1]).to be <= num[1] + 0.5, "temp cap height #{tmp[1].round(1)} over the number's #{num[1].round(1)}"
+          mo = base(page, '[data-month]')
+          fc = base(page, '[data-weather]')
+          skip 'month or forecast not shown here' unless mo && fc
+          expect((fc - mo).abs).to be <= 1, "forecast baseline #{fc.round(1)} not level with the month's #{mo.round(1)}"
         end
       end
     end
